@@ -1,0 +1,23 @@
+appId: ai.triangle.app
+productName: Triangle
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+# Ship the starter template so the app can seed a project on first run.
+# Lands at <resources>/starter, matching ProjectManager.locateStarterTemplate().
+extraResources:
+  - from: ../../templates/starter
+    to: starter
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dir
+win:
+  target:
+    - dir
+linux:
+  target:
+    - dir

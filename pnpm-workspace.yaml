@@ -1,0 +1,9 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Allow these dependencies to run their install scripts (e.g. Electron downloads
+# its prebuilt binary; esbuild compiles its native helper).
+onlyBuiltDependencies:
+  - electron
+  - esbuild
