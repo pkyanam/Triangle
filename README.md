@@ -19,10 +19,19 @@ harness-agnostic agent layer.
 
 ## Status
 
-**Stage 1 — Core Shell & Live Preview** (current). See
-[`docs/STAGE-1.md`](docs/STAGE-1.md) for what's delivered and how to run it.
+**Stage 2 — Editor + Basic Agent Orchestration** (current): a Monaco editor (JS/TS/GLSL)
+with live save → hot-reload, plus a real agent layer (Claude Agent SDK + Codex CLI) that
+can read and edit the project behind a human-approval gate. See
+[`docs/STAGE-2.md`](docs/STAGE-2.md). Stage 1 (core shell & live preview) is documented in
+[`docs/STAGE-1.md`](docs/STAGE-1.md).
 
 The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+### Agent credentials
+
+Triangle reads agent credentials from the environment or a gitignored config — never
+committed. The Claude harness needs `ANTHROPIC_API_KEY`; the Codex harness needs the
+`codex` CLI on PATH. See [`docs/STAGE-2.md`](docs/STAGE-2.md#configuration-credentials).
 
 ## Repository layout
 

@@ -6,8 +6,8 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | ----- | ----- | ------ |
 | 0 | Foundations & Architecture | ✅ Done (this monorepo + ADRs + tool schema) |
 | 1 | Core Shell & Live Preview | ✅ Done |
-| 2 | Editor + Basic Agent Orchestration | ⬜ Next |
-| 3 | Three.js Domain Tooling & Visual Feedback Loop | ⬜ |
+| 2 | Editor + Basic Agent Orchestration | ✅ Done |
+| 3 | Three.js Domain Tooling & Visual Feedback Loop | ⬜ Next |
 | 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | ⬜ |
 | 5 | Polish, Rich Features & Internal Prototype | ⬜ |
 | 6 | Post-Prototype Hardening & Web Path | ⬜ Future |
@@ -27,12 +27,14 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 
 See [`STAGE-1.md`](STAGE-1.md).
 
-## Stage 2 — Editor + Basic Agent Orchestration (next)
+## Stage 2 — Editor + Basic Agent Orchestration
 
-- [ ] Monaco editor (GLSL/JS/TS) replacing the read-only viewer.
-- [ ] Claude Agent SDK integration (spawn + chat loop).
-- [ ] Codex CLI integration (launch + basic delegation).
-- [ ] File read/write tools exposed to agents (the schemas already live in `@triangle/shared`).
+- [x] Monaco editor (GLSL/JS/TS) replacing the read-only viewer.
+- [x] Claude Agent SDK integration (spawn + chat loop).
+- [x] Codex CLI integration (launch + basic delegation).
+- [x] File read/write tools exposed to agents (the schemas already live in `@triangle/shared`).
+
+See [`STAGE-2.md`](STAGE-2.md).
 
 ## Stages 3–6
 
