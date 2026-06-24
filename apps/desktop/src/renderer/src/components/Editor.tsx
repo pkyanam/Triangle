@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Save } from 'lucide-react';
 import MonacoEditor, { type OnMount } from '@monaco-editor/react';
 import type { editor as MonacoEditorNS } from 'monaco-editor';
 import { monacoLanguageFor, setupMonaco, TRIANGLE_DARK_THEME } from '../monaco/setup.js';
@@ -126,13 +127,16 @@ export function Editor({ path, content, onSave }: EditorProps): React.JSX.Elemen
           )}
           {path}
         </span>
-        <span className="code__badge">{monacoLanguageFor(path)}</span>
+        <span style={{ marginLeft: 'auto' }} className="badge badge--info">
+          {monacoLanguageFor(path)}
+        </span>
         <button
           className="btn btn--xs"
           onClick={() => void doSave()}
           disabled={!dirty || saving}
           title="Save (Cmd/Ctrl+S)"
         >
+          <Save size={12} />
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>

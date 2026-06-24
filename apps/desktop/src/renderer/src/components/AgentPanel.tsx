@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FolderGit2, Send, ShieldCheck, Square, TriangleAlert } from 'lucide-react';
 import {
-  HARNESSES,
   type AgentEvent,
   type ApprovalRequest,
   type ChatMessage,
@@ -8,6 +8,7 @@ import {
   type HarnessId,
   type ToolCallTrace,
 } from '@triangle/shared';
+import { HarnessPicker } from './HarnessPicker.js';
 
 let idCounter = 0;
 const nextId = (): string => `m${++idCounter}`;
@@ -196,35 +197,30 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
     }
   };
 
-  // Merge static catalog with live availability for the selector.
-  const harnessRows = HARNESSES.map((h) => {
-    const live = availability.find((a) => a.id === h.id);
-    const available = live ? live.available : h.available;
-    const note = live?.reason ?? h.note;
-    return { id: h.id, label: h.label, available, note };
-  });
-  const selected = harnessRows.find((h) => h.id === harness);
+  // Live availability for the currently selected harness (for the notice).
+  const selectedLive = availability.find((a) => a.id === harness);
+  const selectedUnavailable = selectedLive ? !selectedLive.available : false;
 
   return (
     <div className="agent">
-      <div className="agent__harness">
-        <select
-          className="agent__select"
+      <div className="agent__bar">
+        <HarnessPicker
           value={harness}
-          onChange={(e) => setHarness(e.target.value as HarnessId)}
-        >
-          {harnessRows.map((h) => (
-            <option key={h.id} value={h.id} disabled={!h.available}>
-              {h.label}
-              {h.available ? '' : ' — unavailable'}
-            </option>
-          ))}
-        </select>
-        <span className="chip">{projectName}</span>
+          availability={availability}
+          onChange={setHarness}
+          disabled={busy}
+        />
+        <span className="chip" title={`Project: ${projectName}`}>
+          <FolderGit2 size={12} />
+          {projectName}
+        </span>
       </div>
 
-      {selected && !selected.available && selected.note && (
-        <div className="agent__notice">{selected.note}</div>
+      {selectedUnavailable && selectedLive?.reason && (
+        <div className="agent__notice">
+          <TriangleAlert size={14} />
+          <span>{selectedLive.reason}</span>
+        </div>
       )}
 
       <div className="agent__messages" ref={scrollRef}>
@@ -252,15 +248,21 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
         ))}
         {busy && !approval && (
           <div className="msg msg--assistant">
-            <span className="msg__pending">working…</span>
+            <span className="msg__pending">
+              <span className="msg__spinner" />
+              working…
+            </span>
           </div>
         )}
       </div>
 
       {approval && (
         <div className="approval">
-          <div className="approval__title">
-            Approve write {approval.exists ? '(overwrite)' : '(new file)'}
+          <div className="approval__head">
+            <ShieldCheck size={14} style={{ color: 'var(--primary)' }} />
+            <span className="approval__title">
+              Approve write {approval.exists ? '(overwrite)' : '(new file)'}
+            </span>
           </div>
           <div className="approval__path">{approval.path}</div>
           <pre className="approval__preview">{approval.content}</pre>
@@ -276,32 +278,34 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
       )}
 
       <div className="agent__composer">
-        <textarea
-          className="agent__input"
-          placeholder="Ask the agent to change the scene…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        <div className="agent__composer-row">
-          <label className="agent__toggle" title="Skip the per-write approval prompt">
-            <input
-              type="checkbox"
-              checked={autoApprove}
-              onChange={(e) => setAutoApprove(e.target.checked)}
-            />
-            Auto-approve writes
-          </label>
-          <div className="agent__composer-spacer" />
-          {busy ? (
-            <button className="btn" onClick={cancel}>
-              Stop
-            </button>
-          ) : (
-            <button className="btn btn--primary" onClick={send} disabled={!input.trim()}>
-              Send
-            </button>
-          )}
+        <div className="composer">
+          <textarea
+            className="agent__input"
+            placeholder="Ask the agent to change the scene…"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+          />
+          <div className="composer__row">
+            <label className="agent__toggle" title="Skip the per-write approval prompt">
+              <input
+                type="checkbox"
+                checked={autoApprove}
+                onChange={(e) => setAutoApprove(e.target.checked)}
+              />
+              Auto-approve writes
+            </label>
+            <div className="composer__spacer" />
+            {busy ? (
+              <button className="btn" onClick={cancel}>
+                <Square size={13} /> Stop
+              </button>
+            ) : (
+              <button className="btn btn--primary" onClick={send} disabled={!input.trim()}>
+                <Send size={13} /> Send
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

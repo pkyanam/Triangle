@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Camera, Grid3x3, Pause, Play, RotateCw, TriangleAlert } from 'lucide-react';
 import { createPreviewRuntime, type PreviewRuntime } from '@triangle/preview-runtime';
 import type { PreviewStats, PreviewStatus } from '@triangle/shared';
 
@@ -71,33 +72,36 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
   return (
     <div className="preview">
       <div className="preview__toolbar">
-        <button className="btn" onClick={reload} title="Reload scene">
-          ↻ Reload
+        <button className="btn btn--ghost" onClick={reload} title="Reload scene">
+          <RotateCw size={14} /> Reload
         </button>
         <button
-          className={`btn${paused ? ' btn--active' : ''}`}
+          className={`btn btn--ghost${paused ? ' btn--active' : ''}`}
           onClick={togglePause}
           title="Pause / resume animation"
         >
-          {paused ? '▶ Resume' : '⏸ Pause'}
+          {paused ? <Play size={14} /> : <Pause size={14} />}
+          {paused ? 'Resume' : 'Pause'}
         </button>
         <button
-          className={`btn${grid ? ' btn--active' : ''}`}
+          className={`btn btn--ghost${grid ? ' btn--active' : ''}`}
           onClick={toggleGrid}
           title="Toggle grid helper"
         >
-          # Grid
+          <Grid3x3 size={14} /> Grid
         </button>
         <div className="preview__toolbar-spacer" />
-        <button className="btn" onClick={screenshot} title="Save a PNG screenshot">
-          📷 Screenshot
+        <button className="btn btn--ghost" onClick={screenshot} title="Save a PNG screenshot">
+          <Camera size={14} /> Screenshot
         </button>
       </div>
       <div className="preview__stage">
         <canvas ref={canvasRef} className="preview__canvas" />
         {error && (
           <div className="preview__error">
-            <div className="preview__error-title">Scene error</div>
+            <div className="preview__error-title">
+              <TriangleAlert size={14} /> Scene error
+            </div>
             {error}
           </div>
         )}

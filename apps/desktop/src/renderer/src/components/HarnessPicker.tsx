@@ -1,0 +1,163 @@
+import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import {
+  Bot,
+  Check,
+  ChevronDown,
+  CircleDashed,
+  Search,
+  Sparkles,
+  TerminalSquare,
+} from 'lucide-react';
+import { HARNESSES, type HarnessAvailability, type HarnessId } from '@triangle/shared';
+
+interface HarnessPickerProps {
+  value: HarnessId;
+  availability: HarnessAvailability[];
+  onChange: (id: HarnessId) => void;
+  disabled?: boolean;
+}
+
+interface HarnessMeta {
+  icon: ComponentType<{ size?: number | string }>;
+  /** Subtitle shown under the harness name, à la the Trifecta model row. */
+  subtitle: string;
+}
+
+const META: Record<HarnessId, HarnessMeta> = {
+  mock: { icon: CircleDashed, subtitle: 'Local · canned responses' },
+  claude: { icon: Sparkles, subtitle: 'Anthropic · Claude Agent SDK' },
+  codex: { icon: TerminalSquare, subtitle: 'OpenAI · Codex CLI' },
+  acp: { icon: Bot, subtitle: 'Protocol · ACP / MCP (Stage 4)' },
+};
+
+/**
+ * Agent harness picker — a popover styled after Trifecta's model picker: a
+ * trigger that shows the active harness + a searchable list of icon/name/subtitle
+ * rows with availability, hover/selected states, and a check on the active one.
+ */
+export function HarnessPicker({
+  value,
+  availability,
+  onChange,
+  disabled,
+}: HarnessPickerProps): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const rows = useMemo(
+    () =>
+      HARNESSES.map((h) => {
+        const live = availability.find((a) => a.id === h.id);
+        return {
+          id: h.id,
+          label: h.label,
+          available: live ? live.available : h.available,
+          note: live?.reason ?? h.note,
+          ...META[h.id],
+        };
+      }),
+    [availability],
+  );
+
+  const selected = rows.find((r) => r.id === value);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) => r.label.toLowerCase().includes(q) || r.subtitle.toLowerCase().includes(q),
+    );
+  }, [rows, query]);
+
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      // Focus the search after the open animation begins.
+      const t = window.setTimeout(() => searchRef.current?.focus(), 20);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, [open]);
+
+  // Close on Escape.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const choose = (id: HarnessId, available: boolean): void => {
+    if (!available) return;
+    onChange(id);
+    setOpen(false);
+  };
+
+  const TriggerIcon = selected?.icon ?? Bot;
+
+  return (
+    <div className="picker" data-open={open}>
+      <button
+        className="picker__trigger"
+        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        title="Select agent harness"
+      >
+        <span className="picker__trigger-icon">
+          <TriggerIcon size={15} />
+        </span>
+        <span className="picker__trigger-label">{selected?.label ?? 'Select harness'}</span>
+        <ChevronDown className="picker__trigger-chevron" size={14} />
+      </button>
+
+      {open && (
+        <>
+          <div className="picker__backdrop" onClick={() => setOpen(false)} />
+          <div className="picker__popup" role="listbox">
+            <div className="picker__search">
+              <Search size={15} />
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search harnesses…"
+              />
+            </div>
+            <div className="picker__list">
+              {filtered.map((r) => {
+                const Icon = r.icon;
+                const isSelected = r.id === value;
+                return (
+                  <button
+                    key={r.id}
+                    role="option"
+                    aria-selected={isSelected}
+                    className={`picker__row${isSelected ? ' picker__row--selected' : ''}`}
+                    disabled={!r.available}
+                    onClick={() => choose(r.id, r.available)}
+                  >
+                    <span className="picker__row-icon">
+                      <Icon size={14} />
+                    </span>
+                    <span className="picker__row-main">
+                      <span className="picker__row-name">
+                        <span>{r.label}</span>
+                        {!r.available && <span className="badge badge--warning">soon</span>}
+                      </span>
+                      <span className="picker__row-sub">{r.note ?? r.subtitle}</span>
+                    </span>
+                    {isSelected && <Check className="picker__row-check" size={15} />}
+                  </button>
+                );
+              })}
+              {filtered.length === 0 && <div className="picker__empty">No harnesses match.</div>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

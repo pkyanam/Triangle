@@ -1,4 +1,13 @@
 import { useState } from 'react';
+import {
+  ChevronRight,
+  FileCode2,
+  FileJson,
+  FileText,
+  Folder,
+  FolderOpen,
+  Sparkles,
+} from 'lucide-react';
 import type { FileNode } from '@triangle/shared';
 
 interface FileTreeProps {
@@ -7,21 +16,25 @@ interface FileTreeProps {
   onSelect: (path: string) => void;
 }
 
-const EXT_ICON: Record<string, string> = {
-  js: 'JS',
-  ts: 'TS',
-  tsx: 'TS',
-  jsx: 'JS',
-  json: '{}',
-  glsl: '▣',
-  vert: '▣',
-  frag: '▣',
-  md: 'M',
-};
-
-function iconFor(name: string): string {
-  const ext = name.split('.').pop() ?? '';
-  return EXT_ICON[ext] ?? '·';
+/** Pick a lucide icon (and whether it's brand-accented) for a file name. */
+function fileIcon(name: string): React.JSX.Element {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  switch (ext) {
+    case 'glsl':
+    case 'vert':
+    case 'frag':
+    case 'vs':
+    case 'fs':
+      return <Sparkles className="tree__icon tree__icon--accent" size={14} />;
+    case 'json':
+      return <FileJson className="tree__icon" size={14} />;
+    case 'md':
+    case 'markdown':
+    case 'txt':
+      return <FileText className="tree__icon" size={14} />;
+    default:
+      return <FileCode2 className="tree__icon" size={14} />;
+  }
 }
 
 function TreeRow({
@@ -43,12 +56,22 @@ function TreeRow({
     <>
       <div
         className={`tree__row${selected ? ' tree__row--selected' : ''}`}
-        style={{ paddingLeft: 8 + depth * 14 }}
+        style={{ paddingLeft: 8 + depth * 13, position: 'relative' }}
         onClick={() => (isDir ? setOpen((o) => !o) : onSelect(node.path))}
         title={node.path}
       >
-        <span className="tree__chevron">{isDir ? (open ? '▾' : '▸') : ''}</span>
-        <span className="tree__icon">{isDir ? (open ? '📂' : '📁') : iconFor(node.name)}</span>
+        <span className={`tree__chevron${isDir && open ? ' tree__chevron--open' : ''}`}>
+          {isDir ? <ChevronRight size={12} /> : null}
+        </span>
+        {isDir ? (
+          open ? (
+            <FolderOpen className="tree__icon tree__icon--accent" size={14} />
+          ) : (
+            <Folder className="tree__icon" size={14} />
+          )
+        ) : (
+          fileIcon(node.name)
+        )}
         <span className="tree__name">{node.name}</span>
       </div>
       {isDir &&
