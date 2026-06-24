@@ -14,6 +14,10 @@ const TRIANGLE_TOOL_NAMES = [
   'mcp__triangle__triangle_project_tree',
   'mcp__triangle__triangle_read_file',
   'mcp__triangle__triangle_write_file',
+  'mcp__triangle__triangle_capture_screenshot',
+  'mcp__triangle__triangle_describe_scene',
+  'mcp__triangle__triangle_validate_shader',
+  'mcp__triangle__triangle_performance_snapshot',
 ];
 
 const SYSTEM_PROMPT =
@@ -21,7 +25,11 @@ const SYSTEM_PROMPT =
   'preview engine. The active project is a Triangle project whose entry module is hot-reloaded ' +
   'on save. Use the triangle_* tools to inspect and edit project files (paths are project-' +
   'relative). Entry modules receive an injected THREE context and must not use bare imports. ' +
-  'Make minimal, targeted edits and briefly explain what you changed.';
+  'For visual grounding you can call triangle_capture_screenshot (saves a PNG you can then Read), ' +
+  'triangle_describe_scene (the live scene graph), triangle_validate_shader (compile GLSL and get ' +
+  'diagnostics before writing it to disk), and triangle_performance_snapshot. Prefer validating a ' +
+  'shader and capturing a screenshot to confirm your changes look right. Make minimal, targeted ' +
+  'edits and briefly explain what you changed.';
 
 /** Extract concatenated text from a Beta assistant message's content blocks. */
 function extractText(message: { content?: unknown }): string {
@@ -92,6 +100,48 @@ export const claudeHarness: AgentHarness = {
         async ({ path, content }) => {
           const summary = await toolset.writeFile(path, content);
           return { content: [{ type: 'text' as const, text: summary }] };
+        },
+      ),
+      tool(
+        'triangle_capture_screenshot',
+        'Capture the current preview framebuffer as a PNG (saved to the project) for visual grounding. Read the returned path to view it.',
+        {
+          width: z.number().int().positive().optional().describe('Optional output width in pixels.'),
+          height: z.number().int().positive().optional().describe('Optional output height in pixels.'),
+        },
+        async ({ width, height }) => {
+          const text = await toolset.captureScreenshot({ width, height });
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_describe_scene',
+        'Return a structured summary of the live scene graph (objects, materials, lights, camera).',
+        {},
+        async () => {
+          const text = await toolset.describeScene();
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_validate_shader',
+        'Compile a GLSL shader against the live GL context and return diagnostics, without mutating the scene.',
+        {
+          stage: z.enum(['vertex', 'fragment']).describe('Shader stage.'),
+          source: z.string().describe('GLSL source.'),
+        },
+        async ({ stage, source }) => {
+          const text = await toolset.validateShader(stage, source);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_performance_snapshot',
+        'Return current FPS, draw calls, triangle count, and a GPU-memory estimate.',
+        {},
+        async () => {
+          const text = await toolset.performanceSnapshot();
+          return { content: [{ type: 'text' as const, text }] };
         },
       ),
     ];

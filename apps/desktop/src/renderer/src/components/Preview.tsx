@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, Grid3x3, Pause, Play, RotateCw, TriangleAlert } from 'lucide-react';
 import { createPreviewRuntime, type PreviewRuntime } from '@triangle/preview-runtime';
 import type { PreviewStats, PreviewStatus } from '@triangle/shared';
+import { setActiveRuntime } from '../preview/bridge.js';
 
 interface PreviewProps {
   /** Entry module source; reloading it hot-reloads the scene. */
@@ -33,8 +34,11 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
       onStats: (s) => statsCb.current?.(s),
     });
     runtimeRef.current = rt;
+    // Expose this runtime to the agent preview bridge (screenshot/scene/perf/shader).
+    const unregister = setActiveRuntime(rt);
     rt.start();
     return () => {
+      unregister();
       rt.dispose();
       runtimeRef.current = null;
     };

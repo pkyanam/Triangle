@@ -37,7 +37,16 @@ export interface ToolDefinition {
 }
 
 /**
+ * The build stage Triangle currently ships. Tools at or below this stage are wired
+ * to real implementations; later-stage tools remain forward declarations. Keeping a
+ * single constant means `available` flags below stay in sync with reality.
+ */
+export const CURRENT_STAGE = 3;
+
+/**
  * The canonical Triangle tool catalog. Grouped by domain; expanded each stage.
+ * The `available` flag reflects whether the tool is wired in the {@link CURRENT_STAGE}
+ * build (Stage 2 filesystem + Stage 3 domain tooling are now live).
  */
 export const TRIANGLE_TOOLS: ToolDefinition[] = [
   // --- Filesystem (Stage 2) — maps onto file:* / project:* IPC channels ---
@@ -45,7 +54,7 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
     name: 'triangle_project_tree',
     description: 'List the active project file tree.',
     parameters: { type: 'object', properties: {} },
-    available: false,
+    available: true,
     stage: 2,
   },
   {
@@ -56,7 +65,7 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
       properties: { path: { type: 'string', description: 'Project-relative path.' } },
       required: ['path'],
     },
-    available: false,
+    available: true,
     stage: 2,
   },
   {
@@ -71,7 +80,7 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
       },
       required: ['path', 'content'],
     },
-    available: false,
+    available: true,
     stage: 2,
   },
 
@@ -87,7 +96,7 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
         height: { type: 'integer', description: 'Optional output height in pixels.' },
       },
     },
-    available: false,
+    available: true,
     stage: 3,
   },
   {
@@ -95,7 +104,7 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
     description:
       'Return a structured summary of the live scene graph (objects, materials, lights, camera).',
     parameters: { type: 'object', properties: {} },
-    available: false,
+    available: true,
     stage: 3,
   },
   {
@@ -109,14 +118,14 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
       },
       required: ['stage', 'source'],
     },
-    available: false,
+    available: true,
     stage: 3,
   },
   {
     name: 'triangle_performance_snapshot',
     description: 'Return current FPS, draw calls, triangle count, and GPU memory estimates.',
     parameters: { type: 'object', properties: {} },
-    available: false,
+    available: true,
     stage: 3,
   },
 

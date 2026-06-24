@@ -4,6 +4,10 @@ import { TopBar } from './components/TopBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Workspace, type PanelsOpen, type WorkspaceHandle } from './workspace/Workspace.js';
 import type { WorkspaceState } from './workspace/context.js';
+import { installPreviewBridge } from './preview/bridge.js';
+
+// Service agent preview requests (screenshot/scene/perf/shader) against the live runtime.
+installPreviewBridge();
 
 export function App(): React.JSX.Element {
   const [project, setProject] = useState<ProjectInfo | null>(null);

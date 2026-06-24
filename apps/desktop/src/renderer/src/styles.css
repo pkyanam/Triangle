@@ -809,6 +809,12 @@ button {
   flex: 0 0 auto;
   padding: 10px;
 }
+.agent__quick-actions {
+  display: flex;
+  gap: 6px;
+  padding: 0 2px 8px;
+  flex-wrap: wrap;
+}
 .composer {
   border-radius: var(--radius-2xl);
   border: 1px solid var(--input);

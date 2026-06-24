@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FolderGit2, Send, ShieldCheck, Square, TriangleAlert } from 'lucide-react';
+import {
+  Camera,
+  FolderGit2,
+  Gauge,
+  ListTree,
+  Send,
+  ShieldCheck,
+  Square,
+  TriangleAlert,
+} from 'lucide-react';
 import {
   type AgentEvent,
   type ApprovalRequest,
@@ -9,6 +18,11 @@ import {
   type ToolCallTrace,
 } from '@triangle/shared';
 import { HarnessPicker } from './HarnessPicker.js';
+import {
+  activePerformanceSnapshot,
+  captureScreenshotPath,
+  describeActiveScene,
+} from '../preview/bridge.js';
 
 let idCounter = 0;
 const nextId = (): string => `m${++idCounter}`;
@@ -197,6 +211,56 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
     }
   };
 
+  /**
+   * Append a grounding context block to the composer. These quick-actions read the
+   * live preview directly (renderer-side), so they work for *every* harness — Mock,
+   * Claude, and Codex — by injecting the data into the next prompt.
+   */
+  const appendContext = (block: string): void => {
+    setInput((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${block}` : block));
+  };
+
+  const noticeFor = (e: unknown): void => {
+    upsert({
+      id: `qa-err:${Date.now()}`,
+      role: 'system',
+      content: String((e as Error).message ?? e),
+      timestamp: Date.now(),
+    });
+  };
+
+  const attachScreenshot = (): void => {
+    captureScreenshotPath()
+      .then((path) =>
+        appendContext(
+          `[Triangle context] Current preview screenshot saved at \`${path}\` — read this image file for a visual reference.`,
+        ),
+      )
+      .catch(noticeFor);
+  };
+
+  const attachSceneSummary = (): void => {
+    try {
+      const summary = describeActiveScene();
+      appendContext(
+        `[Triangle context] Current scene graph:\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``,
+      );
+    } catch (e) {
+      noticeFor(e);
+    }
+  };
+
+  const attachPerformance = (): void => {
+    try {
+      const snap = activePerformanceSnapshot();
+      appendContext(
+        `[Triangle context] Performance snapshot:\n\`\`\`json\n${JSON.stringify(snap, null, 2)}\n\`\`\``,
+      );
+    } catch (e) {
+      noticeFor(e);
+    }
+  };
+
   // Live availability for the currently selected harness (for the notice).
   const selectedLive = availability.find((a) => a.id === harness);
   const selectedUnavailable = selectedLive ? !selectedLive.available : false;
@@ -278,6 +342,29 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
       )}
 
       <div className="agent__composer">
+        <div className="agent__quick-actions">
+          <button
+            className="btn btn--ghost btn--xs"
+            onClick={attachScreenshot}
+            title="Capture the preview and attach its path for the agent"
+          >
+            <Camera size={12} /> Screenshot
+          </button>
+          <button
+            className="btn btn--ghost btn--xs"
+            onClick={attachSceneSummary}
+            title="Attach a summary of the live scene graph"
+          >
+            <ListTree size={12} /> Scene
+          </button>
+          <button
+            className="btn btn--ghost btn--xs"
+            onClick={attachPerformance}
+            title="Attach a performance snapshot"
+          >
+            <Gauge size={12} /> Perf
+          </button>
+        </div>
         <div className="composer">
           <textarea
             className="agent__input"

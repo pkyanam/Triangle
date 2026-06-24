@@ -16,6 +16,7 @@ import type {
   ApprovalRequest,
   HarnessAvailability,
 } from './agent.js';
+import type { PreviewRequest, PreviewResult } from './preview.js';
 
 /** Request/response channels invoked from the renderer. */
 export interface IpcInvokeChannels {
@@ -72,6 +73,25 @@ export interface IpcInvokeChannels {
     request: ApprovalDecision;
     response: { ok: boolean };
   };
+  /**
+   * The renderer's reply to a `preview:request` (Stage 3 preview bridge). The
+   * active preview runtime services the request and returns the result here,
+   * correlated by `requestId`. See ADR 0007.
+   */
+  'preview:result': {
+    request: PreviewResult;
+    response: { ok: boolean };
+  };
+  /**
+   * Save a renderer-captured framebuffer (PNG data URL) to the project's
+   * gitignored capture directory, returning its project-relative path. Backs
+   * the "attach screenshot" quick-action; the agent screenshot tool saves via
+   * the same `ProjectManager` path in main.
+   */
+  'preview:save-capture': {
+    request: { dataUrl: string };
+    response: { path: string };
+  };
 }
 
 /** Events pushed from main to renderer. */
@@ -84,6 +104,8 @@ export interface IpcEventChannels {
   'agent:event': AgentEvent;
   /** A gated file write awaiting human approval. */
   'agent:approval-request': ApprovalRequest;
+  /** A request from main for the active preview runtime to service (Stage 3). */
+  'preview:request': PreviewRequest;
 }
 
 export type IpcInvokeChannel = keyof IpcInvokeChannels;
@@ -104,6 +126,8 @@ export const INVOKE_CHANNELS = [
   'agent:start',
   'agent:cancel',
   'agent:approval',
+  'preview:result',
+  'preview:save-capture',
 ] as const satisfies readonly IpcInvokeChannel[];
 
 export const EVENT_CHANNELS = [
@@ -111,4 +135,5 @@ export const EVENT_CHANNELS = [
   'project:changed',
   'agent:event',
   'agent:approval-request',
+  'preview:request',
 ] as const satisfies readonly IpcEventChannel[];

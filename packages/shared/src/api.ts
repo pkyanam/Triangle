@@ -13,6 +13,7 @@ import type {
   ApprovalRequest,
   HarnessAvailability,
 } from './agent.js';
+import type { PreviewRequest, PreviewResult } from './preview.js';
 
 /** Unsubscribe handle returned by event subscriptions. */
 export type Unsubscribe = () => void;
@@ -46,5 +47,17 @@ export interface TriangleApi {
     onEvent: (cb: (event: AgentEvent) => void) => Unsubscribe;
     /** Subscribe to write-approval prompts. */
     onApprovalRequest: (cb: (req: ApprovalRequest) => void) => Unsubscribe;
+  };
+  /** Stage 3 preview bridge — connects the agent layer to the live runtime. */
+  preview: {
+    /**
+     * Subscribe to requests issued by main (screenshot/scene/perf/shader). The
+     * active preview runtime services each and replies via {@link result}.
+     */
+    onRequest: (cb: (req: PreviewRequest) => void) => Unsubscribe;
+    /** Reply to a `preview:request`, correlated by `requestId`. */
+    result: (result: PreviewResult) => Promise<{ ok: boolean }>;
+    /** Persist a captured PNG (data URL) to the project, returning its path. */
+    saveCapture: (dataUrl: string) => Promise<IpcResponse<'preview:save-capture'>>;
   };
 }

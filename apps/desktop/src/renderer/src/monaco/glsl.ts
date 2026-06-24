@@ -1,4 +1,5 @@
 import type * as Monaco from 'monaco-editor';
+import type { ShaderStage } from '@triangle/shared';
 
 /**
  * A self-contained GLSL (OpenGL ES / WebGL Shading Language) definition for Monaco.
@@ -120,6 +121,18 @@ export const glslLanguageConfig: Monaco.languages.LanguageConfiguration = {
     { open: '(', close: ')' },
   ],
 };
+
+/**
+ * Infer whether a GLSL source is a vertex or fragment shader from its file
+ * extension, falling back to content heuristics for ambiguous `.glsl` files
+ * (vertex shaders write `gl_Position`; fragment shaders typically don't).
+ */
+export function shaderStageFor(path: string | null, source: string): ShaderStage {
+  const ext = path?.split('.').pop()?.toLowerCase() ?? '';
+  if (['vert', 'vs', 'vertex'].includes(ext)) return 'vertex';
+  if (['frag', 'fs', 'fragment'].includes(ext)) return 'fragment';
+  return /\bgl_Position\b/.test(source) ? 'vertex' : 'fragment';
+}
 
 /** Register the GLSL language with a Monaco instance (idempotent). */
 export function registerGlsl(monaco: typeof Monaco): void {

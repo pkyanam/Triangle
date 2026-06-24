@@ -3,6 +3,7 @@ import type {
   AgentEvent,
   ApprovalRequest,
   FileChangeEvent,
+  PreviewRequest,
   ProjectInfo,
   TriangleApi,
   Unsubscribe,
@@ -36,6 +37,11 @@ const api: TriangleApi = {
     approve: (decision) => ipcRenderer.invoke('agent:approval', decision),
     onEvent: (cb) => subscribe<AgentEvent>('agent:event', cb),
     onApprovalRequest: (cb) => subscribe<ApprovalRequest>('agent:approval-request', cb),
+  },
+  preview: {
+    onRequest: (cb) => subscribe<PreviewRequest>('preview:request', cb),
+    result: (result) => ipcRenderer.invoke('preview:result', result),
+    saveCapture: (dataUrl) => ipcRenderer.invoke('preview:save-capture', { dataUrl }),
   },
 };
 

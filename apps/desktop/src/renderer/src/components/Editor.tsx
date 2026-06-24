@@ -3,6 +3,11 @@ import { Save } from 'lucide-react';
 import MonacoEditor, { type OnMount } from '@monaco-editor/react';
 import type { editor as MonacoEditorNS } from 'monaco-editor';
 import { monacoLanguageFor, setupMonaco, TRIANGLE_DARK_THEME } from '../monaco/setup.js';
+import { shaderStageFor } from '../monaco/glsl.js';
+import { validateActiveShader } from '../preview/bridge.js';
+
+/** Marker owner id for our live GLSL compile diagnostics (ADR 0004/0007). */
+const SHADER_MARKER_OWNER = 'triangle-glsl';
 
 // Configure Monaco (workers, GLSL language, theme, local loader) before first mount.
 setupMonaco();
@@ -48,12 +53,57 @@ export function Editor({ path, content, onSave }: EditorProps): React.JSX.Elemen
     setDirty(next);
   }, []);
 
+  const lintTimer = useRef<number | undefined>(undefined);
+
   const applyLanguage = useCallback((p: string | null) => {
     const ed = editorRef.current;
     const monaco = monacoRef.current;
     const model = ed?.getModel();
     if (monaco && model) monaco.editor.setModelLanguage(model, monacoLanguageFor(p));
   }, []);
+
+  /**
+   * Compile the current buffer against the live preview's GL context and surface
+   * the diagnostics as Monaco markers (Stage 3). No-op for non-GLSL files or when
+   * the Preview panel is closed; markers are cleared either way. See ADR 0007.
+   */
+  const lintShader = useCallback((value: string) => {
+    const ed = editorRef.current;
+    const monaco = monacoRef.current;
+    const model = ed?.getModel();
+    if (!ed || !monaco || !model) return;
+    const isGlsl = monacoLanguageFor(pathRef.current) === 'glsl';
+    if (!isGlsl) {
+      monaco.editor.setModelMarkers(model, SHADER_MARKER_OWNER, []);
+      return;
+    }
+    const result = validateActiveShader(shaderStageFor(pathRef.current, value), value);
+    if (!result || result.ok) {
+      monaco.editor.setModelMarkers(model, SHADER_MARKER_OWNER, []);
+      return;
+    }
+    const markers = result.diagnostics.map((d) => {
+      const lineLength = model.getLineMaxColumn(Math.min(d.line, model.getLineCount()));
+      return {
+        severity:
+          d.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
+        message: d.message,
+        startLineNumber: d.line,
+        startColumn: d.column ?? 1,
+        endLineNumber: d.line,
+        endColumn: lineLength,
+      };
+    });
+    monaco.editor.setModelMarkers(model, SHADER_MARKER_OWNER, markers);
+  }, []);
+
+  const scheduleLint = useCallback(
+    (value: string) => {
+      window.clearTimeout(lintTimer.current);
+      lintTimer.current = window.setTimeout(() => lintShader(value), 250);
+    },
+    [lintShader],
+  );
 
   const doSave = useCallback(async () => {
     const ed = editorRef.current;
@@ -86,6 +136,7 @@ export function Editor({ path, content, onSave }: EditorProps): React.JSX.Elemen
       if (ed) {
         if (ed.getValue() !== content) ed.setValue(content);
         applyLanguage(path);
+        lintShader(content);
       }
       return;
     }
@@ -94,8 +145,12 @@ export function Editor({ path, content, onSave }: EditorProps): React.JSX.Elemen
     if (!dirtyRef.current && ed && content !== savedRef.current) {
       savedRef.current = content;
       if (ed.getValue() !== content) ed.setValue(content);
+      lintShader(content);
     }
-  }, [path, content, applyLanguage, setDirtyBoth]);
+  }, [path, content, applyLanguage, setDirtyBoth, lintShader]);
+
+  // Clear the pending lint timer on unmount.
+  useEffect(() => () => window.clearTimeout(lintTimer.current), []);
 
   const handleMount: OnMount = (ed, monaco) => {
     editorRef.current = ed;
@@ -106,10 +161,12 @@ export function Editor({ path, content, onSave }: EditorProps): React.JSX.Elemen
     monaco.editor.setTheme(TRIANGLE_DARK_THEME);
     // Save on Cmd/Ctrl+S.
     ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void doSave());
+    lintShader(content);
   };
 
   const handleChange = (value: string | undefined): void => {
     setDirtyBoth((value ?? '') !== savedRef.current);
+    scheduleLint(value ?? '');
   };
 
   if (!path) {

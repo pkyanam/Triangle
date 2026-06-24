@@ -177,6 +177,21 @@ export class ProjectManager {
     return { path: relPath, ok: true };
   }
 
+  /**
+   * Persist a binary capture (e.g. an agent screenshot) under the project's
+   * gitignored `.triangle/captures/` directory and return its project-relative
+   * POSIX path. `.triangle` is in {@link IGNORED}, so this never appears in the
+   * file tree nor triggers a hot-reload. Backs the screenshot tool/quick-action.
+   */
+  async saveCapture(buffer: Buffer, ext = 'png'): Promise<{ path: string }> {
+    const root = this.getRoot();
+    const rel = `.triangle/captures/capture-${Date.now()}.${ext}`;
+    const abs = path.join(root, rel);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, buffer);
+    return { path: rel };
+  }
+
   /** Whether a watcher event for `relPath` should be swallowed as a self-write echo. */
   private isSuppressed(relPath: string): boolean {
     const expiry = this.suppressed.get(relPath);

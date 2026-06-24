@@ -11,6 +11,7 @@ import type {
 } from '@triangle/shared';
 import { ProjectManager } from './project.js';
 import { AgentManager } from './agent/manager.js';
+import { PreviewBridge } from './preview-bridge.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
@@ -18,6 +19,13 @@ const isDev = !!process.env['ELECTRON_RENDERER_URL'];
 let mainWindow: BrowserWindow | null = null;
 let project: ProjectManager;
 let agents: AgentManager;
+let preview: PreviewBridge;
+
+/** Decode a `data:…;base64,…` URL into raw bytes. */
+function dataUrlToBuffer(dataUrl: string): Buffer {
+  const comma = dataUrl.indexOf(',');
+  return Buffer.from(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl, 'base64');
+}
 
 /** Type-safe wrapper around ipcMain.handle keyed by the shared IPC contract. */
 function handle<C extends IpcInvokeChannel>(
@@ -49,6 +57,11 @@ function registerIpc(): void {
   handle('agent:start', (req) => agents.start(req));
   handle('agent:cancel', (req) => agents.cancel(req.runId));
   handle('agent:approval', (req) => agents.resolveApproval(req));
+
+  // Stage 3 preview bridge: the renderer replies to main's `preview:request`s here,
+  // and persists quick-action screenshots via the same ProjectManager capture path.
+  handle('preview:result', (req) => preview.resolve(req));
+  handle('preview:save-capture', (req) => project.saveCapture(dataUrlToBuffer(req.dataUrl)));
 }
 
 function createWindow(): void {
@@ -108,8 +121,10 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('[main] failed to initialize project:', err);
   }
+  preview = new PreviewBridge((req) => send('preview:request', req));
   agents = new AgentManager(
     project,
+    preview,
     (event) => send('agent:event', event),
     (req) => send('agent:approval-request', req),
   );
@@ -128,6 +143,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   agents?.disposeAll();
+  preview?.disposeAll();
   void project?.dispose();
 });
 

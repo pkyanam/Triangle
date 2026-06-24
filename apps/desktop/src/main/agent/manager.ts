@@ -10,6 +10,7 @@ import type {
 } from '@triangle/shared';
 import { loadConfig, type TriangleConfig } from '../config.js';
 import type { ProjectManager } from '../project.js';
+import type { PreviewBridge } from '../preview-bridge.js';
 import { createToolset, type ApprovalGate } from './tools.js';
 import type { AgentHarness } from './harness.js';
 import { mockHarness } from './mock.js';
@@ -40,6 +41,7 @@ export class AgentManager {
 
   constructor(
     private readonly project: ProjectManager,
+    private readonly preview: PreviewBridge,
     private readonly emitEvent: (event: AgentEvent) => void,
     private readonly sendApproval: (req: ApprovalRequest) => void,
   ) {
@@ -110,6 +112,7 @@ export class AgentManager {
 
     const toolset = createToolset({
       project: this.project,
+      preview: this.preview,
       approveWrite,
       emitTrace: (trace) => this.emitEvent({ type: 'tool', runId, trace }),
     });

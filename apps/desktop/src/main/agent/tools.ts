@@ -1,5 +1,6 @@
-import type { FileNode, ToolCallTrace } from '@triangle/shared';
+import type { FileNode, ShaderStage, ShaderValidationResult, ToolCallTrace } from '@triangle/shared';
 import type { ProjectManager } from '../project.js';
+import type { PreviewBridge } from '../preview-bridge.js';
 
 /**
  * The Triangle filesystem toolset — the concrete implementation of the
@@ -21,6 +22,8 @@ export type ApprovalGate = (req: {
 export interface ToolContext {
   project: ProjectManager;
   approveWrite: ApprovalGate;
+  /** Bridge to the live preview runtime (Stage 3 domain tooling). */
+  preview: PreviewBridge;
   /** Emit a tool-call trace to the UI (running → ok/error). */
   emitTrace: (trace: ToolCallTrace) => void;
 }
@@ -46,18 +49,44 @@ function renderTree(node: FileNode, depth = 0): string {
   return [head, ...kids].join('\n');
 }
 
+/** Render a shader validation result as a compact, agent-readable report. */
+function renderShaderReport(result: ShaderValidationResult): string {
+  if (result.ok) return `OK — ${result.stage} shader compiled cleanly (${result.dialect}).`;
+  const lines = result.diagnostics.map(
+    (d) => `  ${d.severity} (line ${d.line}): ${d.message}`,
+  );
+  return [
+    `FAILED — ${result.stage} shader did not compile (${result.dialect}).`,
+    ...lines,
+  ].join('\n');
+}
+
+/** Decode a `data:image/...;base64,…` URL into raw bytes. */
+function dataUrlToBuffer(dataUrl: string): Buffer {
+  const comma = dataUrl.indexOf(',');
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  return Buffer.from(base64, 'base64');
+}
+
 /**
  * The raw, framework-agnostic tool functions. Each emits a trace and forwards to the
- * project layer. Harnesses (Claude SDK, ACP, …) wrap these in their own tool envelopes.
+ * project layer or the preview bridge. Harnesses (Claude SDK, Codex/MCP, ACP, …) wrap
+ * these in their own tool envelopes.
  */
 export interface TriangleToolset {
+  // Filesystem (Stage 2).
   projectTree(): Promise<string>;
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<string>;
+  // Three.js domain tooling (Stage 3) — backed by the live preview runtime.
+  captureScreenshot(options?: { width?: number; height?: number }): Promise<string>;
+  describeScene(): Promise<string>;
+  validateShader(stage: ShaderStage, source: string): Promise<string>;
+  performanceSnapshot(): Promise<string>;
 }
 
 export function createToolset(ctx: ToolContext): TriangleToolset {
-  const { project, approveWrite, emitTrace } = ctx;
+  const { project, approveWrite, preview, emitTrace } = ctx;
 
   async function traced<T>(
     tool: string,
@@ -103,6 +132,49 @@ export function createToolset(ctx: ToolContext): TriangleToolset {
         return {
           result: `${exists ? 'Updated' : 'Created'} ${path}`,
           summary: `${exists ? 'Updated' : 'Created'} ${path} (${content.length} bytes).`,
+        };
+      }),
+
+    captureScreenshot: (options = {}) =>
+      traced('triangle_capture_screenshot', { ...options }, async () => {
+        const capture = await preview.captureScreenshot(options);
+        const { path } = await project.saveCapture(dataUrlToBuffer(capture.dataUrl));
+        const summary = `Saved ${capture.width}×${capture.height} screenshot to ${path}.`;
+        return {
+          result: `${summary} Read this image file for a visual reference of the current preview.`,
+          summary,
+        };
+      }),
+
+    describeScene: () =>
+      traced('triangle_describe_scene', {}, async () => {
+        const summary = await preview.describeScene();
+        const text = JSON.stringify(summary, null, 2);
+        return {
+          result: text,
+          summary: `${summary.objects.length} object(s), ${summary.lights.length} light(s), ${summary.triangles} triangles.`,
+        };
+      }),
+
+    validateShader: (stage: ShaderStage, source: string) =>
+      traced('triangle_validate_shader', { stage, bytes: source.length }, async () => {
+        const result = await preview.validateShader(stage, source);
+        const text = renderShaderReport(result);
+        return {
+          result: text,
+          summary: result.ok
+            ? `${stage} shader OK.`
+            : `${stage} shader: ${result.diagnostics.length} error(s).`,
+        };
+      }),
+
+    performanceSnapshot: () =>
+      traced('triangle_performance_snapshot', {}, async () => {
+        const snap = await preview.performanceSnapshot();
+        const text = JSON.stringify(snap, null, 2);
+        return {
+          result: text,
+          summary: `${snap.fps} fps · ${snap.drawCalls} draws · ${snap.triangles} tris · ~${snap.gpuMemoryEstimateMb} MB GPU.`,
         };
       }),
   };

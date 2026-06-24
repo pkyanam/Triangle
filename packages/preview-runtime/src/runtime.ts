@@ -1,11 +1,21 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type {
+  CaptureResult,
+  PerformanceSnapshot,
   PreviewModule,
   PreviewStats,
   PreviewStatus,
+  SceneSummary,
   SetupContext,
+  ShaderStage,
+  ShaderValidationResult,
 } from '@triangle/shared';
+import {
+  describeScene as inspectScene,
+  performanceSnapshot as inspectPerformance,
+  validateShader as inspectShader,
+} from './inspect.js';
 
 export interface PreviewRuntimeOptions {
   /** Called whenever the load/run status changes (idle/loading/running/error). */
@@ -51,6 +61,7 @@ export class PreviewRuntime {
   // FPS sampling.
   private frames = 0;
   private lastStatsAt = 0;
+  private lastFps = 0;
 
   constructor(canvas: HTMLCanvasElement, options: PreviewRuntimeOptions = {}) {
     this.canvas = canvas;
@@ -139,6 +150,48 @@ export class PreviewRuntime {
   screenshot(): string {
     this.renderer.render(this.scene, this.camera);
     return this.canvas.toDataURL('image/png');
+  }
+
+  /**
+   * Capture the framebuffer as a PNG, optionally at a specific size, returning the
+   * data URL plus the pixel dimensions. The render size is restored afterwards so
+   * the live preview is unaffected. Backs the `triangle_capture_screenshot` tool.
+   */
+  capture(options: { width?: number; height?: number } = {}): CaptureResult {
+    const prev = this.renderer.getSize(new THREE.Vector2());
+    const width = Math.max(1, Math.round(options.width ?? prev.x));
+    const height = Math.max(1, Math.round(options.height ?? prev.y));
+    const resized = width !== prev.x || height !== prev.y;
+
+    if (resized) {
+      this.renderer.setSize(width, height, false);
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+    }
+    this.renderer.render(this.scene, this.camera);
+    const dataUrl = this.canvas.toDataURL('image/png');
+    if (resized) {
+      this.renderer.setSize(prev.x, prev.y, false);
+      this.camera.aspect = prev.x / prev.y;
+      this.camera.updateProjectionMatrix();
+      this.renderer.render(this.scene, this.camera);
+    }
+    return { dataUrl, width, height };
+  }
+
+  /** Serialize the live scene graph for agent grounding. */
+  describeScene(): SceneSummary {
+    return inspectScene(this.scene, this.camera, this.renderer, this.persistent);
+  }
+
+  /** Snapshot current performance counters (FPS, draw calls, memory, …). */
+  performanceSnapshot(): PerformanceSnapshot {
+    return inspectPerformance(this.renderer, this.scene, this.lastFps);
+  }
+
+  /** Compile a GLSL shader against the live GL context (no scene mutation). */
+  validateShader(stage: ShaderStage, source: string): ShaderValidationResult {
+    return inspectShader(this.renderer, stage, source);
   }
 
   /** Tear everything down and release GPU resources. Idempotent. */
@@ -238,8 +291,9 @@ export class PreviewRuntime {
     const elapsed = now - this.lastStatsAt;
     if (elapsed < 250) return;
     const info = this.renderer.info;
+    this.lastFps = Math.round((this.frames * 1000) / elapsed);
     this.options.onStats?.({
-      fps: Math.round((this.frames * 1000) / elapsed),
+      fps: this.lastFps,
       drawCalls: info.render.calls,
       triangles: info.render.triangles,
       geometries: info.memory.geometries,
