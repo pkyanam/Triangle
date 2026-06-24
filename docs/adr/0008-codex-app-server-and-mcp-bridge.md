@@ -30,8 +30,12 @@ Two facts shaped the decision:
   `item/agentMessage/delta` → assistant streaming; `commandExecution` / `fileChange`
   / `mcpToolCall` items → tool traces; `turn/completed` resolves the run;
   `turn/interrupt` on cancel. Server-initiated approval requests for sandboxed
-  command/file actions are accepted (consistent with the workspace sandbox); other
-  server requests are declined so a turn never hangs.
+  command/file actions are accepted (consistent with the workspace sandbox).
+  Crucially, Codex gates *every* MCP tool call behind an
+  `mcpServer/elicitation/request` (form mode, `codex_approval_kind:
+  mcp_tool_call`); since these are Triangle's own trusted domain tools, the harness
+  auto-accepts form-mode elicitations — otherwise the tool call is reported back to
+  the model as "rejected". Other server requests are declined so a turn never hangs.
 - **A bundled Triangle MCP server.** `apps/desktop/src/mcp/server.ts` is a small,
   dependency-free stdio MCP server (hand-rolled JSON-RPC: `initialize`,
   `tools/list`, `tools/call`) that advertises the four Stage 3 tools straight from

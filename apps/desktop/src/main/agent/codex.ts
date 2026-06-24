@@ -261,15 +261,27 @@ export const codexHarness: AgentHarness = {
       };
 
       const handleServerRequest = (msg: RpcMessage): void => {
-        // Codex requests approval for sandboxed actions. We run with sandbox
-        // `workspace-write` scoped to the project (Stage 2 boundary), so accept
-        // command/file approvals; decline anything else so the turn never hangs.
+        // Codex drives approvals as server→client requests. We run with sandbox
+        // `workspace-write` scoped to the project (the Stage 2 boundary), so accept
+        // command/file approvals. Codex also gates every MCP tool call behind an
+        // `mcpServer/elicitation/request` (codex_approval_kind: mcp_tool_call); those
+        // are Triangle's *own* trusted domain tools, so auto-accept form-mode
+        // elicitations. Decline url-mode (OAuth) and anything else so a turn never hangs.
         switch (msg.method) {
           case 'item/commandExecution/requestApproval':
           case 'item/fileChange/requestApproval':
             client.respond(msg.id, { decision: 'accept' });
             break;
+          case 'mcpServer/elicitation/request':
+            if (msg.params?.['mode'] === 'form') {
+              client.respond(msg.id, { action: 'accept', content: {}, _meta: null });
+            } else {
+              client.respond(msg.id, { action: 'decline', content: null, _meta: null });
+            }
+            break;
           default:
+            // e.g. item/tool/requestUserInput, permissions, OAuth — we can't answer
+            // these unattended; respond with an error rather than hang the turn.
             client.respondError(msg.id, -32601, `Unsupported server request: ${msg.method}`);
         }
       };
