@@ -1,3 +1,5 @@
+import logoUrl from '../assets/logo.jpg';
+
 interface TopBarProps {
   projectName: string;
   leftOpen: boolean;
@@ -16,7 +18,7 @@ export function TopBar({
   return (
     <div className="topbar">
       <div className="topbar__brand">
-        <span className="topbar__logo">◢</span>
+        <img className="topbar__logo-img" src={logoUrl} alt="Triangle" />
         <span>Triangle</span>
         <span className="topbar__project">— {projectName}</span>
       </div>

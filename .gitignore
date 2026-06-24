@@ -9,6 +9,10 @@ build/
 release/
 *.tsbuildinfo
 
+# …but keep electron-builder's committed app resources (icons).
+!apps/desktop/build/
+!apps/desktop/build/**
+
 # Logs
 logs/
 *.log

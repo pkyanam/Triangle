@@ -13,11 +13,14 @@ extraResources:
     to: starter
 mac:
   category: public.app-category.developer-tools
+  icon: build/icon.png
   target:
     - dir
 win:
+  icon: build/icon.png
   target:
     - dir
 linux:
+  icon: build/icon.png
   target:
     - dir
