@@ -2,17 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PreviewStats, PreviewStatus, ProjectInfo } from '@triangle/shared';
 import { TopBar } from './components/TopBar.js';
 import { StatusBar } from './components/StatusBar.js';
-import { FileTree } from './components/FileTree.js';
-import { Editor } from './components/Editor.js';
-import { Preview } from './components/Preview.js';
-import { AgentPanel } from './components/AgentPanel.js';
-import { Splitter } from './components/Splitter.js';
-
-const LEFT_MIN = 180;
-const LEFT_MAX = 480;
-const RIGHT_MIN = 280;
-const RIGHT_MAX = 560;
-const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));
+import { Workspace, type WorkspaceHandle } from './workspace/Workspace.js';
+import type { WorkspaceState } from './workspace/context.js';
 
 export function App(): React.JSX.Element {
   const [project, setProject] = useState<ProjectInfo | null>(null);
@@ -23,11 +14,9 @@ export function App(): React.JSX.Element {
   const [stats, setStats] = useState<PreviewStats | null>(null);
   const [electronVersion, setElectronVersion] = useState('');
 
-  // Layout state.
-  const [leftWidth, setLeftWidth] = useState(260);
-  const [rightWidth, setRightWidth] = useState(380);
-  const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
+  // Which optional dock panels are currently mounted (reflected in the TopBar).
+  const [panelsOpen, setPanelsOpen] = useState({ explorer: true, agent: true });
+  const workspaceRef = useRef<WorkspaceHandle>(null);
 
   // Refs so the file-watch subscription stays stable yet reads fresh values.
   const selectedRef = useRef<string | null>(null);
@@ -110,63 +99,31 @@ export function App(): React.JSX.Element {
   const projectName = project?.manifest.name ?? 'Loading…';
   const entry = project?.manifest.entry ?? '—';
 
+  const workspaceState: WorkspaceState = {
+    project,
+    projectName,
+    entrySource,
+    selectedPath,
+    selectedContent,
+    openFile,
+    saveFile,
+    onStatus: setStatus,
+    onStats: setStats,
+  };
+
   return (
     <div className="app">
       <TopBar
         projectName={projectName}
-        leftOpen={leftOpen}
-        rightOpen={rightOpen}
-        onToggleLeft={() => setLeftOpen((o) => !o)}
-        onToggleRight={() => setRightOpen((o) => !o)}
+        leftOpen={panelsOpen.explorer}
+        rightOpen={panelsOpen.agent}
+        onToggleLeft={() => workspaceRef.current?.toggleExplorer()}
+        onToggleRight={() => workspaceRef.current?.toggleAgent()}
+        onResetLayout={() => workspaceRef.current?.resetLayout()}
       />
 
       <div className="workspace">
-        {leftOpen && (
-          <>
-            <div className="panel" style={{ width: leftWidth, flex: `0 0 ${leftWidth}px` }}>
-              <div className="panel__header">
-                <span>Explorer</span>
-              </div>
-              <div className="panel__body" style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flex: '0 0 45%', overflow: 'auto', borderBottom: '1px solid var(--border)' }}>
-                  <FileTree
-                    root={project?.tree ?? null}
-                    selectedPath={selectedPath}
-                    onSelect={openFile}
-                  />
-                </div>
-                <div style={{ flex: 1, minHeight: 0 }}>
-                  <Editor path={selectedPath} content={selectedContent} onSave={saveFile} />
-                </div>
-              </div>
-            </div>
-            <Splitter
-              onDrag={(dx) => setLeftWidth((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))}
-              onDoubleClick={() => setLeftOpen(false)}
-            />
-          </>
-        )}
-
-        <div className="panel panel--center">
-          <Preview source={entrySource} onStatus={setStatus} onStats={setStats} />
-        </div>
-
-        {rightOpen && (
-          <>
-            <Splitter
-              onDrag={(dx) => setRightWidth((w) => clamp(w - dx, RIGHT_MIN, RIGHT_MAX))}
-              onDoubleClick={() => setRightOpen(false)}
-            />
-            <div className="panel" style={{ width: rightWidth, flex: `0 0 ${rightWidth}px` }}>
-              <div className="panel__header">
-                <span>Agent</span>
-              </div>
-              <div className="panel__body" style={{ overflow: 'hidden' }}>
-                <AgentPanel projectName={projectName} />
-              </div>
-            </div>
-          </>
-        )}
+        <Workspace ref={workspaceRef} state={workspaceState} onPanelsChange={setPanelsOpen} />
       </div>
 
       <StatusBar
