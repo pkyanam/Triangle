@@ -11,7 +11,12 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin(keepBundled)],
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/main/index.ts') },
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          // The Triangle MCP server: a separate entry that Codex launches as a
+          // subprocess (run via electron-as-node). Emitted to out/main/mcp.js.
+          mcp: resolve(__dirname, 'src/mcp/server.ts'),
+        },
       },
     },
   },

@@ -1,28 +1,120 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import readline from 'node:readline';
 import type { TriangleConfig } from '../config.js';
 import { harnessTraceId, type AgentHarness, type RunContext } from './harness.js';
 
 /**
- * Codex CLI harness. Delegates a task to OpenAI's `codex` binary in non-interactive
- * mode (`codex exec --json`), parsing its JSONL event stream into Triangle agent events.
+ * Codex harness backed by the **Codex App Server** (`codex app-server`) — the same
+ * JSON-RPC interface the Codex VS Code extension uses. See ADR 0008.
  *
- * Unlike the Claude harness (whose writes route through ProjectManager + the approval
- * gate), Codex edits files directly on disk within a `workspace-write` sandbox scoped to
- * the project root; the file watcher then reflects those edits into the editor/preview.
- * See ADR 0005 for that boundary.
+ * Why the App Server (vs. the previous `codex exec --json`): it gives a persistent
+ * thread, structured streaming `item/*` events, and — crucially for Stage 3 — lets
+ * us register Triangle's domain tools as an MCP server (`config.mcp_servers.triangle`)
+ * that Codex can call autonomously. That MCP server is the bundled Triangle MCP
+ * stdio server, which Codex launches and which forwards tool calls back over the
+ * loopback tool bridge to this run's toolset. So Codex reaches the *same* live
+ * preview tools as the in-process Claude harness.
+ *
+ * Wire format: newline-delimited JSON-RPC 2.0 with the `"jsonrpc"` header omitted.
  */
 
 const codexBin = (config: TriangleConfig): string => config.codexPath || 'codex';
 
-/** Resolve a string field from any of several candidate keys. */
-function pick(obj: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const k of keys) {
-    const v = obj[k];
-    if (typeof v === 'string' && v.length > 0) return v;
-  }
-  return undefined;
+const DEVELOPER_INSTRUCTIONS =
+  'You are working inside Triangle, a live Three.js preview engine. The project entry ' +
+  'module hot-reloads on save. Triangle exposes MCP tools under the "triangle" server for ' +
+  'visual grounding: triangle_capture_screenshot (saves a PNG you can view), ' +
+  'triangle_describe_scene, triangle_validate_shader (compile GLSL and get diagnostics before ' +
+  'writing it), and triangle_performance_snapshot. Prefer validating shaders and capturing a ' +
+  'screenshot to confirm visual changes. Make minimal, targeted edits.';
+
+type JsonValue = unknown;
+interface RpcMessage {
+  id?: number | string | null;
+  method?: string;
+  params?: Record<string, JsonValue>;
+  result?: JsonValue;
+  error?: { code: number; message: string };
 }
+
+/** Minimal JSON-RPC client over a child process' stdio (newline-delimited). */
+class AppServerClient {
+  private nextId = 1;
+  private readonly pending = new Map<
+    number,
+    { resolve: (v: JsonValue) => void; reject: (e: Error) => void }
+  >();
+
+  constructor(
+    private readonly child: ChildProcessWithoutNullStreams,
+    private readonly onNotification: (method: string, params: Record<string, JsonValue>) => void,
+    private readonly onServerRequest: (msg: RpcMessage) => void,
+  ) {
+    const rl = readline.createInterface({ input: child.stdout });
+    rl.on('line', (line) => this.onLine(line));
+  }
+
+  private onLine(line: string): void {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let msg: RpcMessage;
+    try {
+      msg = JSON.parse(trimmed) as RpcMessage;
+    } catch {
+      return;
+    }
+    const hasId = msg.id !== undefined && msg.id !== null;
+    if (hasId && (msg.result !== undefined || msg.error !== undefined)) {
+      const pending = this.pending.get(Number(msg.id));
+      if (!pending) return;
+      this.pending.delete(Number(msg.id));
+      if (msg.error) pending.reject(new Error(msg.error.message));
+      else pending.resolve(msg.result);
+    } else if (hasId && msg.method) {
+      this.onServerRequest(msg);
+    } else if (msg.method) {
+      this.onNotification(msg.method, msg.params ?? {});
+    }
+  }
+
+  request(method: string, params: Record<string, JsonValue>): Promise<JsonValue> {
+    const id = this.nextId++;
+    this.child.stdin.write(`${JSON.stringify({ id, method, params })}\n`);
+    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+  }
+
+  notify(method: string, params: Record<string, JsonValue>): void {
+    this.child.stdin.write(`${JSON.stringify({ method, params })}\n`);
+  }
+
+  respond(id: number | string | null | undefined, result: JsonValue): void {
+    this.child.stdin.write(`${JSON.stringify({ id: id ?? null, result })}\n`);
+  }
+
+  respondError(id: number | string | null | undefined, code: number, message: string): void {
+    this.child.stdin.write(`${JSON.stringify({ id: id ?? null, error: { code, message } })}\n`);
+  }
+
+  rejectAll(err: Error): void {
+    for (const p of this.pending.values()) p.reject(err);
+    this.pending.clear();
+  }
+}
+
+/** Extract joined text from an MCP tool-call result's content blocks. */
+function mcpResultText(result: unknown): string | undefined {
+  const content = (result as { content?: unknown[] } | null)?.content;
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .map((c) => (c as { type?: string; text?: string }).text)
+    .filter((t): t is string => typeof t === 'string')
+    .join('');
+  return text || undefined;
+}
+
+const TERMINAL_TOOL_STATUS = new Set(['completed', 'failed', 'declined']);
+const toTraceStatus = (status: string): 'running' | 'ok' | 'error' =>
+  status === 'failed' || status === 'declined' ? 'error' : status === 'inProgress' ? 'running' : 'ok';
 
 export const codexHarness: AgentHarness = {
   id: 'codex',
@@ -59,132 +151,200 @@ export const codexHarness: AgentHarness = {
   },
 
   run(ctx: RunContext): Promise<void> {
-    const { prompt, projectRoot, config, emit, signal } = ctx;
+    const { prompt, projectRoot, config, toolBridge, emit, signal } = ctx;
     const bin = codexBin(config);
 
-    // `--skip-git-repo-check`: Triangle projects (seeded under userData) aren't git repos.
-    const args = [
-      'exec',
-      '--json',
-      '--sandbox',
-      'workspace-write',
-      '--skip-git-repo-check',
-      '-C',
-      projectRoot,
-    ];
-    if (config.codexModel) args.push('--model', config.codexModel);
-    args.push(prompt);
-
     return new Promise<void>((resolve, reject) => {
-      const child = spawn(bin, args, {
+      const child = spawn(bin, ['app-server'], {
         cwd: projectRoot,
         env: { ...process.env },
-        // The prompt is passed as an arg; close stdin so Codex doesn't block reading it.
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }) as ChildProcessWithoutNullStreams;
 
+      let settled = false;
+      let threadId = '';
+      let turnId = '';
       let failure: string | null = null;
+      const agentText = new Map<string, string>();
       const stderrTail: string[] = [];
 
-      const onAbort = (): void => {
-        child.kill();
-      };
-      if (signal.aborted) child.kill();
-      else signal.addEventListener('abort', onAbort, { once: true });
-
-      child.on('error', (err) => {
+      const finish = (err?: Error): void => {
+        if (settled) return;
+        settled = true;
         signal.removeEventListener('abort', onAbort);
-        reject(new Error(`Failed to launch Codex CLI: ${err.message}`));
-      });
+        client.rejectAll(new Error('Codex run ended.'));
+        child.kill();
+        if (err) reject(err);
+        else resolve();
+      };
 
-      const out = readline.createInterface({ input: child.stdout });
-      out.on('line', (line) => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        let ev: Record<string, unknown>;
-        try {
-          ev = JSON.parse(trimmed) as Record<string, unknown>;
-        } catch {
-          return; // non-JSON progress line
+      const onAbort = (): void => {
+        if (threadId && turnId) client.notify('turn/interrupt', { threadId, turnId });
+        finish();
+      };
+
+      const handleNotification = (method: string, params: Record<string, JsonValue>): void => {
+        switch (method) {
+          case 'item/agentMessage/delta': {
+            const itemId = String(params['itemId'] ?? '');
+            const delta = String(params['delta'] ?? '');
+            const text = (agentText.get(itemId) ?? '') + delta;
+            agentText.set(itemId, text);
+            emit({ type: 'assistant', messageId: itemId, text });
+            break;
+          }
+          case 'item/started':
+          case 'item/completed':
+            handleItem(params['item'] as Record<string, JsonValue> | undefined, method);
+            break;
+          case 'turn/completed': {
+            const turn = params['turn'] as { id?: string; status?: string; error?: { message?: string } } | undefined;
+            if (turn?.status === 'failed') finish(new Error(turn.error?.message ?? 'Codex turn failed.'));
+            else finish();
+            break;
+          }
+          case 'error': {
+            const err = params['error'] as { message?: string } | undefined;
+            failure = err?.message ?? 'Codex reported an error.';
+            break;
+          }
         }
-        handleEvent(ev, emit, (msg) => (failure = msg));
-      });
+      };
 
-      const err = readline.createInterface({ input: child.stderr });
-      err.on('line', (line) => {
+      const handleItem = (item: Record<string, JsonValue> | undefined, method: string): void => {
+        if (!item) return;
+        const type = String(item['type'] ?? '');
+        const id = String(item['id'] ?? harnessTraceId());
+        const completed = method === 'item/completed';
+
+        if (type === 'agentMessage') {
+          const text = String(item['text'] ?? '');
+          if (text) emit({ type: 'assistant', messageId: id, text });
+        } else if (type === 'commandExecution') {
+          const status = String(item['status'] ?? 'inProgress');
+          if (completed || !TERMINAL_TOOL_STATUS.has(status)) {
+            emit({
+              type: 'tool',
+              trace: {
+                id,
+                tool: 'command',
+                args: { command: String(item['command'] ?? '(command)') },
+                status: toTraceStatus(status),
+                result: (item['aggregatedOutput'] as string | null) ?? undefined,
+              },
+            });
+          }
+        } else if (type === 'fileChange') {
+          const changes = (item['changes'] as Array<{ path?: string }> | undefined) ?? [];
+          emit({
+            type: 'tool',
+            trace: {
+              id,
+              tool: 'file_change',
+              args: { path: changes.map((c) => c.path).filter(Boolean).join(', ') || '(files)' },
+              status: toTraceStatus(String(item['status'] ?? 'completed')),
+            },
+          });
+        } else if (type === 'mcpToolCall') {
+          const status = String(item['status'] ?? 'inProgress');
+          emit({
+            type: 'tool',
+            trace: {
+              id,
+              tool: String(item['tool'] ?? 'mcp_tool'),
+              args: (item['arguments'] as Record<string, unknown>) ?? {},
+              status: toTraceStatus(status),
+              result: mcpResultText(item['result']),
+            },
+          });
+        }
+      };
+
+      const handleServerRequest = (msg: RpcMessage): void => {
+        // Codex requests approval for sandboxed actions. We run with sandbox
+        // `workspace-write` scoped to the project (Stage 2 boundary), so accept
+        // command/file approvals; decline anything else so the turn never hangs.
+        switch (msg.method) {
+          case 'item/commandExecution/requestApproval':
+          case 'item/fileChange/requestApproval':
+            client.respond(msg.id, { decision: 'accept' });
+            break;
+          default:
+            client.respondError(msg.id, -32601, `Unsupported server request: ${msg.method}`);
+        }
+      };
+
+      const client = new AppServerClient(child, handleNotification, handleServerRequest);
+
+      child.on('error', (err) => finish(new Error(`Failed to launch Codex App Server: ${err.message}`)));
+      const errReader = readline.createInterface({ input: child.stderr });
+      errReader.on('line', (line) => {
         if (line.trim()) {
           stderrTail.push(line);
           if (stderrTail.length > 20) stderrTail.shift();
         }
       });
-
       child.on('close', (code) => {
-        signal.removeEventListener('abort', onAbort);
-        if (signal.aborted) return resolve();
-        if (failure) return reject(new Error(failure));
-        if (code === 0) return resolve();
+        if (settled) return;
+        if (failure) return finish(new Error(failure));
         const detail = stderrTail.join('\n').trim();
-        reject(new Error(`Codex CLI exited with code ${code ?? 'null'}${detail ? `:\n${detail}` : ''}`));
+        finish(
+          code === 0
+            ? undefined
+            : new Error(`Codex App Server exited with code ${code ?? 'null'}${detail ? `:\n${detail}` : ''}`),
+        );
       });
+
+      if (signal.aborted) {
+        finish();
+        return;
+      }
+      signal.addEventListener('abort', onAbort, { once: true });
+
+      // Drive the conversation: initialize → thread/start (with our MCP server) → turn/start.
+      void (async () => {
+        try {
+          await client.request('initialize', {
+            clientInfo: { name: 'triangle', title: 'Triangle', version: '0.3.0' },
+            capabilities: null,
+          });
+          client.notify('initialized', {});
+
+          const threadConfig: Record<string, JsonValue> = {
+            mcp_servers: {
+              triangle: {
+                command: process.execPath,
+                args: [toolBridge.serverScriptPath],
+                env: {
+                  ELECTRON_RUN_AS_NODE: '1',
+                  TRIANGLE_BRIDGE_PORT: String(toolBridge.port),
+                  TRIANGLE_BRIDGE_TOKEN: toolBridge.token,
+                },
+              },
+            },
+          };
+          const thread = (await client.request('thread/start', {
+            cwd: projectRoot,
+            approvalPolicy: 'never',
+            sandbox: 'workspace-write',
+            developerInstructions: DEVELOPER_INSTRUCTIONS,
+            config: threadConfig,
+            ...(config.codexModel ? { model: config.codexModel } : {}),
+          })) as { thread?: { id?: string } };
+          threadId = thread.thread?.id ?? '';
+          if (!threadId) throw new Error('Codex App Server did not return a thread id.');
+          if (signal.aborted) return finish();
+
+          const turn = (await client.request('turn/start', {
+            threadId,
+            input: [{ type: 'text', text: prompt, text_elements: [] }],
+          })) as { turn?: { id?: string } };
+          turnId = turn.turn?.id ?? '';
+          // The run resolves when `turn/completed` arrives (handled above).
+        } catch (err) {
+          finish(err as Error);
+        }
+      })();
     });
   },
 };
-
-/** Map a single Codex JSONL event onto Triangle harness events. */
-function handleEvent(
-  ev: Record<string, unknown>,
-  emit: RunContext['emit'],
-  setFailure: (msg: string) => void,
-): void {
-  const type = typeof ev['type'] === 'string' ? (ev['type'] as string) : '';
-
-  if (type === 'error' || type === 'turn.failed') {
-    const errObj = (ev['error'] as Record<string, unknown> | undefined) ?? ev;
-    setFailure(pick(errObj, 'message', 'reason') ?? 'Codex reported an error.');
-    return;
-  }
-
-  if (type === 'item.completed' || type === 'item.updated') {
-    const item = (ev['item'] as Record<string, unknown> | undefined) ?? {};
-    const itemType = typeof item['type'] === 'string' ? (item['type'] as string) : '';
-    const id = pick(item, 'id') ?? harnessTraceId();
-
-    if (itemType === 'assistant_message' || itemType === 'agent_message') {
-      const text = pick(item, 'text', 'message');
-      if (text) emit({ type: 'assistant', messageId: id, text });
-      return;
-    }
-    if (itemType === 'command_execution') {
-      const command = pick(item, 'command') ?? '(command)';
-      const status = pick(item, 'status') === 'failed' ? 'error' : 'ok';
-      emit({
-        type: 'tool',
-        trace: {
-          id,
-          tool: 'command',
-          args: { command },
-          status,
-          result: pick(item, 'aggregated_output', 'output'),
-        },
-      });
-      return;
-    }
-    if (itemType === 'file_change' || itemType === 'patch' || itemType === 'file_update') {
-      emit({
-        type: 'tool',
-        trace: {
-          id,
-          tool: 'file_change',
-          args: { path: pick(item, 'path') ?? '(files)' },
-          status: 'ok',
-          result: pick(item, 'summary', 'status'),
-        },
-      });
-      return;
-    }
-    if (itemType === 'reasoning') {
-      const text = pick(item, 'text');
-      if (text) emit({ type: 'log', level: 'info', text });
-    }
-  }
-}

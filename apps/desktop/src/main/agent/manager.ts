@@ -11,6 +11,7 @@ import type {
 import { loadConfig, type TriangleConfig } from '../config.js';
 import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
+import type { ToolBridgeServer } from '../tool-bridge.js';
 import { createToolset, type ApprovalGate } from './tools.js';
 import type { AgentHarness } from './harness.js';
 import { mockHarness } from './mock.js';
@@ -42,6 +43,8 @@ export class AgentManager {
   constructor(
     private readonly project: ProjectManager,
     private readonly preview: PreviewBridge,
+    private readonly toolBridge: ToolBridgeServer,
+    private readonly mcpServerScriptPath: string,
     private readonly emitEvent: (event: AgentEvent) => void,
     private readonly sendApproval: (req: ApprovalRequest) => void,
   ) {
@@ -117,12 +120,21 @@ export class AgentManager {
       emitTrace: (trace) => this.emitEvent({ type: 'tool', runId, trace }),
     });
 
+    // Expose this run's toolset to out-of-process harnesses (Codex/MCP) over the
+    // loopback bridge, scoped by a single-use token revoked when the run ends.
+    const bridgeToken = this.toolBridge.register(toolset);
+
     try {
       await harness.run({
         prompt: req.prompt,
         projectRoot: this.project.getRoot(),
         config,
         toolset,
+        toolBridge: {
+          port: this.toolBridge.getPort(),
+          token: bridgeToken,
+          serverScriptPath: this.mcpServerScriptPath,
+        },
         signal: run.controller.signal,
         emit: (event) => {
           if (event.type === 'assistant') {
@@ -145,6 +157,7 @@ export class AgentManager {
       if (run.controller.signal.aborted) emitStatus('cancelled');
       else emitStatus('error', (err as Error).message);
     } finally {
+      this.toolBridge.unregister(bridgeToken);
       this.cleanupRun(runId);
     }
   }

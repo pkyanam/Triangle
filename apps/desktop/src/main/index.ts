@@ -12,6 +12,7 @@ import type {
 import { ProjectManager } from './project.js';
 import { AgentManager } from './agent/manager.js';
 import { PreviewBridge } from './preview-bridge.js';
+import { ToolBridgeServer } from './tool-bridge.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
@@ -20,6 +21,7 @@ let mainWindow: BrowserWindow | null = null;
 let project: ProjectManager;
 let agents: AgentManager;
 let preview: PreviewBridge;
+let toolBridge: ToolBridgeServer;
 
 /** Decode a `data:…;base64,…` URL into raw bytes. */
 function dataUrlToBuffer(dataUrl: string): Buffer {
@@ -122,9 +124,19 @@ app.whenReady().then(async () => {
     console.error('[main] failed to initialize project:', err);
   }
   preview = new PreviewBridge((req) => send('preview:request', req));
+  toolBridge = new ToolBridgeServer();
+  try {
+    await toolBridge.start();
+  } catch (err) {
+    console.error('[main] tool bridge failed to start:', err);
+  }
+  // out/main/mcp.js sits next to this bundle; Codex launches it as a subprocess.
+  const mcpServerScriptPath = path.join(__dirname, 'mcp.js');
   agents = new AgentManager(
     project,
     preview,
+    toolBridge,
+    mcpServerScriptPath,
     (event) => send('agent:event', event),
     (req) => send('agent:approval-request', req),
   );
@@ -144,6 +156,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   agents?.disposeAll();
   preview?.disposeAll();
+  toolBridge?.stop();
   void project?.dispose();
 });
 
