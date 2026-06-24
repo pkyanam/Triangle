@@ -8,18 +8,26 @@ pairs a focused three-panel UI with a high-fidelity live Three.js preview and a
 harness-agnostic agent layer.
 
 ```
-┌──────────────┬───────────────────────────┬──────────────┐
-│              │                           │              │
-│  Mini-editor │   Three.js live preview   │  AI agent    │
-│  + file tree │   (hot-reload, orbit,     │  panel       │
-│              │    screenshot, stats)     │  (chat +     │
-│              │                           │   harness)   │
-└──────────────┴───────────────────────────┴──────────────┘
+┌──────────┬──────────────┬───────────────────────┬──────────────┐
+│          │              │                       │              │
+│ Explorer │  Mini-editor │  Three.js live preview │  AI agent    │
+│  (tree)  │  (Monaco)    │  (hot-reload, orbit,   │  panel       │
+│          │              │   screenshot, stats)   │  (chat +     │
+│          │              │                        │   harness)   │
+└──────────┴──────────────┴───────────────────────┴──────────────┘
+   resizable · movable · dockable · collapsible (dockview)
 ```
 
 ## Status
 
-**Stage 2 — Editor + Basic Agent Orchestration** (current): a Monaco editor (JS/TS/GLSL)
+**Stage 2.5 — Visual & Layout Overhaul** (current): a focused reskin to the Trifecta
+desktop design language (dark, indigo, DM Sans / SF Mono) and a real dockable/movable
+split-pane workspace (dockview) with persisted layout, plus a Trifecta-style agent
+harness picker. No new agent/editor capabilities. See
+[`docs/STAGE-2.5-visual-overhaul.md`](docs/STAGE-2.5-visual-overhaul.md) and
+[ADR 0006](docs/adr/0006-visual-design-and-dock-layout.md).
+
+**Stage 2 — Editor + Basic Agent Orchestration**: a Monaco editor (JS/TS/GLSL)
 with live save → hot-reload, plus a real agent layer (Claude Agent SDK + Codex CLI) that
 can read and edit the project behind a human-approval gate. See
 [`docs/STAGE-2.md`](docs/STAGE-2.md). Stage 1 (core shell & live preview) is documented in

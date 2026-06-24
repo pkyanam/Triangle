@@ -7,6 +7,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 0 | Foundations & Architecture | ✅ Done (this monorepo + ADRs + tool schema) |
 | 1 | Core Shell & Live Preview | ✅ Done |
 | 2 | Editor + Basic Agent Orchestration | ✅ Done |
+| 2.5 | Visual & Layout Overhaul (Trifecta design + dockview) | ✅ Done |
 | 3 | Three.js Domain Tooling & Visual Feedback Loop | ⬜ Next |
 | 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | ⬜ |
 | 5 | Polish, Rich Features & Internal Prototype | ⬜ |
@@ -35,6 +36,18 @@ See [`STAGE-1.md`](STAGE-1.md).
 - [x] File read/write tools exposed to agents (the schemas already live in `@triangle/shared`).
 
 See [`STAGE-2.md`](STAGE-2.md).
+
+## Stage 2.5 — Visual & Layout Overhaul
+
+- [x] Reskin to the Trifecta desktop design language (dark, indigo, DM Sans / SF Mono),
+      centralized in `styles.css` tokens; Monaco theme kept consistent.
+- [x] Real dockable/movable split-pane workspace via dockview (resize, rearrange,
+      float, collapse/restore) with persisted layout.
+- [x] `lucide-react` iconography across all components.
+- [x] Trifecta-style agent harness picker.
+
+See [`STAGE-2.5-visual-overhaul.md`](STAGE-2.5-visual-overhaul.md) and
+[ADR 0006](adr/0006-visual-design-and-dock-layout.md).
 
 ## Stages 3–6
 
