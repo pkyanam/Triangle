@@ -62,7 +62,16 @@ export const codexHarness: AgentHarness = {
     const { prompt, projectRoot, config, emit, signal } = ctx;
     const bin = codexBin(config);
 
-    const args = ['exec', '--json', '--sandbox', 'workspace-write', '-C', projectRoot];
+    // `--skip-git-repo-check`: Triangle projects (seeded under userData) aren't git repos.
+    const args = [
+      'exec',
+      '--json',
+      '--sandbox',
+      'workspace-write',
+      '--skip-git-repo-check',
+      '-C',
+      projectRoot,
+    ];
     if (config.codexModel) args.push('--model', config.codexModel);
     args.push(prompt);
 
@@ -70,6 +79,8 @@ export const codexHarness: AgentHarness = {
       const child = spawn(bin, args, {
         cwd: projectRoot,
         env: { ...process.env },
+        // The prompt is passed as an arg; close stdin so Codex doesn't block reading it.
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
 
       let failure: string | null = null;
