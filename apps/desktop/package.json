@@ -17,6 +17,8 @@
     "@triangle/preview-runtime": "workspace:*",
     "@triangle/shared": "workspace:*",
     "chokidar": "4.0.3",
+    "dockview-react": "6.6.1",
+    "lucide-react": "1.18.0",
     "monaco-editor": "0.54.0",
     "zod": "^4.4.3"
   },
