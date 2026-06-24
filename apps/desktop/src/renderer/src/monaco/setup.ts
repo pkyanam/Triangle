@@ -55,27 +55,30 @@ export function setupMonaco(): typeof monaco {
 
   registerGlsl(monaco);
 
+  // Palette mirrors the Stage 2.5 CSS tokens (Trifecta dark, indigo primary).
+  // Monaco needs concrete hex, so these are the resolved approximations of the
+  // CSS-variable surface system in styles.css.
   monaco.editor.defineTheme(TRIANGLE_DARK_THEME, {
     base: 'vs-dark',
     inherit: true,
     rules: [
-      { token: 'predefined', foreground: '8fb7ff' },
-      { token: 'type', foreground: '4ade80' },
-      { token: 'keyword.directive', foreground: 'fbbf24' },
+      { token: 'predefined', foreground: '8cb4f8' }, // --info-foreground
+      { token: 'type', foreground: '6ee7b7' }, // --success-foreground
+      { token: 'keyword.directive', foreground: 'fcd34d' }, // --warning-foreground
     ],
     colors: {
-      'editor.background': '#14161a',
-      'editor.foreground': '#e6e9ee',
-      'editorLineNumber.foreground': '#6b7280',
-      'editorLineNumber.activeForeground': '#9aa3af',
-      'editor.selectionBackground': '#2a3550',
-      'editor.lineHighlightBackground': '#1a1d22',
-      'editorCursor.foreground': '#ff5533',
-      'editorGutter.background': '#14161a',
-      'editorWidget.background': '#1a1d22',
-      'editorWidget.border': '#2a2f37',
-      'input.background': '#1a1d22',
-      'focusBorder': '#3a3f47',
+      'editor.background': '#161617', // --card
+      'editor.foreground': '#ededf0', // --foreground
+      'editorLineNumber.foreground': '#5a5a60',
+      'editorLineNumber.activeForeground': '#9a9aa3',
+      'editor.selectionBackground': '#34316b', // indigo-tinted
+      'editor.lineHighlightBackground': '#1d1d20',
+      'editorCursor.foreground': '#818cf8', // lighter --primary
+      'editorGutter.background': '#161617',
+      'editorWidget.background': '#1a1a1c', // --popover
+      'editorWidget.border': '#2a2a2e', // --border-strong
+      'input.background': '#1a1a1c',
+      'focusBorder': '#6366f1', // --ring (indigo)
     },
   });
 
