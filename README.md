@@ -21,10 +21,7 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
 
 <br />
 
-<!-- Replace this placeholder with a real screenshot or GIF, e.g. docs/assets/screenshot.png -->
-<img src="https://placehold.co/860x500/0a0a0a/6366f1/png?text=Triangle%20%E2%80%94%20screenshot%20coming%20soon" alt="Triangle — screenshot coming soon" width="860" />
-
-<sub>📸 Screenshot placeholder — swap in a real capture of the app here</sub>
+<img src="triangleScreenshot.jpg" alt="Triangle — Three.js live preview with editor and agent panel" width="860" />
 
 </div>
 
