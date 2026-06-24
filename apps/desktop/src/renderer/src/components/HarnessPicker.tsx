@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bot,
   Check,
@@ -44,6 +53,25 @@ export function HarnessPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState<{ left: number; bottom: number; maxHeight: number } | null>(
+    null,
+  );
+
+  const POPUP_WIDTH = 320;
+
+  // Position the (portaled, fixed) popup just above the trigger, clamped to the
+  // viewport so it is never clipped by the dock panel's overflow.
+  const reposition = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const margin = 8;
+    const left = Math.min(Math.max(margin, r.left), window.innerWidth - POPUP_WIDTH - margin);
+    const bottom = window.innerHeight - r.top + 6; // sit above the trigger
+    const maxHeight = Math.min(360, r.top - margin); // available space above
+    setCoords({ left, bottom, maxHeight });
+  }, []);
 
   const rows = useMemo(
     () =>
@@ -70,6 +98,11 @@ export function HarnessPicker({
     );
   }, [rows, query]);
 
+  // Measure synchronously before paint so the popup never flashes mispositioned.
+  useLayoutEffect(() => {
+    if (open) reposition();
+  }, [open, reposition]);
+
   useEffect(() => {
     if (open) {
       setQuery('');
@@ -80,15 +113,21 @@ export function HarnessPicker({
     return undefined;
   }, [open]);
 
-  // Close on Escape.
+  // Close on Escape; keep the popup anchored on resize/scroll.
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setOpen(false);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [open, reposition]);
 
   const choose = (id: HarnessId, available: boolean): void => {
     if (!available) return;
@@ -101,6 +140,7 @@ export function HarnessPicker({
   return (
     <div className="picker" data-open={open}>
       <button
+        ref={triggerRef}
         className="picker__trigger"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
@@ -113,11 +153,23 @@ export function HarnessPicker({
         <ChevronDown className="picker__trigger-chevron" size={14} />
       </button>
 
-      {open && (
-        <>
-          <div className="picker__backdrop" onClick={() => setOpen(false)} />
-          <div className="picker__popup" role="listbox">
-            <div className="picker__search">
+      {open &&
+        coords &&
+        createPortal(
+          <>
+            <div className="picker__backdrop" onClick={() => setOpen(false)} />
+            <div
+              className="picker__popup"
+              role="listbox"
+              style={{
+                position: 'fixed',
+                left: coords.left,
+                bottom: coords.bottom,
+                width: POPUP_WIDTH,
+                maxHeight: coords.maxHeight,
+              }}
+            >
+              <div className="picker__search">
               <Search size={15} />
               <input
                 ref={searchRef}
@@ -153,11 +205,14 @@ export function HarnessPicker({
                   </button>
                 );
               })}
-              {filtered.length === 0 && <div className="picker__empty">No harnesses match.</div>}
+              {filtered.length === 0 && (
+                <div className="picker__empty">No harnesses match.</div>
+              )}
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>,
+          document.body,
+        )}
     </div>
   );
 }

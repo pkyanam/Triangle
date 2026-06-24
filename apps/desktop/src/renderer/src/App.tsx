@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PreviewStats, PreviewStatus, ProjectInfo } from '@triangle/shared';
 import { TopBar } from './components/TopBar.js';
 import { StatusBar } from './components/StatusBar.js';
-import { Workspace, type WorkspaceHandle } from './workspace/Workspace.js';
+import { Workspace, type PanelsOpen, type WorkspaceHandle } from './workspace/Workspace.js';
 import type { WorkspaceState } from './workspace/context.js';
 
 export function App(): React.JSX.Element {
@@ -14,8 +14,13 @@ export function App(): React.JSX.Element {
   const [stats, setStats] = useState<PreviewStats | null>(null);
   const [electronVersion, setElectronVersion] = useState('');
 
-  // Which optional dock panels are currently mounted (reflected in the TopBar).
-  const [panelsOpen, setPanelsOpen] = useState({ explorer: true, agent: true });
+  // Which dock panels are currently mounted (reflected in the TopBar panels menu).
+  const [panelsOpen, setPanelsOpen] = useState<PanelsOpen>({
+    explorer: true,
+    editor: true,
+    preview: true,
+    agent: true,
+  });
   const workspaceRef = useRef<WorkspaceHandle>(null);
 
   // Refs so the file-watch subscription stays stable yet reads fresh values.
@@ -115,10 +120,8 @@ export function App(): React.JSX.Element {
     <div className="app">
       <TopBar
         projectName={projectName}
-        leftOpen={panelsOpen.explorer}
-        rightOpen={panelsOpen.agent}
-        onToggleLeft={() => workspaceRef.current?.toggleExplorer()}
-        onToggleRight={() => workspaceRef.current?.toggleAgent()}
+        panelsOpen={panelsOpen}
+        onTogglePanel={(id) => workspaceRef.current?.togglePanel(id)}
         onResetLayout={() => workspaceRef.current?.resetLayout()}
       />
 

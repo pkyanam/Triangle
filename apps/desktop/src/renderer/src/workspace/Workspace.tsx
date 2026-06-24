@@ -13,18 +13,30 @@ import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.j
 
 const LAYOUT_KEY = 'triangle.layout.v2';
 
+/** Panel ids, in their default left-to-right order. */
+export const PANEL_IDS = ['explorer', 'editor', 'preview', 'agent'] as const;
+export type PanelId = (typeof PANEL_IDS)[number];
+export type PanelsOpen = Record<PanelId, boolean>;
+
 /** Imperative controls the TopBar drives. */
 export interface WorkspaceHandle {
-  toggleExplorer: () => void;
-  toggleAgent: () => void;
+  togglePanel: (id: PanelId) => void;
   resetLayout: () => void;
 }
 
 interface WorkspaceProps {
   state: WorkspaceState;
-  /** Reports which optional panels are currently mounted (for TopBar toggles). */
-  onPanelsChange: (open: { explorer: boolean; agent: boolean }) => void;
+  /** Reports which panels are currently mounted (for the TopBar panels menu). */
+  onPanelsChange: (open: PanelsOpen) => void;
 }
+
+const WIDTHS: Record<PanelId, number> = { explorer: 230, editor: 420, preview: 0, agent: 400 };
+const MIN_WIDTHS: Record<PanelId, number> = {
+  explorer: 170,
+  editor: 240,
+  preview: 320,
+  agent: 300,
+};
 
 // --- Panel components: rendered by dockview, read live state from context. ---
 
@@ -120,7 +132,40 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
   const reportPanels = (): void => {
     const api = apiRef.current;
     if (!api) return;
-    onPanelsChange({ explorer: !!api.getPanel('explorer'), agent: !!api.getPanel('agent') });
+    const open = {} as PanelsOpen;
+    for (const id of PANEL_IDS) open[id] = !!api.getPanel(id);
+    onPanelsChange(open);
+  };
+
+  /** Re-add a panel next to its nearest existing neighbour, preserving order. */
+  const addPanelById = (api: DockviewApi, id: PanelId): void => {
+    const idx = PANEL_IDS.indexOf(id);
+    let reference: string | undefined;
+    let direction: 'left' | 'right' = 'right';
+    for (let i = idx + 1; i < PANEL_IDS.length; i++) {
+      if (api.getPanel(PANEL_IDS[i])) {
+        reference = PANEL_IDS[i];
+        direction = 'left';
+        break;
+      }
+    }
+    if (!reference) {
+      for (let i = idx - 1; i >= 0; i--) {
+        if (api.getPanel(PANEL_IDS[i])) {
+          reference = PANEL_IDS[i];
+          direction = 'right';
+          break;
+        }
+      }
+    }
+    api.addPanel({
+      id,
+      component: id,
+      title: TITLES[id],
+      ...(WIDTHS[id] ? { initialWidth: WIDTHS[id] } : {}),
+      minimumWidth: MIN_WIDTHS[id],
+      ...(reference ? { position: { referencePanel: reference, direction } } : {}),
+    });
   };
 
   const persist = (): void => {
@@ -162,9 +207,22 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
     reportPanels();
   };
 
+  const togglePanel = (id: PanelId): void => {
+    const api = apiRef.current;
+    if (!api) return;
+    const existing = api.getPanel(id);
+    if (existing) {
+      api.removePanel(existing);
+    } else {
+      addPanelById(api, id);
+      api.getPanel(id)?.api.setActive();
+    }
+    reportPanels();
+    persist();
+  };
+
   useImperativeHandle(ref, () => ({
-    toggleExplorer: () => togglePanel('explorer'),
-    toggleAgent: () => togglePanel('agent'),
+    togglePanel,
     resetLayout: () => {
       const api = apiRef.current;
       if (!api) return;
@@ -174,30 +232,6 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
       persist();
     },
   }));
-
-  const togglePanel = (id: 'explorer' | 'agent'): void => {
-    const api = apiRef.current;
-    if (!api) return;
-    const existing = api.getPanel(id);
-    if (existing) {
-      api.removePanel(existing);
-    } else {
-      // Re-add at a sensible default position relative to whatever's present.
-      const reference = api.getPanel(id === 'explorer' ? 'editor' : 'preview') ?? api.panels[0];
-      api.addPanel({
-        id,
-        component: id,
-        title: TITLES[id],
-        initialWidth: id === 'explorer' ? 230 : 400,
-        minimumWidth: id === 'explorer' ? 170 : 300,
-        position: reference
-          ? { referencePanel: reference.id, direction: id === 'explorer' ? 'left' : 'right' }
-          : undefined,
-      });
-    }
-    reportPanels();
-    persist();
-  };
 
   return (
     <WorkspaceContext.Provider value={state}>

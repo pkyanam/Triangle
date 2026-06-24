@@ -222,6 +222,58 @@ button {
   -webkit-app-region: no-drag;
 }
 
+/* ---------- TopBar panels menu ---------- */
+.menu {
+  position: relative;
+}
+.menu__popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: var(--z-popover);
+  min-width: 184px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--popover);
+  box-shadow: var(--bevel-top), 0 18px 50px rgb(0 0 0 / 55%);
+  transform-origin: top right;
+  animation: picker-in 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: var(--radius-md);
+  color: var(--foreground);
+  font-size: 12.5px;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.menu__item:hover {
+  background: var(--accent);
+}
+.menu__item-check {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  color: var(--primary);
+}
+.menu__item svg {
+  color: var(--muted-foreground);
+}
+.menu__item-label {
+  flex: 1;
+}
+
 .workspace {
   flex: 1;
   display: flex;
@@ -973,16 +1025,12 @@ button {
   inset: 0;
   z-index: var(--z-popover);
 }
+/* Positioned via inline `fixed` coords (portaled to <body>) so it is never
+   clipped by the dock panel's overflow. */
 .picker__popup {
-  position: absolute;
   z-index: calc(var(--z-popover) + 1);
-  bottom: calc(100% + 6px);
-  left: 0;
-  width: 320px;
-  max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
-  max-height: 360px;
   overflow: hidden;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-strong);
