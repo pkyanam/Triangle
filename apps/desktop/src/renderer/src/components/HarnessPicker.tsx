@@ -8,16 +8,9 @@ import {
   type ComponentType,
 } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Bot,
-  Check,
-  ChevronDown,
-  CircleDashed,
-  Search,
-  Sparkles,
-  TerminalSquare,
-} from 'lucide-react';
+import { Check, ChevronDown, CircleDashed, Network, Search } from 'lucide-react';
 import { HARNESSES, type HarnessAvailability, type HarnessId } from '@triangle/shared';
+import { ClaudeIcon, OpenAIIcon } from './icons/providers.js';
 
 interface HarnessPickerProps {
   value: HarnessId;
@@ -34,10 +27,12 @@ interface HarnessMeta {
 
 const META: Record<HarnessId, HarnessMeta> = {
   mock: { icon: CircleDashed, subtitle: 'Local · canned responses' },
-  claude: { icon: Sparkles, subtitle: 'Anthropic · Claude Agent SDK' },
-  codex: { icon: TerminalSquare, subtitle: 'OpenAI · Codex CLI' },
-  acp: { icon: Bot, subtitle: 'Protocol · ACP / MCP (Stage 4)' },
+  claude: { icon: ClaudeIcon, subtitle: 'Anthropic · Claude Agent SDK' },
+  codex: { icon: OpenAIIcon, subtitle: 'OpenAI · Codex CLI' },
+  acp: { icon: Network, subtitle: 'Protocol · ACP / MCP (Stage 4)' },
 };
+
+const TriggerFallback = Network;
 
 /**
  * Agent harness picker — a popover styled after Trifecta's model picker: a
@@ -54,23 +49,39 @@ export function HarnessPicker({
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [coords, setCoords] = useState<{ left: number; bottom: number; maxHeight: number } | null>(
-    null,
-  );
+  const [coords, setCoords] = useState<{
+    left: number;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+  } | null>(null);
 
   const POPUP_WIDTH = 320;
 
-  // Position the (portaled, fixed) popup just above the trigger, clamped to the
-  // viewport so it is never clipped by the dock panel's overflow.
+  // Position the (portaled, fixed) popup, flipping above/below the trigger
+  // depending on available space, and clamped to the viewport so it is never
+  // clipped by the dock panel's overflow.
   const reposition = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const margin = 8;
+    const gap = 6;
+    const preferred = 360;
     const left = Math.min(Math.max(margin, r.left), window.innerWidth - POPUP_WIDTH - margin);
-    const bottom = window.innerHeight - r.top + 6; // sit above the trigger
-    const maxHeight = Math.min(360, r.top - margin); // available space above
-    setCoords({ left, bottom, maxHeight });
+    const spaceBelow = window.innerHeight - r.bottom - margin;
+    const spaceAbove = r.top - margin;
+    // Open downward unless there's clearly more room above (the harness bar
+    // usually sits near the top of the agent panel → opens down).
+    if (spaceBelow >= preferred || spaceBelow >= spaceAbove) {
+      setCoords({ left, top: r.bottom + gap, maxHeight: Math.min(preferred, spaceBelow) });
+    } else {
+      setCoords({
+        left,
+        bottom: window.innerHeight - r.top + gap,
+        maxHeight: Math.min(preferred, spaceAbove),
+      });
+    }
   }, []);
 
   const rows = useMemo(
@@ -135,7 +146,7 @@ export function HarnessPicker({
     setOpen(false);
   };
 
-  const TriggerIcon = selected?.icon ?? Bot;
+  const TriggerIcon = selected?.icon ?? TriggerFallback;
 
   return (
     <div className="picker" data-open={open}>
@@ -164,9 +175,11 @@ export function HarnessPicker({
               style={{
                 position: 'fixed',
                 left: coords.left,
+                top: coords.top,
                 bottom: coords.bottom,
                 width: POPUP_WIDTH,
                 maxHeight: coords.maxHeight,
+                transformOrigin: coords.top != null ? 'top left' : 'bottom left',
               }}
             >
               <div className="picker__search">

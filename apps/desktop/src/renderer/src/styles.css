@@ -1002,7 +1002,7 @@ button {
 .picker__trigger-icon {
   display: inline-flex;
   flex: 0 0 auto;
-  color: var(--primary);
+  color: var(--foreground);
 }
 .picker__trigger-label {
   flex: 1;
@@ -1113,7 +1113,7 @@ button {
   justify-content: center;
   border-radius: var(--radius-sm);
   background: var(--muted);
-  color: var(--primary);
+  color: var(--foreground);
   margin-top: 1px;
 }
 .picker__row--selected .picker__row-icon {
