@@ -12,7 +12,7 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
 
 <br />
 
-[![Stage](https://img.shields.io/badge/stage-2.5%20%C2%B7%20visual%20%26%20layout-6366f1)](docs/ROADMAP.md)
+[![Stage](https://img.shields.io/badge/stage-3%20%C2%B7%20domain%20tooling%20%26%20visual%20feedback-6366f1)](docs/ROADMAP.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
 [![Built with Electron](https://img.shields.io/badge/Electron-37-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Three.js](https://img.shields.io/badge/three.js-0.184-000000?logo=three.js&logoColor=white)](https://threejs.org/)
@@ -39,8 +39,12 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
   pause/grid toggles, screenshots, and an FPS / draw-call / triangle-count HUD.
 - ✍️ **Monaco editor** — JS / TS / GLSL with syntax highlighting, a dirty/save model,
   and a `suppressWatch` save path that hot-reloads without churn.
-- 🤖 **Harness-agnostic agents** — Claude Agent SDK + Codex CLI (and a zero-setup Mock
-  agent) that read and edit the project behind a **human-approval gate**.
+- 🤖 **Harness-agnostic agents** — Claude Agent SDK + Codex (via the Codex App Server)
+  and a zero-setup Mock agent, reading and editing the project behind a **human-approval
+  gate**.
+- 🧠 **Three.js domain tools** — agents capture screenshots, summarize the live scene
+  graph, validate GLSL shaders, and read performance counters for real **visual feedback**
+  — reachable by Claude in-process and by Codex via a bundled MCP server.
 - 🧱 **Dockable workspace** — resizable, movable, dockable, floatable, collapsible
   panes (powered by [dockview](https://dockview.dev)) with a persisted layout.
 - 🎨 **Centralized theming** — a single CSS-variable design system; the Monaco theme
@@ -86,8 +90,10 @@ pnpm package          # produce a distributable build (electron-builder, Stage 5
 
 Credentials are read from the environment or a gitignored config — **never committed**.
 The Claude harness needs `ANTHROPIC_API_KEY`; the Codex harness needs the `codex` CLI on
-`PATH`. See [`docs/STAGE-2.md`](docs/STAGE-2.md#configuration-credentials) for the full
-precedence and key list.
+`PATH` (and a signed-in account, since it now drives the [Codex App
+Server](docs/adr/0008-codex-app-server-and-mcp-bridge.md)). See
+[`docs/STAGE-2.md`](docs/STAGE-2.md#configuration-credentials) for the full precedence and
+key list.
 
 ## Status & roadmap
 
@@ -97,14 +103,14 @@ precedence and key list.
 | 1 | Core shell & live preview | ✅ |
 | 2 | Editor + basic agent orchestration | ✅ |
 | 2.5 | Visual & layout overhaul (design system + dockview) | ✅ |
-| 3 | Three.js domain tooling & visual feedback loop | ⬜ Next |
-| 4 | Rich agent capabilities & protocol support (ACP / MCP) | ⬜ |
+| 3 | Three.js domain tooling & visual feedback loop | ✅ |
+| 4 | Rich agent capabilities & protocol support (ACP / MCP) | ⬜ Next |
 | 5 | Polish, rich features & internal prototype | ⬜ |
 | 6 | Post-prototype hardening & web path | ⬜ |
 
 The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Stage write-ups:
 [Stage 1](docs/STAGE-1.md) · [Stage 2](docs/STAGE-2.md) ·
-[Stage 2.5](docs/STAGE-2.5-visual-overhaul.md).
+[Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md).
 
 ## Architecture
 
@@ -126,7 +132,9 @@ Key decisions are recorded as Architecture Decision Records in
 [`docs/adr/`](docs/adr/) — covering the [tech stack](docs/adr/0002-tech-stack.md), the
 [process model & IPC](docs/adr/0003-process-model-and-ipc.md), the
 [editor & GLSL](docs/adr/0004-editor-and-glsl.md), [agent orchestration](docs/adr/0005-agent-orchestration.md),
-and the [design system & dock layout](docs/adr/0006-visual-design-and-dock-layout.md).
+the [design system & dock layout](docs/adr/0006-visual-design-and-dock-layout.md), the
+[preview bridge & domain tooling](docs/adr/0007-preview-bridge-and-domain-tooling.md), and the
+[Codex App Server & MCP bridge](docs/adr/0008-codex-app-server-and-mcp-bridge.md).
 
 ## Contributing
 

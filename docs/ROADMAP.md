@@ -8,8 +8,8 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 1 | Core Shell & Live Preview | ✅ Done |
 | 2 | Editor + Basic Agent Orchestration | ✅ Done |
 | 2.5 | Visual & Layout Overhaul (Trifecta design + dockview) | ✅ Done |
-| 3 | Three.js Domain Tooling & Visual Feedback Loop | ⬜ Next |
-| 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | ⬜ |
+| 3 | Three.js Domain Tooling & Visual Feedback Loop | ✅ Done |
+| 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | ⬜ Next |
 | 5 | Polish, Rich Features & Internal Prototype | ⬜ |
 | 6 | Post-Prototype Hardening & Web Path | ⬜ Future |
 
@@ -49,7 +49,21 @@ See [`STAGE-2.md`](STAGE-2.md).
 See [`STAGE-2.5-visual-overhaul.md`](STAGE-2.5-visual-overhaul.md) and
 [ADR 0006](adr/0006-visual-design-and-dock-layout.md).
 
-## Stages 3–6
+## Stage 3 — Three.js Domain Tooling & Visual Feedback Loop
+
+- [x] `triangle_validate_shader` — live GLSL compile diagnostics (tool + Monaco markers).
+- [x] `triangle_capture_screenshot` — framebuffer PNG saved to the project for grounding.
+- [x] `triangle_describe_scene` — structured scene-graph summary.
+- [x] `triangle_performance_snapshot` — FPS / draw calls / triangles / GPU-memory estimate.
+- [x] Works in Codex too — Codex App Server harness + a Triangle MCP server over a
+      token-guarded loopback bridge.
+- [x] Harness-agnostic AgentPanel quick-actions + tool-trace surfacing.
+
+See [`STAGE-3.md`](STAGE-3.md) and [ADR 0007](adr/0007-preview-bridge-and-domain-tooling.md),
+[ADR 0008](adr/0008-codex-app-server-and-mcp-bridge.md),
+[ADR 0009](adr/0009-preview-persistence-across-dock-remounts.md).
+
+## Stages 4–6
 
 See the PRD for full detail. Highlights: shader compilation feedback + screenshot/scene
 context pipeline (Stage 3), ACP compatibility + MCP server + live scene manipulation +
