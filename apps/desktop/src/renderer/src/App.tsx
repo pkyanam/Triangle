@@ -3,7 +3,7 @@ import type { PreviewStats, PreviewStatus, ProjectInfo } from '@triangle/shared'
 import { TopBar } from './components/TopBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { FileTree } from './components/FileTree.js';
-import { CodeViewer } from './components/CodeViewer.js';
+import { Editor } from './components/Editor.js';
 import { Preview } from './components/Preview.js';
 import { AgentPanel } from './components/AgentPanel.js';
 import { Splitter } from './components/Splitter.js';
@@ -41,6 +41,14 @@ export function App(): React.JSX.Element {
       .read(path)
       .catch((e: unknown) => ({ path, content: `// Failed to read ${path}\n// ${String(e)}` }));
     setSelectedContent(res.content);
+  }, []);
+
+  // Persist an editor buffer. The write is tagged `suppressWatch` so the watcher echo is
+  // swallowed in main; we update local state (and the preview, if it's the entry) directly.
+  const saveFile = useCallback(async (path: string, content: string) => {
+    await window.triangle.file.write({ path, content, suppressWatch: true });
+    setSelectedContent(content);
+    if (path === entryRef.current) setEntrySource(content);
   }, []);
 
   // Initial load.
@@ -128,7 +136,7 @@ export function App(): React.JSX.Element {
                   />
                 </div>
                 <div style={{ flex: 1, minHeight: 0 }}>
-                  <CodeViewer path={selectedPath} content={selectedContent} />
+                  <Editor path={selectedPath} content={selectedContent} onSave={saveFile} />
                 </div>
               </div>
             </div>

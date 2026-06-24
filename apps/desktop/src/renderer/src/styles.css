@@ -270,6 +270,19 @@ button {
   color: var(--text-dim);
   gap: 8px;
 }
+.code__path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code__dirty {
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 1;
+}
 .code__badge {
   margin-left: auto;
   font-size: 10px;
@@ -280,31 +293,15 @@ button {
   border-radius: 4px;
   padding: 1px 6px;
 }
-.code__scroll {
+.code__editor {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  position: relative;
 }
-.code__pre {
-  display: flex;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  line-height: 1.55;
-  tab-size: 2;
-}
-.code__gutter {
-  flex: 0 0 auto;
-  padding: 10px 10px 10px 14px;
-  text-align: right;
-  color: var(--text-faint);
-  user-select: none;
-  border-right: 1px solid var(--border);
-  background: var(--bg-panel);
-}
-.code__lines {
-  padding: 10px 16px;
-  white-space: pre;
-  color: var(--text);
-  user-select: text;
+.btn--xs {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
 }
 .code__empty,
 .panel__empty {

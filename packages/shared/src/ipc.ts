@@ -29,9 +29,14 @@ export interface IpcInvokeChannels {
   /**
    * Write a UTF-8 text file by project-relative path.
    * Gated by the main process (Stage 1: no-op approval; later: human approval).
+   *
+   * `suppressWatch` marks the write as renderer-originated (e.g. the Monaco editor's
+   * own save). The main process then swallows the watcher echo for that path so the
+   * UI doesn't reload/clobber state it already holds. Agent/disk writes leave it unset
+   * so the normal watcher-driven hot-reload path runs.
    */
   'file:write': {
-    request: { path: string; content: string };
+    request: { path: string; content: string; suppressWatch?: boolean };
     response: { path: string; ok: boolean };
   };
   /** App metadata for the about/header surfaces. */

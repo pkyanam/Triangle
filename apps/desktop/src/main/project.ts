@@ -31,6 +31,10 @@ function toRelPosix(root: string, abs: string): string {
 export class ProjectManager {
   private root: string | null = null;
   private watcher: FSWatcher | null = null;
+  /** Project-relative paths whose next watcher echo should be swallowed (-> expiry ms). */
+  private readonly suppressed = new Map<string, number>();
+  /** How long a suppression entry stays armed after a self-write. */
+  private static readonly SUPPRESS_WINDOW_MS = 2000;
 
   constructor(private readonly onFileChange: (event: FileChangeEvent) => void) {}
 
@@ -144,12 +148,32 @@ export class ProjectManager {
   /**
    * Write a file (the one place side effects happen). Stage 1 writes directly; the
    * human-approval gate hooks in here in later stages.
+   *
+   * When `suppressWatch` is set the write is renderer-originated, so we arm a short
+   * suppression window to swallow the watcher echo for this path (the editor already
+   * holds the content and drives its own hot-reload). Agent/disk writes do not set it,
+   * so the watcher fires normally and the UI reacts.
    */
-  async writeFile(relPath: string, content: string): Promise<{ path: string; ok: boolean }> {
+  async writeFile(
+    relPath: string,
+    content: string,
+    suppressWatch = false,
+  ): Promise<{ path: string; ok: boolean }> {
     const abs = this.resolveSafe(relPath);
+    if (suppressWatch) {
+      this.suppressed.set(relPath, Date.now() + ProjectManager.SUPPRESS_WINDOW_MS);
+    }
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, content, 'utf8');
     return { path: relPath, ok: true };
+  }
+
+  /** Whether a watcher event for `relPath` should be swallowed as a self-write echo. */
+  private isSuppressed(relPath: string): boolean {
+    const expiry = this.suppressed.get(relPath);
+    if (expiry === undefined) return false;
+    this.suppressed.delete(relPath);
+    return Date.now() <= expiry;
   }
 
   private startWatching(root: string): void {
@@ -159,8 +183,12 @@ export class ProjectManager {
       ignored: (p) => p.split(path.sep).some((seg) => IGNORED.has(seg)),
       awaitWriteFinish: { stabilityThreshold: 60, pollInterval: 20 },
     });
-    const emit = (type: FileChangeType) => (abs: string) =>
-      this.onFileChange({ type, path: toRelPosix(root, abs) });
+    const emit = (type: FileChangeType) => (abs: string) => {
+      const rel = toRelPosix(root, abs);
+      // Swallow the echo of a renderer-originated (editor) save.
+      if ((type === 'change' || type === 'add') && this.isSuppressed(rel)) return;
+      this.onFileChange({ type, path: rel });
+    };
     this.watcher
       .on('add', emit('add'))
       .on('change', emit('change'))

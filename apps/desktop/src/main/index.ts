@@ -40,7 +40,7 @@ function registerIpc(): void {
   handle('project:get', () => project.getInfo());
   handle('project:refresh', () => project.getInfo());
   handle('file:read', (req) => project.readFile(req.path));
-  handle('file:write', (req) => project.writeFile(req.path, req.content));
+  handle('file:write', (req) => project.writeFile(req.path, req.content, req.suppressWatch));
 }
 
 function createWindow(): void {
