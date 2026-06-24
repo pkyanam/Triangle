@@ -8,6 +8,14 @@
  * all import these so the contract can never drift.
  */
 import type { FileChangeEvent, ProjectInfo } from './project.js';
+import type {
+  AgentEvent,
+  AgentStartRequest,
+  AgentStartResult,
+  ApprovalDecision,
+  ApprovalRequest,
+  HarnessAvailability,
+} from './agent.js';
 
 /** Request/response channels invoked from the renderer. */
 export interface IpcInvokeChannels {
@@ -44,6 +52,26 @@ export interface IpcInvokeChannels {
     request: void;
     response: { name: string; version: string; electron: string; node: string };
   };
+  /** List agent harnesses with their runtime availability (keys/CLI present, …). */
+  'agent:harnesses': {
+    request: void;
+    response: HarnessAvailability[];
+  };
+  /** Start an agent run. Results stream back over the `agent:event` channel. */
+  'agent:start': {
+    request: AgentStartRequest;
+    response: AgentStartResult;
+  };
+  /** Cancel an in-flight agent run. */
+  'agent:cancel': {
+    request: { runId: string };
+    response: { ok: boolean };
+  };
+  /** Resolve a pending file-write approval (see `agent:approval-request`). */
+  'agent:approval': {
+    request: ApprovalDecision;
+    response: { ok: boolean };
+  };
 }
 
 /** Events pushed from main to renderer. */
@@ -52,6 +80,10 @@ export interface IpcEventChannels {
   'project:file-changed': FileChangeEvent;
   /** The active project changed (e.g. opened a different folder). */
   'project:changed': ProjectInfo;
+  /** A streamed event from an in-flight agent run. */
+  'agent:event': AgentEvent;
+  /** A gated file write awaiting human approval. */
+  'agent:approval-request': ApprovalRequest;
 }
 
 export type IpcInvokeChannel = keyof IpcInvokeChannels;
@@ -68,9 +100,15 @@ export const INVOKE_CHANNELS = [
   'file:read',
   'file:write',
   'app:info',
+  'agent:harnesses',
+  'agent:start',
+  'agent:cancel',
+  'agent:approval',
 ] as const satisfies readonly IpcInvokeChannel[];
 
 export const EVENT_CHANNELS = [
   'project:file-changed',
   'project:changed',
+  'agent:event',
+  'agent:approval-request',
 ] as const satisfies readonly IpcEventChannel[];

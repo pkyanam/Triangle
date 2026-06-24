@@ -17,9 +17,9 @@ export interface HarnessDescriptor {
 }
 
 export const HARNESSES: HarnessDescriptor[] = [
-  { id: 'mock', label: 'Mock Agent', available: true, note: 'Canned responses for Stage 1.' },
-  { id: 'claude', label: 'Claude Agent SDK', available: false, note: 'Stage 2.' },
-  { id: 'codex', label: 'Codex CLI', available: false, note: 'Stage 2.' },
+  { id: 'mock', label: 'Mock Agent', available: true, note: 'Canned responses, no backend.' },
+  { id: 'claude', label: 'Claude Agent SDK', available: true, note: 'Needs ANTHROPIC_API_KEY.' },
+  { id: 'codex', label: 'Codex CLI', available: true, note: 'Needs the `codex` CLI installed.' },
   { id: 'acp', label: 'ACP / MCP', available: false, note: 'Stage 4.' },
 ];
 
@@ -43,4 +43,67 @@ export interface ToolCallTrace {
   args: Record<string, unknown>;
   status: 'running' | 'ok' | 'error';
   result?: string;
+}
+
+// --- Stage 2: real agent orchestration over IPC -----------------------------
+
+/** Runtime availability of a harness (computed in main from config + environment). */
+export interface HarnessAvailability {
+  id: HarnessId;
+  label: string;
+  available: boolean;
+  /** Why it's unavailable (missing key, CLI not found, …), shown in the UI. */
+  reason?: string;
+}
+
+/** A request from the renderer to start an agent run. */
+export interface AgentStartRequest {
+  /** Renderer-generated id correlating this run's streamed events. */
+  runId: string;
+  harness: HarnessId;
+  prompt: string;
+  /**
+   * When true the human-approval gate auto-approves file writes; otherwise each write
+   * raises an {@link ApprovalRequest} the user must accept before it lands on disk.
+   */
+  autoApproveWrites: boolean;
+}
+
+export interface AgentStartResult {
+  runId: string;
+  accepted: boolean;
+  reason?: string;
+}
+
+export type AgentRunStatus = 'started' | 'completed' | 'error' | 'cancelled';
+
+/** Streaming events pushed from main during an agent run, keyed by `runId`. */
+export type AgentEvent =
+  | { type: 'status'; runId: string; status: AgentRunStatus; message?: string }
+  | {
+      /** A (whole) assistant message turn. `messageId` lets the UI update in place. */
+      type: 'assistant';
+      runId: string;
+      messageId: string;
+      text: string;
+    }
+  | { type: 'tool'; runId: string; trace: ToolCallTrace }
+  | { type: 'log'; runId: string; level: 'info' | 'warn' | 'error'; text: string };
+
+/** Raised by the main process when a gated write needs human approval. */
+export interface ApprovalRequest {
+  approvalId: string;
+  runId: string;
+  tool: string;
+  /** Project-relative target path. */
+  path: string;
+  /** Proposed new file contents (may be truncated for display). */
+  content: string;
+  /** True if the file already exists (overwrite vs create). */
+  exists: boolean;
+}
+
+export interface ApprovalDecision {
+  approvalId: string;
+  approved: boolean;
 }

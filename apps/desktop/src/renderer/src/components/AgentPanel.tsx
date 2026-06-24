@@ -1,31 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
-import { HARNESSES, type ChatMessage, type HarnessId } from '@triangle/shared';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  HARNESSES,
+  type AgentEvent,
+  type ApprovalRequest,
+  type ChatMessage,
+  type HarnessAvailability,
+  type HarnessId,
+  type ToolCallTrace,
+} from '@triangle/shared';
 
 let idCounter = 0;
 const nextId = (): string => `m${++idCounter}`;
+const newRunId = (): string => `run_${Date.now()}_${++idCounter}`;
 
 const GREETING: ChatMessage = {
   id: nextId(),
   role: 'system',
   content:
-    'Mock agent active (Stage 1). Real harnesses — Claude Agent SDK, Codex CLI, ACP/MCP — ' +
-    'wire in here in Stage 2+. Try: "make the knot blue" or "add more particles".',
+    'Triangle agent ready. Pick a harness: the Mock agent works with no setup; Claude Agent ' +
+    'SDK needs ANTHROPIC_API_KEY; Codex CLI needs the `codex` binary. The agent edits project ' +
+    'files (gated by approval unless auto-approve is on) and the preview hot-reloads on save.',
   timestamp: Date.now(),
 };
-
-/** Canned, deterministic responses so the loop feels real without a backend. */
-function mockReply(prompt: string): string {
-  const p = prompt.toLowerCase();
-  if (p.includes('shader') || p.includes('glsl'))
-    return 'In Stage 2 I would open src/main.js, edit the fragment shader uniforms, and you\u2019d see the preview hot-reload. For now this is a canned response — shader validation tooling lands in Stage 3.';
-  if (p.includes('color') || p.includes('blue') || p.includes('red'))
-    return 'Got it — I\u2019d change the `uColorB` uniform in the shader material and save the file. The center preview would hot-reload instantly once file-writing tools are enabled (Stage 2).';
-  if (p.includes('particle'))
-    return 'I\u2019d bump the instanced particle `count` in setup() and rebuild the InstancedMesh. Live scene-manipulation tools (no full reload needed) arrive in Stage 4.';
-  if (p.includes('screenshot') || p.includes('see'))
-    return 'The screenshot + structured scene-description pipeline (multimodal grounding) is a Stage 3 deliverable. The schema is already declared in @triangle/shared.';
-  return 'Acknowledged. This is the Stage 1 mock agent, so I can\u2019t edit files yet — but the chat, harness selector, and message loop are fully wired and ready for a real harness.';
-}
 
 interface AgentPanelProps {
   projectName: string;
@@ -33,38 +29,164 @@ interface AgentPanelProps {
 
 export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element {
   const [harness, setHarness] = useState<HarnessId>('mock');
+  const [availability, setAvailability] = useState<HarnessAvailability[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const runRef = useRef<string | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
+  }, [messages, approval]);
+
+  // Load runtime harness availability.
+  useEffect(() => {
+    let active = true;
+    void window.triangle.agent.harnesses().then((list) => {
+      if (active) setAvailability(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /** Insert or update a message by id. */
+  const upsert = useCallback((msg: ChatMessage) => {
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === msg.id);
+      if (idx === -1) return [...prev, msg];
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...msg };
+      return next;
+    });
+  }, []);
+
+  /** Merge a tool trace into a per-run "tool activity" bubble. */
+  const upsertTrace = useCallback((runId: string, trace: ToolCallTrace) => {
+    const id = `tools:${runId}`;
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === id);
+      if (idx === -1) {
+        return [
+          ...prev,
+          { id, role: 'assistant', content: '', timestamp: Date.now(), toolCalls: [trace] },
+        ];
+      }
+      const existing = prev[idx];
+      const calls = existing.toolCalls ? [...existing.toolCalls] : [];
+      const tIdx = calls.findIndex((c) => c.id === trace.id);
+      if (tIdx === -1) calls.push(trace);
+      else calls[tIdx] = trace;
+      const next = [...prev];
+      next[idx] = { ...existing, toolCalls: calls };
+      return next;
+    });
+  }, []);
+
+  // Subscribe to streamed run events + approval prompts.
+  useEffect(() => {
+    const offEvent = window.triangle.agent.onEvent((event: AgentEvent) => {
+      if (event.runId !== runRef.current) return;
+      switch (event.type) {
+        case 'assistant':
+          upsert({
+            id: `a:${event.runId}:${event.messageId}`,
+            role: 'assistant',
+            content: event.text,
+            timestamp: Date.now(),
+          });
+          break;
+        case 'tool':
+          upsertTrace(event.runId, event.trace);
+          break;
+        case 'log':
+          upsert({
+            id: `log:${event.runId}`,
+            role: 'system',
+            content: event.text,
+            timestamp: Date.now(),
+          });
+          break;
+        case 'status':
+          if (event.status === 'error') {
+            upsert({
+              id: `err:${event.runId}`,
+              role: 'system',
+              content: `Error: ${event.message ?? 'agent run failed.'}`,
+              timestamp: Date.now(),
+            });
+          }
+          if (event.status !== 'started') {
+            setBusy(false);
+            runRef.current = null;
+          }
+          break;
+      }
+    });
+
+    const offApproval = window.triangle.agent.onApprovalRequest((req) => {
+      if (req.runId !== runRef.current) {
+        void window.triangle.agent.approve({ approvalId: req.approvalId, approved: false });
+        return;
+      }
+      setApproval(req);
+    });
+
+    return () => {
+      offEvent();
+      offApproval();
+    };
+  }, [upsert, upsertTrace]);
 
   const send = (): void => {
     const text = input.trim();
     if (!text || busy) return;
-    const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, timestamp: Date.now() };
-    const pending: ChatMessage = {
-      id: nextId(),
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-      pending: true,
-    };
-    setMessages((m) => [...m, userMsg, pending]);
+    const runId = newRunId();
+    runRef.current = runId;
+    setMessages((m) => [
+      ...m,
+      { id: nextId(), role: 'user', content: text, timestamp: Date.now() },
+    ]);
     setInput('');
     setBusy(true);
 
-    // Simulate the agent "thinking" then streaming a reply.
-    window.setTimeout(() => {
-      const reply = mockReply(text);
-      setMessages((m) =>
-        m.map((msg) => (msg.id === pending.id ? { ...msg, content: reply, pending: false } : msg)),
-      );
-      setBusy(false);
-    }, 550);
+    void window.triangle.agent
+      .start({ runId, harness, prompt: text, autoApproveWrites: autoApprove })
+      .then((res) => {
+        if (!res.accepted) {
+          upsert({
+            id: `err:${runId}`,
+            role: 'system',
+            content: `Could not start: ${res.reason ?? 'harness unavailable.'}`,
+            timestamp: Date.now(),
+          });
+          setBusy(false);
+          runRef.current = null;
+        }
+      })
+      .catch((e: unknown) => {
+        upsert({
+          id: `err:${runId}`,
+          role: 'system',
+          content: `Could not start: ${String(e)}`,
+          timestamp: Date.now(),
+        });
+        setBusy(false);
+        runRef.current = null;
+      });
+  };
+
+  const cancel = (): void => {
+    if (runRef.current) void window.triangle.agent.cancel(runRef.current);
+  };
+
+  const decideApproval = (approved: boolean): void => {
+    if (!approval) return;
+    void window.triangle.agent.approve({ approvalId: approval.approvalId, approved });
+    setApproval(null);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -74,6 +196,15 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
     }
   };
 
+  // Merge static catalog with live availability for the selector.
+  const harnessRows = HARNESSES.map((h) => {
+    const live = availability.find((a) => a.id === h.id);
+    const available = live ? live.available : h.available;
+    const note = live?.reason ?? h.note;
+    return { id: h.id, label: h.label, available, note };
+  });
+  const selected = harnessRows.find((h) => h.id === harness);
+
   return (
     <div className="agent">
       <div className="agent__harness">
@@ -82,26 +213,67 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
           value={harness}
           onChange={(e) => setHarness(e.target.value as HarnessId)}
         >
-          {HARNESSES.map((h) => (
+          {harnessRows.map((h) => (
             <option key={h.id} value={h.id} disabled={!h.available}>
               {h.label}
-              {h.available ? '' : ' — soon'}
+              {h.available ? '' : ' — unavailable'}
             </option>
           ))}
         </select>
         <span className="chip">{projectName}</span>
       </div>
 
+      {selected && !selected.available && selected.note && (
+        <div className="agent__notice">{selected.note}</div>
+      )}
+
       <div className="agent__messages" ref={scrollRef}>
         {messages.map((msg) => (
           <div key={msg.id} className={`msg msg--${msg.role}`}>
             <span className="msg__role">{msg.role}</span>
-            <div className="msg__bubble">
-              {msg.pending ? <span className="msg__pending">thinking…</span> : msg.content}
-            </div>
+            {msg.toolCalls && msg.toolCalls.length > 0 && (
+              <div className="msg__tools">
+                {msg.toolCalls.map((t) => (
+                  <div key={t.id} className={`tool tool--${t.status}`}>
+                    <span className="tool__dot" />
+                    <span className="tool__name">{t.tool}</span>
+                    <span className="tool__args">
+                      {t.args.path ? String(t.args.path) : t.args.command ? String(t.args.command) : ''}
+                    </span>
+                    {t.result && t.status !== 'running' && (
+                      <span className="tool__result">{t.result}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {msg.content && <div className="msg__bubble">{msg.content}</div>}
           </div>
         ))}
+        {busy && !approval && (
+          <div className="msg msg--assistant">
+            <span className="msg__pending">working…</span>
+          </div>
+        )}
       </div>
+
+      {approval && (
+        <div className="approval">
+          <div className="approval__title">
+            Approve write {approval.exists ? '(overwrite)' : '(new file)'}
+          </div>
+          <div className="approval__path">{approval.path}</div>
+          <pre className="approval__preview">{approval.content}</pre>
+          <div className="approval__actions">
+            <button className="btn" onClick={() => decideApproval(false)}>
+              Reject
+            </button>
+            <button className="btn btn--primary" onClick={() => decideApproval(true)}>
+              Approve
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="agent__composer">
         <textarea
@@ -112,10 +284,24 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
           onKeyDown={onKeyDown}
         />
         <div className="agent__composer-row">
-          <span className="agent__hint">Enter to send · Shift+Enter for newline</span>
-          <button className="btn btn--primary" onClick={send} disabled={busy || !input.trim()}>
-            Send
-          </button>
+          <label className="agent__toggle" title="Skip the per-write approval prompt">
+            <input
+              type="checkbox"
+              checked={autoApprove}
+              onChange={(e) => setAutoApprove(e.target.checked)}
+            />
+            Auto-approve writes
+          </label>
+          <div className="agent__composer-spacer" />
+          {busy ? (
+            <button className="btn" onClick={cancel}>
+              Stop
+            </button>
+          ) : (
+            <button className="btn btn--primary" onClick={send} disabled={!input.trim()}>
+              Send
+            </button>
+          )}
         </div>
       </div>
     </div>

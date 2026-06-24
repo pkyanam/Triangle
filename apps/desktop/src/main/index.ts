@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import type {
@@ -9,12 +10,14 @@ import type {
   IpcResponse,
 } from '@triangle/shared';
 import { ProjectManager } from './project.js';
+import { AgentManager } from './agent/manager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
 
 let mainWindow: BrowserWindow | null = null;
 let project: ProjectManager;
+let agents: AgentManager;
 
 /** Type-safe wrapper around ipcMain.handle keyed by the shared IPC contract. */
 function handle<C extends IpcInvokeChannel>(
@@ -41,9 +44,18 @@ function registerIpc(): void {
   handle('project:refresh', () => project.getInfo());
   handle('file:read', (req) => project.readFile(req.path));
   handle('file:write', (req) => project.writeFile(req.path, req.content, req.suppressWatch));
+
+  handle('agent:harnesses', () => agents.listHarnesses());
+  handle('agent:start', (req) => agents.start(req));
+  handle('agent:cancel', (req) => agents.cancel(req.runId));
+  handle('agent:approval', (req) => agents.resolveApproval(req));
 }
 
 function createWindow(): void {
+  // App icon (dev/Linux/Windows; macOS packaging uses the .icns from electron-builder).
+  const iconPath = path.join(app.getAppPath(), 'build', 'icon.png');
+  const icon = existsSync(iconPath) ? iconPath : undefined;
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -52,6 +64,7 @@ function createWindow(): void {
     show: false,
     backgroundColor: '#0e1013',
     title: 'Triangle',
+    icon,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.mjs'),
@@ -95,6 +108,11 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('[main] failed to initialize project:', err);
   }
+  agents = new AgentManager(
+    project,
+    (event) => send('agent:event', event),
+    (req) => send('agent:approval-request', req),
+  );
 
   registerIpc();
   createWindow();
@@ -109,6 +127,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  agents?.disposeAll();
   void project?.dispose();
 });
 

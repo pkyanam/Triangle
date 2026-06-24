@@ -83,6 +83,16 @@ button {
   font-size: 15px;
 }
 
+.topbar__logo-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  object-fit: contain;
+  background: #fff;
+  padding: 2px;
+  -webkit-app-region: no-drag;
+}
+
 .topbar__project {
   color: var(--text-dim);
   font-weight: 400;
@@ -392,6 +402,16 @@ button {
   font-family: inherit;
   font-size: 12px;
 }
+.agent__notice {
+  flex: 0 0 auto;
+  margin: 8px 10px 0;
+  padding: 6px 9px;
+  font-size: 11px;
+  color: var(--yellow);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 6px;
+}
 .agent__messages {
   flex: 1;
   overflow: auto;
@@ -496,4 +516,113 @@ button {
   border-radius: 4px;
   border: 1px solid var(--border);
   color: var(--text-faint);
+}
+
+/* ---------- Agent: tool traces ---------- */
+.msg__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tool {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.tool__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 6px;
+  background: var(--text-faint);
+}
+.tool--running .tool__dot {
+  background: var(--yellow);
+}
+.tool--ok .tool__dot {
+  background: var(--green);
+}
+.tool--error .tool__dot {
+  background: var(--red);
+}
+.tool__name {
+  color: var(--text);
+}
+.tool__args {
+  color: var(--blue);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool__result {
+  margin-left: auto;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+}
+
+/* ---------- Agent: approval gate ---------- */
+.approval {
+  flex: 0 0 auto;
+  margin: 0 10px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  background: rgba(255, 85, 51, 0.06);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.approval__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.approval__path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+.approval__preview {
+  max-height: 140px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  user-select: text;
+}
+.approval__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---------- Agent: composer extras ---------- */
+.agent__composer-spacer {
+  flex: 1;
+}
+.agent__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.agent__toggle input {
+  accent-color: var(--accent);
 }

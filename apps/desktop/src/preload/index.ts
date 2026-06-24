@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
+  AgentEvent,
+  ApprovalRequest,
   FileChangeEvent,
   ProjectInfo,
   TriangleApi,
@@ -26,6 +28,14 @@ const api: TriangleApi = {
   file: {
     read: (path) => ipcRenderer.invoke('file:read', { path }),
     write: (req) => ipcRenderer.invoke('file:write', req),
+  },
+  agent: {
+    harnesses: () => ipcRenderer.invoke('agent:harnesses'),
+    start: (req) => ipcRenderer.invoke('agent:start', req),
+    cancel: (runId) => ipcRenderer.invoke('agent:cancel', { runId }),
+    approve: (decision) => ipcRenderer.invoke('agent:approval', decision),
+    onEvent: (cb) => subscribe<AgentEvent>('agent:event', cb),
+    onApprovalRequest: (cb) => subscribe<ApprovalRequest>('agent:approval-request', cb),
   },
 };
 

@@ -145,6 +145,15 @@ export class ProjectManager {
     return { path: relPath, content };
   }
 
+  /** Whether a project-relative path exists (and resolves safely within the root). */
+  exists(relPath: string): boolean {
+    try {
+      return existsSync(this.resolveSafe(relPath));
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Write a file (the one place side effects happen). Stage 1 writes directly; the
    * human-approval gate hooks in here in later stages.
