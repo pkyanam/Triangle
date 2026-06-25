@@ -73,7 +73,7 @@ function AgentDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
   const ws = useWorkspace();
   return (
     <div className="tpanel">
-      <AgentPanel projectName={ws.projectName} />
+      <AgentPanel projectName={ws.projectName} projectId={ws.project?.id ?? ''} />
     </div>
   );
 }

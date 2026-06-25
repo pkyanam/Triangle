@@ -5,6 +5,7 @@
  */
 import type { IpcRequest, IpcResponse } from './ipc.js';
 import type { FileChangeEvent, ProjectInfo, ProjectSummary, TemplateInfo } from './project.js';
+import type { SessionRecord, SessionSummary } from './session.js';
 import type {
   AgentEvent,
   AgentStartRequest,
@@ -60,6 +61,15 @@ export interface TriangleApi {
     onEvent: (cb: (event: AgentEvent) => void) => Unsubscribe;
     /** Subscribe to write-approval prompts. */
     onApprovalRequest: (cb: (req: ApprovalRequest) => void) => Unsubscribe;
+  };
+  /** Persisted agent session history for the active project (ADR 0016). */
+  session: {
+    /** List recorded sessions (newest first). */
+    list: () => Promise<SessionSummary[]>;
+    /** Read one full session transcript by id. */
+    get: (id: string) => Promise<SessionRecord | null>;
+    /** Delete all recorded sessions for the active project. */
+    clear: () => Promise<{ ok: boolean }>;
   };
   /** Standalone MCP endpoint (ADR 0013): how external MCP clients connect to Triangle. */
   mcp: {

@@ -8,6 +8,7 @@
  * all import these so the contract can never drift.
  */
 import type { FileChangeEvent, ProjectInfo, ProjectSummary, TemplateInfo } from './project.js';
+import type { SessionRecord, SessionSummary } from './session.js';
 import type {
   AgentEvent,
   AgentSettings,
@@ -131,6 +132,21 @@ export interface IpcInvokeChannels {
     request: ApprovalDecision;
     response: { ok: boolean };
   };
+  /** List recorded agent sessions for the active project (newest first). */
+  'session:list': {
+    request: void;
+    response: SessionSummary[];
+  };
+  /** Read one full session transcript by id (active project). */
+  'session:get': {
+    request: { id: string };
+    response: SessionRecord | null;
+  };
+  /** Delete all recorded sessions for the active project. */
+  'session:clear': {
+    request: void;
+    response: { ok: boolean };
+  };
   /**
    * The renderer's reply to a `preview:request` (Stage 3 preview bridge). The
    * active preview runtime services the request and returns the result here,
@@ -193,6 +209,9 @@ export const INVOKE_CHANNELS = [
   'agent:start',
   'agent:cancel',
   'agent:approval',
+  'session:list',
+  'session:get',
+  'session:clear',
   'preview:result',
   'preview:save-capture',
 ] as const satisfies readonly IpcInvokeChannel[];

@@ -3,6 +3,7 @@ import {
   Camera,
   FolderGit2,
   Gauge,
+  History,
   ListTree,
   Send,
   Settings2,
@@ -22,6 +23,7 @@ import {
 } from '@triangle/shared';
 import { HarnessPicker } from './HarnessPicker.js';
 import { HarnessConfig } from './HarnessConfig.js';
+import { SessionHistory } from './SessionHistory.js';
 import { DiffView } from './DiffView.js';
 import {
   activePerformanceSnapshot,
@@ -46,9 +48,11 @@ const GREETING: ChatMessage = {
 
 interface AgentPanelProps {
   projectName: string;
+  /** Active project id — used to scope session history and reset the chat on switch. */
+  projectId: string;
 }
 
-export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element {
+export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.JSX.Element {
   const [harness, setHarness] = useState<HarnessId>('mock');
   const [availability, setAvailability] = useState<HarnessAvailability[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
@@ -57,6 +61,7 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
   const [autoApprove, setAutoApprove] = useState(false);
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<string | null>(null);
   // Once the user explicitly picks a harness, stop auto-selecting a default.
@@ -91,6 +96,16 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
     userPickedRef.current = true;
     setHarness(id);
   }, []);
+
+  // Switching projects resets the live chat (each project has its own history),
+  // dismisses any pending approval, and leaves the history view.
+  useEffect(() => {
+    setMessages([GREETING]);
+    setApproval(null);
+    setShowHistory(false);
+    runRef.current = null;
+    setBusy(false);
+  }, [projectId]);
 
   /** Insert or update a message by id. */
   const upsert = useCallback((msg: ChatMessage) => {
@@ -299,6 +314,17 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
           disabled={busy}
         />
         <button
+          className={`btn btn--icon${showHistory ? ' btn--active' : ''}`}
+          onClick={() => {
+            setShowHistory((s) => !s);
+            setShowConfig(false);
+          }}
+          title="Session history"
+          aria-pressed={showHistory}
+        >
+          <History size={14} />
+        </button>
+        <button
           className={`btn btn--icon${showConfig ? ' btn--active' : ''}`}
           onClick={() => setShowConfig((s) => !s)}
           title="Configure this harness"
@@ -314,6 +340,10 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
 
       {showConfig && <HarnessConfig harness={harness} onSaved={refreshHarnesses} />}
 
+      {showHistory ? (
+        <SessionHistory projectId={projectId} />
+      ) : (
+        <>
       {selectedUnavailable && selectedLive?.reason && (
         <div className="agent__notice">
           <TriangleAlert size={14} />
@@ -450,6 +480,8 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { AgentManager } from './agent/manager.js';
 import { PreviewBridge } from './preview-bridge.js';
 import { ToolBridgeServer } from './tool-bridge.js';
 import { McpEndpoint } from './mcp-endpoint.js';
+import { SessionStore } from './session-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
@@ -26,6 +27,7 @@ let agents: AgentManager;
 let preview: PreviewBridge;
 let toolBridge: ToolBridgeServer;
 let mcpEndpoint: McpEndpoint;
+let sessions: SessionStore;
 
 /** Decode a `data:…;base64,…` URL into raw bytes. */
 function dataUrlToBuffer(dataUrl: string): Buffer {
@@ -112,6 +114,14 @@ function registerIpc(): void {
   handle('agent:cancel', (req) => agents.cancel(req.runId));
   handle('agent:approval', (req) => agents.resolveApproval(req));
 
+  // Session history (ADR 0016) — scoped to the active project.
+  handle('session:list', () => sessions.list(project.getActiveId()));
+  handle('session:get', (req) => sessions.get(project.getActiveId(), req.id));
+  handle('session:clear', async () => {
+    await sessions.clear(project.getActiveId());
+    return { ok: true };
+  });
+
   // Stage 3 preview bridge: the renderer replies to main's `preview:request`s here,
   // and persists quick-action screenshots via the same ProjectManager capture path.
   handle('preview:result', (req) => preview.resolve(req));
@@ -191,11 +201,13 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('[main] MCP endpoint failed to start:', err);
   }
+  sessions = new SessionStore();
   agents = new AgentManager(
     project,
     preview,
     toolBridge,
     mcpServerScriptPath,
+    sessions,
     (event) => send('agent:event', event),
     (req) => send('agent:approval-request', req),
     () => mcpEndpoint.serverConfig(),

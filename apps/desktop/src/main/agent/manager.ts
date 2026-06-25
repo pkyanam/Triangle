@@ -13,6 +13,7 @@ import { loadConfig, type TriangleConfig } from '../config.js';
 import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
 import type { ToolBridgeServer } from '../tool-bridge.js';
+import type { SessionStore } from '../session-store.js';
 import { createToolset, type ApprovalGate } from './tools.js';
 import type { AgentHarness, ApprovalAsk, ApprovalOutcome } from './harness.js';
 import { mockHarness } from './mock.js';
@@ -57,6 +58,12 @@ interface ActiveRun {
   autoApproveAll: boolean;
 }
 
+/** Summarise a batch of file changes for the session-history approval entry. */
+function summariseChanges(changes: ApprovalFileChange[], command?: string, tool?: string): string {
+  if (changes.length > 0) return changes.map((c) => `${c.kind} ${c.path}`).join(', ');
+  return command ?? tool ?? 'action';
+}
+
 /**
  * Orchestrates agent runs: selects a harness, wires the Triangle toolset + approval gate,
  * streams events to the renderer, and manages cancellation. The single owner of agent
@@ -76,6 +83,7 @@ export class AgentManager {
     private readonly preview: PreviewBridge,
     private readonly toolBridge: ToolBridgeServer,
     private readonly mcpServerScriptPath: string,
+    private readonly sessions: SessionStore,
     private readonly emitEvent: (event: AgentEvent) => void,
     private readonly sendApproval: (req: ApprovalRequest) => void,
     /** Returns the standalone MCP endpoint config to advertise to ACP agents. */
@@ -141,9 +149,22 @@ export class AgentManager {
     run: ActiveRun,
   ): Promise<void> {
     const { runId } = req;
+    // Forward every run event to the renderer *and* the session recorder, so a
+    // run's transcript survives an app restart (ADR 0016).
+    const forward = (event: AgentEvent): void => {
+      this.recordEvent(runId, event);
+      this.emitEvent(event);
+    };
     const emitStatus = (status: AgentRunStatus, message?: string): void =>
-      this.emitEvent({ type: 'status', runId, status, message });
+      forward({ type: 'status', runId, status, message });
 
+    let projectId = 'unknown';
+    try {
+      projectId = this.project.getActiveId();
+    } catch {
+      /* project not initialised — record under a placeholder */
+    }
+    this.sessions.begin(runId, projectId, req.harness, req.prompt);
     emitStatus('started');
 
     // Triangle tool writes (Claude in-process / MCP via the bridge): read the
@@ -188,7 +209,7 @@ export class AgentManager {
       project: this.project,
       preview: this.preview,
       approveWrite,
-      emitTrace: (trace) => this.emitEvent({ type: 'tool', runId, trace }),
+      emitTrace: (trace) => forward({ type: 'tool', runId, trace }),
     });
 
     // Expose this run's toolset to out-of-process harnesses (Codex/MCP) over the
@@ -212,27 +233,51 @@ export class AgentManager {
         signal: run.controller.signal,
         emit: (event) => {
           if (event.type === 'assistant') {
-            this.emitEvent({
-              type: 'assistant',
-              runId,
-              messageId: event.messageId,
-              text: event.text,
-            });
+            forward({ type: 'assistant', runId, messageId: event.messageId, text: event.text });
           } else if (event.type === 'tool') {
-            this.emitEvent({ type: 'tool', runId, trace: event.trace });
+            forward({ type: 'tool', runId, trace: event.trace });
           } else {
-            this.emitEvent({ type: 'log', runId, level: event.level, text: event.text });
+            forward({ type: 'log', runId, level: event.level, text: event.text });
           }
         },
       });
-      if (run.controller.signal.aborted) emitStatus('cancelled');
-      else emitStatus('completed');
+      if (run.controller.signal.aborted) {
+        emitStatus('cancelled');
+        this.sessions.finish(runId, 'cancelled');
+      } else {
+        emitStatus('completed');
+        this.sessions.finish(runId, 'completed');
+      }
     } catch (err) {
-      if (run.controller.signal.aborted) emitStatus('cancelled');
-      else emitStatus('error', (err as Error).message);
+      if (run.controller.signal.aborted) {
+        emitStatus('cancelled');
+        this.sessions.finish(runId, 'cancelled');
+      } else {
+        const message = (err as Error).message;
+        emitStatus('error', message);
+        this.sessions.finish(runId, 'error', message);
+      }
     } finally {
       this.toolBridge.unregister(bridgeToken);
       this.cleanupRun(runId);
+    }
+  }
+
+  /** Map a streamed run event onto a persisted transcript entry (ADR 0016). */
+  private recordEvent(runId: string, event: AgentEvent): void {
+    const ts = Date.now();
+    switch (event.type) {
+      case 'assistant':
+        this.sessions.append(runId, { kind: 'assistant', ts, messageId: event.messageId, text: event.text });
+        break;
+      case 'tool':
+        this.sessions.append(runId, { kind: 'tool', ts, trace: event.trace });
+        break;
+      case 'log':
+        this.sessions.append(runId, { kind: 'log', ts, level: event.level, text: event.text });
+        break;
+      case 'status':
+        break; // terminal status is recorded by SessionStore.finish
     }
   }
 
@@ -276,7 +321,21 @@ export class AgentManager {
     run.approvals.add(approvalId);
     const payload: ApprovalRequest = { approvalId, runId, source, ...body };
     return new Promise<ApprovalOutcome>((resolve) => {
-      this.pendingApprovals.set(approvalId, { resolve, runId });
+      // Record the approval *outcome* (approve/reject) in the session transcript,
+      // however it resolves (user decision, cancel, or run cleanup).
+      const wrapped = (outcome: ApprovalOutcome): void => {
+        this.sessions.append(runId, {
+          kind: 'approval',
+          ts: Date.now(),
+          tool: body.tool,
+          summary: summariseChanges(body.changes, body.command, body.tool),
+          ...(body.command ? { command: body.command } : {}),
+          approved: outcome.approved,
+          scope: outcome.scope,
+        });
+        resolve(outcome);
+      };
+      this.pendingApprovals.set(approvalId, { resolve: wrapped, runId });
       this.sendApproval(payload);
     });
   }

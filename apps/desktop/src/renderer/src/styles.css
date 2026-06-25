@@ -1490,3 +1490,116 @@ button {
   justify-content: flex-end;
   gap: 6px;
 }
+
+/* ---------- Session history ---------- */
+.history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.history__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.history__head-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.history__status {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  background: var(--accent);
+}
+.history__status--completed {
+  color: oklch(0.8 0.16 150);
+  background: color-mix(in srgb, oklch(0.8 0.16 150) 14%, transparent);
+}
+.history__status--error {
+  color: oklch(0.72 0.19 25);
+  background: color-mix(in srgb, oklch(0.72 0.19 25) 14%, transparent);
+}
+.history__status--running {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+.history__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history__item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--card);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.history__item:hover {
+  border-color: var(--border-strong);
+  background: var(--accent);
+}
+.history__item-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.history__item-harness {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.history__item-when {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+.history__item-prompt {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.history__transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.history__empty {
+  padding: 22px 16px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.history__approval {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  padding: 4px 2px;
+}
