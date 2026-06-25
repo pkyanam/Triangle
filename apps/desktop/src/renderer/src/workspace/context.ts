@@ -17,6 +17,9 @@ export interface WorkspaceState {
   saveFile: (path: string, content: string) => void | Promise<void>;
   onStatus: (status: PreviewStatus) => void;
   onStats: (stats: PreviewStats) => void;
+  /** Currently selected scene object uuid (Stage 5.75). */
+  selectedObject: string | null;
+  setSelectedObject: (uuid: string | null) => void;
 }
 
 export const WorkspaceContext = createContext<WorkspaceState | null>(null);

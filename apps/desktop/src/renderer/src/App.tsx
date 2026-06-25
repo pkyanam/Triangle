@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PreviewStats, PreviewStatus, ProjectInfo } from '@triangle/shared';
+import type { PreviewStatus, ProjectInfo } from '@triangle/shared';
 import { TopBar } from './components/TopBar.js';
-import { StatusBar } from './components/StatusBar.js';
+import { Console } from './components/Console.js';
 import { Workspace, type PanelsOpen, type WorkspaceHandle } from './workspace/Workspace.js';
 import type { WorkspaceState } from './workspace/context.js';
 import { installPreviewBridge } from './preview/bridge.js';
@@ -15,8 +15,8 @@ export function App(): React.JSX.Element {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedContent, setSelectedContent] = useState('');
   const [status, setStatus] = useState<PreviewStatus>({ phase: 'idle' });
-  const [stats, setStats] = useState<PreviewStats | null>(null);
-  const [electronVersion, setElectronVersion] = useState('');
+  const [playing, setPlaying] = useState(false);
+  const [selectedObject, setSelectedObject] = useState<string | null>(null);
 
   // Which dock panels are currently mounted (reflected in the TopBar panels menu).
   const [panelsOpen, setPanelsOpen] = useState<PanelsOpen>({
@@ -24,6 +24,8 @@ export function App(): React.JSX.Element {
     editor: true,
     preview: true,
     agent: true,
+    outliner: true,
+    inspector: true,
   });
   const workspaceRef = useRef<WorkspaceHandle>(null);
 
@@ -62,12 +64,8 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     let active = true;
     void (async () => {
-      const [info, appInfo] = await Promise.all([
-        window.triangle.project.get(),
-        window.triangle.app.info(),
-      ]);
+      const info = await window.triangle.project.get();
       if (!active) return;
-      setElectronVersion(appInfo.electron);
       await applyProject(info);
     })();
     return () => {
@@ -116,6 +114,16 @@ export function App(): React.JSX.Element {
     // Re-subscribe only when the project root changes.
   }, [project?.root]);
 
+  // Play mode: Esc exits.
+  useEffect(() => {
+    if (!playing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPlaying(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [playing]);
+
   const projectName = project?.manifest.name ?? 'Loading…';
   const entry = project?.manifest.entry ?? '—';
 
@@ -128,14 +136,18 @@ export function App(): React.JSX.Element {
     openFile,
     saveFile,
     onStatus: setStatus,
-    onStats: setStats,
+    onStats: () => undefined,
+    selectedObject,
+    setSelectedObject,
   };
 
   return (
-    <div className="app">
+    <div className={`app${playing ? ' app--playing' : ''}`}>
       <TopBar
         projectName={projectName}
         panelsOpen={panelsOpen}
+        playing={playing}
+        onTogglePlay={() => setPlaying((p) => !p)}
         onTogglePanel={(id) => workspaceRef.current?.togglePanel(id)}
         onResetLayout={() => workspaceRef.current?.resetLayout()}
       />
@@ -144,12 +156,7 @@ export function App(): React.JSX.Element {
         <Workspace ref={workspaceRef} state={workspaceState} onPanelsChange={setPanelsOpen} />
       </div>
 
-      <StatusBar
-        status={status}
-        stats={stats}
-        entry={entry}
-        electronVersion={electronVersion}
-      />
+      <Console status={status} entry={entry} />
     </div>
   );
 }

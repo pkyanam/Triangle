@@ -9,19 +9,19 @@ import { FileTree } from '../components/FileTree.js';
 import { Editor } from '../components/Editor.js';
 import { Preview } from '../components/Preview.js';
 import { AgentPanel } from '../components/AgentPanel.js';
+import { Outliner } from '../components/Outliner.js';
+import { Inspector } from '../components/Inspector.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
 /**
- * localStorage key prefix for the persisted dockview layout. Stage 5.5 scopes
- * the key per-project (`triangle.layout.v2.<projectId>`) so each project keeps
- * its own panel arrangement; earlier stages used one global key. A project with
- * no saved layout falls back to {@link buildDefaultLayout}.
+ * localStorage key prefix for the persisted dockview layout. Stage 5.75 bumps
+ * the key to `v3` so existing saved layouts fall back to the new engine default.
  */
-const LAYOUT_KEY_PREFIX = 'triangle.layout.v2';
+const LAYOUT_KEY_PREFIX = 'triangle.layout.v3';
 const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
-export const PANEL_IDS = ['explorer', 'editor', 'preview', 'agent'] as const;
+export const PANEL_IDS = ['explorer', 'editor', 'preview', 'agent', 'outliner', 'inspector'] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 export type PanelsOpen = Record<PanelId, boolean>;
 
@@ -37,12 +37,22 @@ interface WorkspaceProps {
   onPanelsChange: (open: PanelsOpen) => void;
 }
 
-const WIDTHS: Record<PanelId, number> = { explorer: 230, editor: 420, preview: 0, agent: 400 };
+const WIDTHS: Record<PanelId, number> = {
+  explorer: 230,
+  editor: 420,
+  preview: 0,
+  agent: 400,
+  outliner: 230,
+  inspector: 320,
+};
+
 const MIN_WIDTHS: Record<PanelId, number> = {
   explorer: 170,
   editor: 240,
   preview: 320,
   agent: 300,
+  outliner: 170,
+  inspector: 260,
 };
 
 // --- Panel components: rendered by dockview, read live state from context. ---
@@ -85,11 +95,31 @@ function AgentDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
   );
 }
 
+function OutlinerPanel(_props: IDockviewPanelProps): React.JSX.Element {
+  const ws = useWorkspace();
+  return (
+    <div className="tpanel">
+      <Outliner selectedUuid={ws.selectedObject} onSelect={ws.setSelectedObject} />
+    </div>
+  );
+}
+
+function InspectorPanel(_props: IDockviewPanelProps): React.JSX.Element {
+  const ws = useWorkspace();
+  return (
+    <div className="tpanel">
+      <Inspector selectedUuid={ws.selectedObject} />
+    </div>
+  );
+}
+
 const COMPONENTS = {
   explorer: ExplorerPanel,
   editor: EditorPanel,
   preview: PreviewPanel,
   agent: AgentDockPanel,
+  outliner: OutlinerPanel,
+  inspector: InspectorPanel,
 };
 
 const TITLES: Record<string, string> = {
@@ -97,17 +127,22 @@ const TITLES: Record<string, string> = {
   editor: 'Editor',
   preview: 'Preview',
   agent: 'Agent',
+  outliner: 'Outliner',
+  inspector: 'Inspector',
 };
 
-/** Lay out the default IDE arrangement: Explorer | Editor | Preview | Agent. */
+/** Build the new engine default layout: left rail, hero viewport, right rail. */
 function buildDefaultLayout(api: DockviewApi): void {
+  // Center: hero viewport.
   api.addPanel({ id: 'preview', component: 'preview', title: TITLES.preview, minimumWidth: 320 });
+
+  // Left rail: Explorer + Outliner (Outliner front).
   api.addPanel({
-    id: 'editor',
-    component: 'editor',
-    title: TITLES.editor,
-    initialWidth: 420,
-    minimumWidth: 240,
+    id: 'outliner',
+    component: 'outliner',
+    title: TITLES.outliner,
+    initialWidth: 230,
+    minimumWidth: 170,
     position: { referencePanel: 'preview', direction: 'left' },
   });
   api.addPanel({
@@ -116,8 +151,10 @@ function buildDefaultLayout(api: DockviewApi): void {
     title: TITLES.explorer,
     initialWidth: 230,
     minimumWidth: 170,
-    position: { referencePanel: 'editor', direction: 'left' },
+    position: { referencePanel: 'outliner', direction: 'left' },
   });
+
+  // Right rail: Agent + Inspector (Agent front).
   api.addPanel({
     id: 'agent',
     component: 'agent',
@@ -126,6 +163,25 @@ function buildDefaultLayout(api: DockviewApi): void {
     minimumWidth: 300,
     position: { referencePanel: 'preview', direction: 'right' },
   });
+  api.addPanel({
+    id: 'inspector',
+    component: 'inspector',
+    title: TITLES.inspector,
+    initialWidth: 320,
+    minimumWidth: 260,
+    position: { referencePanel: 'agent', direction: 'right' },
+  });
+
+  // Editor sits between the left rail and the viewport.
+  api.addPanel({
+    id: 'editor',
+    component: 'editor',
+    title: TITLES.editor,
+    initialWidth: 420,
+    minimumWidth: 240,
+    position: { referencePanel: 'preview', direction: 'left' },
+  });
+
   api.getPanel('preview')?.api.setActive();
 }
 
@@ -181,7 +237,7 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
     const api = apiRef.current;
     if (!api) return;
     const pid = activeProjectRef.current;
-    if (!pid) return; // nothing to key the layout under yet
+    if (!pid) return;
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       try {
@@ -225,14 +281,12 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
     reportPanels();
   };
 
-  // When the active project changes (after onReady), persist the outgoing
-  // project's layout under its own key and apply the incoming project's layout
-  // (or the default). This keeps each project's panel arrangement independent.
+  // When the active project changes, persist the outgoing layout and apply the
+  // incoming project's layout (or the default).
   useEffect(() => {
     const api = apiRef.current;
     const pid = state.project?.id ?? null;
     if (!api || pid === activeProjectRef.current) return;
-    // Flush the outgoing layout to its key before switching.
     if (activeProjectRef.current) {
       try {
         localStorage.setItem(layoutKey(activeProjectRef.current), JSON.stringify(api.toJSON()));
@@ -244,6 +298,14 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
     if (pid) applyLayout(api, pid);
     reportPanels();
   }, [state.project?.id]);
+
+  // Auto-switch the right rail to Inspector when a scene object is selected.
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api || !state.selectedObject) return;
+    const inspector = api.getPanel('inspector');
+    if (inspector) inspector.api.setActive();
+  }, [state.selectedObject]);
 
   const togglePanel = (id: PanelId): void => {
     const api = apiRef.current;
