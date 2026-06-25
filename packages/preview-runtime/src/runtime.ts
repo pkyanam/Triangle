@@ -77,7 +77,7 @@ export class PreviewRuntime {
   private readonly selection: SelectionHighlight;
   private selectedUuid: string | null = null;
   private viewMode: 'lit' | 'wireframe' = 'lit';
-  private stepUntil = 0;
+  private stepFrames = 0;
   private readonly wireframeSnapshot = new Map<string, boolean>();
 
   constructor(canvas: HTMLCanvasElement, options: PreviewRuntimeOptions = {}) {
@@ -278,7 +278,7 @@ export class PreviewRuntime {
   /** Advance the animation loop by exactly one frame, then pause again. */
   step(): void {
     this.paused = false;
-    this.stepUntil = performance.now() + 100;
+    this.stepFrames = 1;
   }
 
   /**
@@ -372,7 +372,7 @@ export class PreviewRuntime {
     const time = this.timer.getElapsed();
     this.controls.update();
 
-    const shouldStep = this.stepUntil > 0 && performance.now() < this.stepUntil;
+    const shouldStep = this.stepFrames > 0;
     if ((shouldStep || !this.paused) && this.module?.update) {
       try {
         this.module.update({ ...this.setupContext(), state: this.moduleState, delta, time });
@@ -383,9 +383,9 @@ export class PreviewRuntime {
         return;
       }
     }
-    if (this.stepUntil > 0 && performance.now() >= this.stepUntil) {
-      this.paused = true;
-      this.stepUntil = 0;
+    if (this.stepFrames > 0) {
+      this.stepFrames -= 1;
+      if (this.stepFrames === 0) this.paused = true;
     }
 
     this.selection.update();

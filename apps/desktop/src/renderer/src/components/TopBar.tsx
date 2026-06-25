@@ -17,6 +17,7 @@ import type { ComponentType } from 'react';
 import type { PanelId, PanelsOpen } from '../workspace/Workspace.js';
 import { ProjectMenu } from './ProjectMenu.js';
 import logoUrl from '../assets/logo.jpg';
+import { getActiveViewMode, setActiveViewMode } from '../preview/bridge.js';
 
 interface TopBarProps {
   projectName: string;
@@ -45,6 +46,7 @@ export function TopBar({
   onResetLayout,
 }: TopBarProps): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'lit' | 'wireframe'>(() => getActiveViewMode());
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -82,9 +84,18 @@ export function TopBar({
           {playing ? <Square size={14} /> : <Play size={14} />}
         </button>
         <div className="toolbar-divider" />
-        <div className="toolbar-btn" title="View mode: Lit" style={{ width: 'auto', padding: '0 7px', color: 'var(--muted-foreground)' }}>
+        <button
+          className={`toolbar-btn${viewMode === 'wireframe' ? ' toolbar-btn--active' : ''}`}
+          title={`View mode: ${viewMode === 'wireframe' ? 'Wireframe' : 'Lit'}`}
+          style={{ width: 'auto', padding: '0 7px' }}
+          onClick={() => {
+            const next = viewMode === 'lit' ? 'wireframe' : 'lit';
+            setActiveViewMode(next);
+            setViewMode(next);
+          }}
+        >
           <View size={14} />
-        </div>
+        </button>
         <div className="toolbar-divider" />
         <div className="menu" ref={menuRef}>
           <button
