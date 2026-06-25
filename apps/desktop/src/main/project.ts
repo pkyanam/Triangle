@@ -278,7 +278,7 @@ export class ProjectManager {
     if (!runtime) {
       throw new Error(
         'Standalone HTML export needs the bundled Three.js runtime files ' +
-          '(three.core.js + OrbitControls.js), which were not found. ' +
+          '(three.module.js + OrbitControls.js), which were not found. ' +
           'Rebuild the app so they ship under out/main/runtime/ (dev) or ' +
           '<resources>/runtime/ (packaged).',
       );

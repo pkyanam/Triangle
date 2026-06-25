@@ -33,7 +33,8 @@ const HTML_IGNORE = new Set(['node_modules', '.git', '.triangle', '.DS_Store']);
  *   3. `<repoRoot>/packages/preview-runtime/node_modules/three/...` — dev-only
  *      fallback that reads three straight from the pnpm workspace.
  *
- * Returns absolute paths to `three.core.js` + `OrbitControls.js`, or `null` if
+ * Returns absolute paths to `three.module.js` (the full build — includes
+ * WebGLRenderer, unlike `three.core.js`) + `OrbitControls.js`, or `null` if
  * either is missing.
  */
 export function resolveRuntimeFiles(
@@ -42,11 +43,11 @@ export function resolveRuntimeFiles(
   repoRoot: string,
 ): { threeCore: string; orbitControls: string } | null {
   const rel = {
-    threeCore: path.join('build', 'three.core.js'),
+    threeCore: path.join('build', 'three.module.js'),
     orbitControls: path.join('examples', 'jsm', 'controls', 'OrbitControls.js'),
   };
   const flatRel = {
-    threeCore: 'three.core.js',
+    threeCore: 'three.module.js',
     orbitControls: 'OrbitControls.js',
   };
   const bases = [

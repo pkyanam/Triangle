@@ -21,8 +21,8 @@ function copyRuntime(): import('vite').Plugin {
   const dest = resolve(__dirname, 'out', 'main', 'runtime');
   const sources = [
     {
-      src: resolve(threePkg, 'build', 'three.core.js'),
-      dest: resolve(dest, 'three.core.js'),
+      src: resolve(threePkg, 'build', 'three.module.js'),
+      dest: resolve(dest, 'three.module.js'),
     },
     {
       src: resolve(threePkg, 'examples', 'jsm', 'controls', 'OrbitControls.js'),
