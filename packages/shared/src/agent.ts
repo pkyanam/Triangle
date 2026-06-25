@@ -23,6 +23,26 @@ export const HARNESSES: HarnessDescriptor[] = [
   { id: 'acp', label: 'ACP Agent', available: true, note: 'Needs acpAgentCommand configured.' },
 ];
 
+/**
+ * The user-editable subset of agent settings surfaced in the harness-config UI
+ * (Stage 4). Persisted to the user config file in main; secrets (API keys) are
+ * intentionally excluded from this round-trip and stay in env / the config file.
+ */
+export interface AgentSettings {
+  /** Model override for the Claude Agent SDK harness. */
+  claudeModel?: string;
+  /** Model override for the Codex harness. */
+  codexModel?: string;
+  /** External ACP agent command (enables the `acp` harness). */
+  acpAgentCommand?: string;
+  /** Arguments for the ACP agent command. */
+  acpAgentArgs?: string[];
+  /** Display label for the configured ACP agent. */
+  acpAgentLabel?: string;
+  /** Default state of the human-approval gate for file writes. */
+  autoApproveWrites?: boolean;
+}
+
 export type ChatRole = 'user' | 'assistant' | 'system';
 
 export interface ChatMessage {

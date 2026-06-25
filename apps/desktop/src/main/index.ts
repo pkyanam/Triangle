@@ -9,6 +9,7 @@ import type {
   IpcRequest,
   IpcResponse,
 } from '@triangle/shared';
+import { loadAgentSettings, saveAgentSettings } from './config.js';
 import { ProjectManager } from './project.js';
 import { AgentManager } from './agent/manager.js';
 import { PreviewBridge } from './preview-bridge.js';
@@ -59,6 +60,8 @@ function registerIpc(): void {
 
   handle('agent:harnesses', () => agents.listHarnesses());
   handle('mcp:endpoint', () => mcpEndpoint.info());
+  handle('config:get', () => loadAgentSettings());
+  handle('config:set', (patch) => saveAgentSettings(patch));
   handle('agent:start', (req) => agents.start(req));
   handle('agent:cancel', (req) => agents.cancel(req.runId));
   handle('agent:approval', (req) => agents.resolveApproval(req));

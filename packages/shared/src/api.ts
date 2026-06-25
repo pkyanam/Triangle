@@ -53,6 +53,11 @@ export interface TriangleApi {
   mcp: {
     endpoint: () => Promise<McpEndpointInfo>;
   };
+  /** User-editable agent settings (per-harness models, ACP agent, …). */
+  config: {
+    get: () => Promise<IpcResponse<'config:get'>>;
+    set: (patch: IpcRequest<'config:set'>) => Promise<IpcResponse<'config:set'>>;
+  };
   /** Stage 3 preview bridge — connects the agent layer to the live runtime. */
   preview: {
     /**

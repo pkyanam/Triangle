@@ -10,6 +10,7 @@
 import type { FileChangeEvent, ProjectInfo } from './project.js';
 import type {
   AgentEvent,
+  AgentSettings,
   AgentStartRequest,
   AgentStartResult,
   ApprovalDecision,
@@ -63,6 +64,16 @@ export interface IpcInvokeChannels {
   'mcp:endpoint': {
     request: void;
     response: McpEndpointInfo;
+  };
+  /** Read the user-editable agent settings (per-harness models, ACP, …). */
+  'config:get': {
+    request: void;
+    response: AgentSettings;
+  };
+  /** Persist a patch of agent settings; returns the new effective settings. */
+  'config:set': {
+    request: Partial<AgentSettings>;
+    response: AgentSettings;
   };
   /** Start an agent run. Results stream back over the `agent:event` channel. */
   'agent:start': {
@@ -130,6 +141,8 @@ export const INVOKE_CHANNELS = [
   'app:info',
   'agent:harnesses',
   'mcp:endpoint',
+  'config:get',
+  'config:set',
   'agent:start',
   'agent:cancel',
   'agent:approval',

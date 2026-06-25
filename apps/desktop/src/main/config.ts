@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
+import type { AgentSettings } from '@triangle/shared';
 
 /**
  * Agent credentials & settings, resolved from (lowest → highest precedence):
@@ -116,4 +117,44 @@ export function loadConfig(): TriangleConfig {
     ...compact(userFile),
     ...compact(env),
   };
+}
+
+function userConfigPath(): string {
+  return path.join(app.getPath('userData'), 'config.json');
+}
+
+/** The user-editable subset of the effective config (for the harness-config UI). */
+export function loadAgentSettings(): AgentSettings {
+  const c = loadConfig();
+  return {
+    claudeModel: c.claudeModel,
+    codexModel: c.codexModel,
+    acpAgentCommand: c.acpAgentCommand,
+    acpAgentArgs: c.acpAgentArgs,
+    acpAgentLabel: c.acpAgentLabel,
+    autoApproveWrites: c.autoApproveWrites,
+  };
+}
+
+/**
+ * Persist a patch of agent settings to the *user* config file (camelCase),
+ * merging into and preserving any other keys (e.g. an existing API key). An empty
+ * string clears a field. Returns the new effective settings.
+ */
+export function saveAgentSettings(patch: Partial<AgentSettings>): AgentSettings {
+  const file = userConfigPath();
+  const current = (readJson(file) as Record<string, unknown> | null) ?? {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (typeof value === 'string' && value.trim() === '') delete current[key];
+    else if (Array.isArray(value) && value.length === 0) delete current[key];
+    else current[key] = value;
+  }
+  try {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
+  } catch (err) {
+    console.warn('[config] failed to write user config:', err);
+  }
+  return loadAgentSettings();
 }

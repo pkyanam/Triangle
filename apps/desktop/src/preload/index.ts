@@ -41,6 +41,10 @@ const api: TriangleApi = {
   mcp: {
     endpoint: () => ipcRenderer.invoke('mcp:endpoint'),
   },
+  config: {
+    get: () => ipcRenderer.invoke('config:get'),
+    set: (patch) => ipcRenderer.invoke('config:set', patch),
+  },
   preview: {
     onRequest: (cb) => subscribe<PreviewRequest>('preview:request', cb),
     result: (result) => ipcRenderer.invoke('preview:result', result),

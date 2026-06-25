@@ -722,6 +722,90 @@ button {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
 }
+/* ---------- Harness config panel (Stage 4) ---------- */
+.hconfig {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 10px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  box-shadow: var(--bevel-top);
+}
+.hconfig--loading {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+.hconfig__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hconfig__label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+}
+.hconfig__input {
+  height: 30px;
+  padding: 0 9px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.hconfig__input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+}
+.hconfig__note {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+.hconfig__endpoint {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+}
+.hconfig__endpoint-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.hconfig__endpoint-sub {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.hconfig__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+}
+.hconfig__dot--ok {
+  background: var(--diff-add-fg, #46a758);
+}
+.hconfig__footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+
 .agent__notice {
   flex: 0 0 auto;
   display: flex;

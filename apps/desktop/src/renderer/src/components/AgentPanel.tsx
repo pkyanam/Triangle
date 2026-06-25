@@ -5,6 +5,7 @@ import {
   Gauge,
   ListTree,
   Send,
+  Settings2,
   ShieldCheck,
   Square,
   Terminal,
@@ -20,6 +21,7 @@ import {
   type ToolCallTrace,
 } from '@triangle/shared';
 import { HarnessPicker } from './HarnessPicker.js';
+import { HarnessConfig } from './HarnessConfig.js';
 import { DiffView } from './DiffView.js';
 import {
   activePerformanceSnapshot,
@@ -53,6 +55,7 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
   const [busy, setBusy] = useState(false);
   const [autoApprove, setAutoApprove] = useState(false);
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<string | null>(null);
 
@@ -60,16 +63,17 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, approval]);
 
-  // Load runtime harness availability.
-  useEffect(() => {
-    let active = true;
-    void window.triangle.agent.harnesses().then((list) => {
-      if (active) setAvailability(list);
-    });
-    return () => {
-      active = false;
-    };
+  const refreshHarnesses = useCallback(() => {
+    void window.triangle.agent.harnesses().then(setAvailability);
   }, []);
+
+  // Load runtime harness availability + the persisted auto-approve default.
+  useEffect(() => {
+    refreshHarnesses();
+    void window.triangle.config.get().then((s) => {
+      if (typeof s.autoApproveWrites === 'boolean') setAutoApprove(s.autoApproveWrites);
+    });
+  }, [refreshHarnesses]);
 
   /** Insert or update a message by id. */
   const upsert = useCallback((msg: ChatMessage) => {
@@ -277,11 +281,21 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
           onChange={setHarness}
           disabled={busy}
         />
+        <button
+          className={`btn btn--icon${showConfig ? ' btn--active' : ''}`}
+          onClick={() => setShowConfig((s) => !s)}
+          title="Configure this harness"
+          aria-pressed={showConfig}
+        >
+          <Settings2 size={14} />
+        </button>
         <span className="chip" title={`Project: ${projectName}`}>
           <FolderGit2 size={12} />
           {projectName}
         </span>
       </div>
+
+      {showConfig && <HarnessConfig harness={harness} onSaved={refreshHarnesses} />}
 
       {selectedUnavailable && selectedLive?.reason && (
         <div className="agent__notice">
