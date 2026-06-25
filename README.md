@@ -12,7 +12,7 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
 
 <br />
 
-[![Stage](https://img.shields.io/badge/stage-3%20%C2%B7%20domain%20tooling%20%26%20visual%20feedback-6366f1)](docs/ROADMAP.md)
+[![Stage](https://img.shields.io/badge/stage-5%20%C2%B7%20templates%2C%20export%2C%20history%20%26%20packaging-6366f1)](docs/ROADMAP.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
 [![Built with Electron](https://img.shields.io/badge/Electron-37-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Three.js](https://img.shields.io/badge/three.js-0.184-000000?logo=three.js&logoColor=white)](https://threejs.org/)
@@ -53,6 +53,9 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
   and command approvals) flow through one **diff view** with Approve / Approve-all /
   Reject; a gear-toggled **harness config** sets per-harness models, the ACP agent,
   and the MCP endpoint.
+- 🗂️ **Projects, templates & history** — create projects from a template gallery,
+  switch between them, export/import as zips, and review **persistent session
+  history** that survives restarts — all from the title bar.
 - 🧱 **Dockable workspace** — resizable, movable, dockable, floatable, collapsible
   panes (powered by [dockview](https://dockview.dev)) with a persisted layout.
 - 🎨 **Centralized theming** — a single CSS-variable design system; the Monaco theme
@@ -120,13 +123,14 @@ key list.
 | 3 | Three.js domain tooling & visual feedback loop | ✅ |
 | 4 | Rich agent capabilities & protocol support (ACP / MCP) | ✅ |
 | 4.5 | Devin CLI (ACP) as the preferred harness | ✅ |
-| 5 | Polish, rich features & internal prototype | ⬜ |
+| 5 | Polish, rich features & internal prototype | ✅ |
 | 6 | Post-prototype hardening & web path | ⬜ |
 
 The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Stage write-ups:
 [Stage 1](docs/STAGE-1.md) · [Stage 2](docs/STAGE-2.md) ·
 [Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md) ·
-[Stage 4](docs/STAGE-4.md) · [Stage 4.5](docs/STAGE-4.5-devin-acp.md).
+[Stage 4](docs/STAGE-4.md) · [Stage 4.5](docs/STAGE-4.5-devin-acp.md) ·
+[Stage 5](docs/STAGE-5.md).
 
 ## Architecture
 
@@ -139,8 +143,9 @@ triangle/
 ├── packages/
 │   ├── shared/             # Shared TS types: IPC contract + agent tool schemas
 │   └── preview-runtime/    # Framework-agnostic Three.js preview engine
-├── templates/
-│   └── starter/            # Default Three.js project loaded by the preview
+├── templates/              # Project template gallery (new-project sources)
+│   ├── starter/            # Fresnel torus-knot + instanced particles
+│   └── raymarch/           # Full-screen ray-marched SDF (shader-focused)
 └── docs/                   # ADRs, roadmap, and stage notes
 ```
 
@@ -153,8 +158,12 @@ the [design system & dock layout](docs/adr/0006-visual-design-and-dock-layout.md
 [Codex App Server & MCP bridge](docs/adr/0008-codex-app-server-and-mcp-bridge.md),
 [live scene manipulation](docs/adr/0010-live-scene-manipulation.md), the
 [persistent preview canvas](docs/adr/0011-persistent-preview-canvas.md), the
-[unified approval gate & diff view](docs/adr/0012-unified-approval-and-diff.md), and the
-[standalone MCP endpoint & ACP client](docs/adr/0013-standalone-mcp-and-acp.md).
+[unified approval gate & diff view](docs/adr/0012-unified-approval-and-diff.md), the
+[standalone MCP endpoint & ACP client](docs/adr/0013-standalone-mcp-and-acp.md), the
+[Devin CLI (ACP) harness](docs/adr/0014-devin-acp-harness.md),
+[project templates & lifecycle](docs/adr/0015-project-templates-and-lifecycle.md),
+[session history](docs/adr/0016-session-history.md), and
+[packaging & distribution](docs/adr/0017-packaging-and-distribution.md).
 
 ## Contributing
 

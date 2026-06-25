@@ -11,7 +11,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 3 | Three.js Domain Tooling & Visual Feedback Loop | ✅ Done |
 | 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | ✅ Done |
 | 4.5 | Devin CLI (ACP) as the preferred harness | ✅ Done |
-| 5 | Polish, Rich Features & Internal Prototype | ⬜ |
+| 5 | Polish, Rich Features & Internal Prototype | ✅ Done |
 | 6 | Post-Prototype Hardening & Web Path | ⬜ Future |
 
 ## Stage 0 — Foundations & Architecture
@@ -99,6 +99,28 @@ See [`STAGE-4.md`](STAGE-4.md) and [ADR 0010](adr/0010-live-scene-manipulation.m
 
 See [`STAGE-4.5-devin-acp.md`](STAGE-4.5-devin-acp.md) and
 [ADR 0014](adr/0014-devin-acp-harness.md).
+
+## Stage 5 — Polish, Rich Features & Internal Prototype
+
+- [x] Project templates + multi-project lifecycle: a `templates/` gallery (starter
+      + raymarch), list/create/open under `<userData>/projects/<id>` with
+      traversal-safe ids, and a title-bar project switcher + new-project gallery.
+- [x] Export / import projects as zips (fflate), excluding
+      `node_modules`/`.git`/`.triangle`, routed through main via typed IPC.
+- [x] Persistent, per-project session history: runs recorded in main and replayed
+      read-only in the AgentPanel, surviving restarts.
+- [x] Real electron-builder packaging (macOS + Windows first-class), closing the
+      deferred MCP-entry item: the bundled MCP server's `mcp.js` + its shared chunk
+      ship unpacked and resolve via `process.resourcesPath`; `templates/` ships via
+      `extraResources`.
+- [x] Polish: loading/empty/error states, ARIA, onboarding copy, and CSS-token
+      consistency — no regressions to the dockview layout, hot-reload, the 9 domain
+      tools + live manipulation, the persistent preview, or the approval gate.
+
+See [`STAGE-5.md`](STAGE-5.md) and
+[ADR 0015](adr/0015-project-templates-and-lifecycle.md),
+[ADR 0016](adr/0016-session-history.md),
+[ADR 0017](adr/0017-packaging-and-distribution.md).
 
 ## Stages 4–6
 
