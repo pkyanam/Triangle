@@ -13,6 +13,7 @@ import { ProjectManager } from './project.js';
 import { AgentManager } from './agent/manager.js';
 import { PreviewBridge } from './preview-bridge.js';
 import { ToolBridgeServer } from './tool-bridge.js';
+import { McpEndpoint } from './mcp-endpoint.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
@@ -22,6 +23,7 @@ let project: ProjectManager;
 let agents: AgentManager;
 let preview: PreviewBridge;
 let toolBridge: ToolBridgeServer;
+let mcpEndpoint: McpEndpoint;
 
 /** Decode a `data:…;base64,…` URL into raw bytes. */
 function dataUrlToBuffer(dataUrl: string): Buffer {
@@ -56,6 +58,7 @@ function registerIpc(): void {
   handle('file:write', (req) => project.writeFile(req.path, req.content, req.suppressWatch));
 
   handle('agent:harnesses', () => agents.listHarnesses());
+  handle('mcp:endpoint', () => mcpEndpoint.info());
   handle('agent:start', (req) => agents.start(req));
   handle('agent:cancel', (req) => agents.cancel(req.runId));
   handle('agent:approval', (req) => agents.resolveApproval(req));
@@ -130,8 +133,15 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('[main] tool bridge failed to start:', err);
   }
-  // out/main/mcp.js sits next to this bundle; Codex launches it as a subprocess.
+  // out/main/mcp.js sits next to this bundle; Codex (and external MCP clients
+  // via the standalone endpoint) launch it as a subprocess.
   const mcpServerScriptPath = path.join(__dirname, 'mcp.js');
+  mcpEndpoint = new McpEndpoint(project, preview, toolBridge, mcpServerScriptPath);
+  try {
+    await mcpEndpoint.start();
+  } catch (err) {
+    console.error('[main] MCP endpoint failed to start:', err);
+  }
   agents = new AgentManager(
     project,
     preview,
@@ -139,6 +149,7 @@ app.whenReady().then(async () => {
     mcpServerScriptPath,
     (event) => send('agent:event', event),
     (req) => send('agent:approval-request', req),
+    () => mcpEndpoint.serverConfig(),
   );
 
   registerIpc();
@@ -156,6 +167,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   agents?.disposeAll();
   preview?.disposeAll();
+  mcpEndpoint?.stop();
   toolBridge?.stop();
   void project?.dispose();
 });

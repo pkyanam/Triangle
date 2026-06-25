@@ -16,6 +16,7 @@ import type {
   ApprovalRequest,
   HarnessAvailability,
 } from './agent.js';
+import type { McpEndpointInfo } from './endpoint.js';
 import type { PreviewRequest, PreviewResult } from './preview.js';
 
 /** Request/response channels invoked from the renderer. */
@@ -57,6 +58,11 @@ export interface IpcInvokeChannels {
   'agent:harnesses': {
     request: void;
     response: HarnessAvailability[];
+  };
+  /** The standalone Triangle MCP endpoint descriptor (ADR 0013). */
+  'mcp:endpoint': {
+    request: void;
+    response: McpEndpointInfo;
   };
   /** Start an agent run. Results stream back over the `agent:event` channel. */
   'agent:start': {
@@ -123,6 +129,7 @@ export const INVOKE_CHANNELS = [
   'file:write',
   'app:info',
   'agent:harnesses',
+  'mcp:endpoint',
   'agent:start',
   'agent:cancel',
   'agent:approval',

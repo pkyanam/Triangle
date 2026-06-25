@@ -38,6 +38,9 @@ const api: TriangleApi = {
     onEvent: (cb) => subscribe<AgentEvent>('agent:event', cb),
     onApprovalRequest: (cb) => subscribe<ApprovalRequest>('agent:approval-request', cb),
   },
+  mcp: {
+    endpoint: () => ipcRenderer.invoke('mcp:endpoint'),
+  },
   preview: {
     onRequest: (cb) => subscribe<PreviewRequest>('preview:request', cb),
     result: (result) => ipcRenderer.invoke('preview:result', result),

@@ -1,14 +1,20 @@
 /**
  * The Triangle MCP server — a tiny stdio JSON-RPC server that exposes Triangle's
- * Stage 3 Three.js domain tools to *external* agents that speak MCP (notably the
- * Codex App Server harness). See ADR 0008.
+ * Three.js domain tools to *any* MCP-aware caller. See ADR 0008 (Codex) and
+ * ADR 0013 (standalone endpoint).
  *
- * It runs as a short-lived subprocess that Codex launches per its `mcp_servers`
- * config. Because the live preview lives in Triangle's renderer, this process owns
- * no Three.js state: each `tools/call` is forwarded over a token-guarded loopback
- * socket to Triangle's main process (the tool-bridge server), which runs the same
- * `TriangleToolset` used by the in-process Claude tools. One toolset, three callers
- * (Claude in-process, this MCP server, ACP later) — "mapping, not new plumbing".
+ * It runs as a subprocess in two interchangeable ways:
+ *   1. **Per-run**, launched by the Codex App Server harness via its `mcp_servers`
+ *      config (token scoped to that run); and
+ *   2. **Standalone**, launched by any external MCP client (Claude Desktop, an ACP
+ *      agent, a custom harness) using the descriptor Triangle publishes, reaching a
+ *      persistent app-session toolset (`McpEndpoint`).
+ *
+ * Either way the process owns no Three.js state: each `tools/call` is forwarded
+ * over a token-guarded loopback socket to Triangle's main process (the tool-bridge
+ * server), which runs the same `TriangleToolset` the in-process Claude tools use.
+ * One toolset, many callers — "mapping, not new plumbing". The bridge port + token
+ * come from the environment (`TRIANGLE_BRIDGE_PORT` / `TRIANGLE_BRIDGE_TOKEN`).
  *
  * The MCP wire format is newline-delimited JSON-RPC 2.0 over stdio. We implement
  * just the handshake + tools surface by hand to avoid a runtime dependency.

@@ -48,6 +48,12 @@ export interface RunContext {
   toolset: TriangleToolset;
   /** Loopback bridge for out-of-process tool access (Codex/MCP). */
   toolBridge: ToolBridgeInfo;
+  /**
+   * The standalone Triangle MCP endpoint (ADR 0013), for harnesses that drive an
+   * external agent able to consume MCP servers (ACP). Lets the external agent
+   * reach Triangle's domain tools. `null` when the endpoint isn't ready.
+   */
+  mcpEndpoint: { command: string; args: string[]; env: Record<string, string> } | null;
   /** When true, the run auto-approves writes (the gate is bypassed). */
   autoApproveWrites: boolean;
   /**

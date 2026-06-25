@@ -18,6 +18,10 @@ import type { AgentHarness, ApprovalAsk, ApprovalOutcome } from './harness.js';
 import { mockHarness } from './mock.js';
 import { claudeHarness } from './claude.js';
 import { codexHarness } from './codex.js';
+import { acpHarness } from './acp.js';
+
+/** Connection details for an MCP server Triangle can advertise to external agents. */
+export type McpServerConfig = { command: string; args: string[]; env: Record<string, string> };
 
 const MAX_APPROVAL_PREVIEW = 4000;
 
@@ -73,12 +77,14 @@ export class AgentManager {
     private readonly mcpServerScriptPath: string,
     private readonly emitEvent: (event: AgentEvent) => void,
     private readonly sendApproval: (req: ApprovalRequest) => void,
+    /** Returns the standalone MCP endpoint config to advertise to ACP agents. */
+    private readonly mcpEndpointConfig: () => McpServerConfig | null = () => null,
   ) {
     this.harnesses = {
       mock: mockHarness,
       claude: claudeHarness,
       codex: codexHarness,
-      acp: undefined,
+      acp: acpHarness,
     };
   }
 
@@ -198,6 +204,7 @@ export class AgentManager {
           token: bridgeToken,
           serverScriptPath: this.mcpServerScriptPath,
         },
+        mcpEndpoint: this.mcpEndpointConfig(),
         autoApproveWrites: req.autoApproveWrites,
         requestApproval,
         signal: run.controller.signal,

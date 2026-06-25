@@ -20,7 +20,7 @@ export const HARNESSES: HarnessDescriptor[] = [
   { id: 'mock', label: 'Mock Agent', available: true, note: 'Canned responses, no backend.' },
   { id: 'claude', label: 'Claude Agent SDK', available: true, note: 'Needs ANTHROPIC_API_KEY.' },
   { id: 'codex', label: 'Codex CLI', available: true, note: 'Needs the `codex` CLI installed.' },
-  { id: 'acp', label: 'ACP / MCP', available: false, note: 'Stage 4.' },
+  { id: 'acp', label: 'ACP Agent', available: true, note: 'Needs acpAgentCommand configured.' },
 ];
 
 export type ChatRole = 'user' | 'assistant' | 'system';

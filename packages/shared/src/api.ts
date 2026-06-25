@@ -13,6 +13,7 @@ import type {
   ApprovalRequest,
   HarnessAvailability,
 } from './agent.js';
+import type { McpEndpointInfo } from './endpoint.js';
 import type { PreviewRequest, PreviewResult } from './preview.js';
 
 /** Unsubscribe handle returned by event subscriptions. */
@@ -47,6 +48,10 @@ export interface TriangleApi {
     onEvent: (cb: (event: AgentEvent) => void) => Unsubscribe;
     /** Subscribe to write-approval prompts. */
     onApprovalRequest: (cb: (req: ApprovalRequest) => void) => Unsubscribe;
+  };
+  /** Standalone MCP endpoint (ADR 0013): how external MCP clients connect to Triangle. */
+  mcp: {
+    endpoint: () => Promise<McpEndpointInfo>;
   };
   /** Stage 3 preview bridge — connects the agent layer to the live runtime. */
   preview: {

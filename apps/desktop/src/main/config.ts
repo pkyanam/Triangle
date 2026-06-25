@@ -22,6 +22,16 @@ export interface TriangleConfig {
   codexPath?: string;
   /** Override the Codex model. */
   codexModel?: string;
+  /**
+   * Command for an external ACP (Agent Client Protocol) agent that Triangle drives
+   * as an ACP *client* (e.g. `gemini` with its experimental ACP flag). When set,
+   * the `acp` harness becomes available. See ADR 0013.
+   */
+  acpAgentCommand?: string;
+  /** Arguments passed to the ACP agent command (e.g. `["--experimental-acp"]`). */
+  acpAgentArgs?: string[];
+  /** Label shown in the harness picker for the configured ACP agent. */
+  acpAgentLabel?: string;
   /** Default state of the human-approval gate for file writes. */
   autoApproveWrites?: boolean;
 }
@@ -32,6 +42,9 @@ interface RawConfigFile extends Partial<TriangleConfig> {
   claude_model?: string;
   codex_path?: string;
   codex_model?: string;
+  acp_agent_command?: string;
+  acp_agent_args?: string[];
+  acp_agent_label?: string;
   auto_approve_writes?: boolean;
 }
 
@@ -53,6 +66,9 @@ function fromFile(raw: RawConfigFile | null): Partial<TriangleConfig> {
     claudeExecutablePath: raw.claudeExecutablePath,
     codexPath: raw.codexPath ?? raw.codex_path,
     codexModel: raw.codexModel ?? raw.codex_model,
+    acpAgentCommand: raw.acpAgentCommand ?? raw.acp_agent_command,
+    acpAgentArgs: raw.acpAgentArgs ?? raw.acp_agent_args,
+    acpAgentLabel: raw.acpAgentLabel ?? raw.acp_agent_label,
     autoApproveWrites: raw.autoApproveWrites ?? raw.auto_approve_writes,
   };
 }
@@ -72,6 +88,11 @@ function fromEnv(): Partial<TriangleConfig> {
   if (env['TRIANGLE_CLAUDE_EXECUTABLE']) out.claudeExecutablePath = env['TRIANGLE_CLAUDE_EXECUTABLE'];
   if (env['TRIANGLE_CODEX_PATH']) out.codexPath = env['TRIANGLE_CODEX_PATH'];
   if (env['TRIANGLE_CODEX_MODEL']) out.codexModel = env['TRIANGLE_CODEX_MODEL'];
+  if (env['TRIANGLE_ACP_AGENT_COMMAND']) out.acpAgentCommand = env['TRIANGLE_ACP_AGENT_COMMAND'];
+  if (env['TRIANGLE_ACP_AGENT_ARGS']) {
+    out.acpAgentArgs = env['TRIANGLE_ACP_AGENT_ARGS'].split(' ').filter(Boolean);
+  }
+  if (env['TRIANGLE_ACP_AGENT_LABEL']) out.acpAgentLabel = env['TRIANGLE_ACP_AGENT_LABEL'];
   if (env['TRIANGLE_AUTO_APPROVE_WRITES'])
     out.autoApproveWrites = env['TRIANGLE_AUTO_APPROVE_WRITES'] === 'true';
   return out;
