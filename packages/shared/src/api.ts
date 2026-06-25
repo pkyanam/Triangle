@@ -4,7 +4,7 @@
  * consumes it via a global `Window` augmentation.
  */
 import type { IpcRequest, IpcResponse } from './ipc.js';
-import type { FileChangeEvent, ProjectInfo } from './project.js';
+import type { FileChangeEvent, ProjectInfo, ProjectSummary, TemplateInfo } from './project.js';
 import type {
   AgentEvent,
   AgentStartRequest,
@@ -26,6 +26,14 @@ export interface TriangleApi {
   project: {
     get: () => Promise<ProjectInfo>;
     refresh: () => Promise<ProjectInfo>;
+    /** List every project in the workspace (for the switcher). */
+    list: () => Promise<ProjectSummary[]>;
+    /** Available templates for the new-project gallery. */
+    templates: () => Promise<TemplateInfo[]>;
+    /** Create a new project from a template and switch to it. */
+    create: (req: { name: string; templateId: string }) => Promise<ProjectInfo>;
+    /** Open (switch to) an existing project by id. */
+    open: (id: string) => Promise<ProjectInfo>;
     /** Subscribe to file-change events for the active project. */
     onFileChanged: (cb: (event: FileChangeEvent) => void) => Unsubscribe;
     /** Subscribe to active-project changes. */

@@ -29,8 +29,38 @@ export interface ProjectManifest {
 export interface ProjectInfo {
   /** Absolute path to the project root (display/debug only; never used by renderer fs). */
   root: string;
+  /** Stable id of the active project (its directory name under the workspace). */
+  id: string;
   manifest: ProjectManifest;
   tree: FileNode;
+}
+
+/**
+ * A project template a new project can be created from. The template id is the
+ * template directory name; templates ship via electron-builder `extraResources`
+ * in packaged builds and from `<repo>/templates` in dev.
+ */
+export interface TemplateInfo {
+  /** Stable id = the template directory name. */
+  id: string;
+  /** Human-readable name (from the template's `triangle.json`). */
+  name: string;
+  /** One-line description shown in the template gallery. */
+  description?: string;
+}
+
+/** A project on disk, summarised for the project switcher. */
+export interface ProjectSummary {
+  /** Stable id = the project directory name under `<userData>/projects`. */
+  id: string;
+  /** Display name (from the project manifest). */
+  name: string;
+  /** Optional manifest description. */
+  description?: string;
+  /** Epoch ms of the most recent on-disk modification (for recency sort). */
+  modifiedAt: number;
+  /** True for the currently active project. */
+  active: boolean;
 }
 
 /** Reason a file-change event fired. */

@@ -1,0 +1,6 @@
+{
+  "name": "Raymarched SDF",
+  "version": 1,
+  "description": "A full-screen ray-marched signed-distance field: three metaballs smooth-blended with soft shadows and a fresnel rim. All the action lives in the fragment shader — edit src/main.js and save to hot-reload.",
+  "entry": "src/main.js"
+}

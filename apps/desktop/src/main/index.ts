@@ -55,6 +55,18 @@ function registerIpc(): void {
 
   handle('project:get', () => project.getInfo());
   handle('project:refresh', () => project.getInfo());
+  handle('template:list', () => project.listTemplates());
+  handle('project:list', () => project.listProjects());
+  handle('project:create', async (req) => {
+    const info = await project.createProject(req.name, req.templateId);
+    send('project:changed', info);
+    return info;
+  });
+  handle('project:open', async (req) => {
+    const info = await project.openProject(req.id);
+    send('project:changed', info);
+    return info;
+  });
   handle('file:read', (req) => project.readFile(req.path));
   handle('file:write', (req) => project.writeFile(req.path, req.content, req.suppressWatch));
 

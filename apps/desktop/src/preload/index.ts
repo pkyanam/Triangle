@@ -23,6 +23,10 @@ const api: TriangleApi = {
   project: {
     get: () => ipcRenderer.invoke('project:get'),
     refresh: () => ipcRenderer.invoke('project:refresh'),
+    list: () => ipcRenderer.invoke('project:list'),
+    templates: () => ipcRenderer.invoke('template:list'),
+    create: (req) => ipcRenderer.invoke('project:create', req),
+    open: (id) => ipcRenderer.invoke('project:open', { id }),
     onFileChanged: (cb) => subscribe<FileChangeEvent>('project:file-changed', cb),
     onChanged: (cb) => subscribe<ProjectInfo>('project:changed', cb),
   },

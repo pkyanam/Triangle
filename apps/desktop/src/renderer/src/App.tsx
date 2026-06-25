@@ -49,6 +49,15 @@ export function App(): React.JSX.Element {
     if (path === entryRef.current) setEntrySource(content);
   }, []);
 
+  // Load (or reload, on project switch) a project's tree + entry into the editor.
+  const applyProject = useCallback(async (info: ProjectInfo) => {
+    setProject(info);
+    const entry = await window.triangle.file.read(info.manifest.entry).catch(() => null);
+    setEntrySource(entry?.content ?? '');
+    setSelectedPath(info.manifest.entry);
+    setSelectedContent(entry?.content ?? '');
+  }, []);
+
   // Initial load.
   useEffect(() => {
     let active = true;
@@ -58,18 +67,20 @@ export function App(): React.JSX.Element {
         window.triangle.app.info(),
       ]);
       if (!active) return;
-      setProject(info);
       setElectronVersion(appInfo.electron);
-      const entry = await window.triangle.file.read(info.manifest.entry).catch(() => null);
-      if (!active) return;
-      setEntrySource(entry?.content ?? '');
-      setSelectedPath(info.manifest.entry);
-      setSelectedContent(entry?.content ?? '');
+      await applyProject(info);
     })();
     return () => {
       active = false;
     };
-  }, []);
+  }, [applyProject]);
+
+  // React to active-project switches (new project / open another project).
+  useEffect(() => {
+    return window.triangle.project.onChanged((info) => {
+      void applyProject(info);
+    });
+  }, [applyProject]);
 
   // Watch the project for changes: refresh tree, hot-reload entry, refresh open file.
   useEffect(() => {

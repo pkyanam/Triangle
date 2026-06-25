@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { PanelId, PanelsOpen } from '../workspace/Workspace.js';
+import { ProjectMenu } from './ProjectMenu.js';
 import logoUrl from '../assets/logo.jpg';
 
 interface TopBarProps {
@@ -57,7 +58,7 @@ export function TopBar({
         <img className="topbar__logo-img" src={logoUrl} alt="Triangle" />
         <span>Triangle</span>
         <span className="topbar__project-sep">/</span>
-        <span className="topbar__project">{projectName}</span>
+        <ProjectMenu projectName={projectName} />
       </div>
       <div className="topbar__spacer" />
       <div className="topbar__actions">

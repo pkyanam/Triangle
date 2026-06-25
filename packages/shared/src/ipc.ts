@@ -7,7 +7,7 @@
  * Main (handlers), preload (bindings), and renderer (the `window.triangle` typings)
  * all import these so the contract can never drift.
  */
-import type { FileChangeEvent, ProjectInfo } from './project.js';
+import type { FileChangeEvent, ProjectInfo, ProjectSummary, TemplateInfo } from './project.js';
 import type {
   AgentEvent,
   AgentSettings,
@@ -30,6 +30,30 @@ export interface IpcInvokeChannels {
   /** Re-scan the project tree from disk. */
   'project:refresh': {
     request: void;
+    response: ProjectInfo;
+  };
+  /** List the available project templates (the new-project gallery). */
+  'template:list': {
+    request: void;
+    response: TemplateInfo[];
+  };
+  /** List all projects in the workspace (for the project switcher). */
+  'project:list': {
+    request: void;
+    response: ProjectSummary[];
+  };
+  /**
+   * Create a new project from a template and switch to it. The display name is
+   * slugified into a traversal-safe directory id in the main process; the active
+   * project changes (also pushed via `project:changed`).
+   */
+  'project:create': {
+    request: { name: string; templateId: string };
+    response: ProjectInfo;
+  };
+  /** Open (switch to) an existing project by id. Also pushed via `project:changed`. */
+  'project:open': {
+    request: { id: string };
     response: ProjectInfo;
   };
   /** Read a UTF-8 text file by project-relative path. */
@@ -136,6 +160,10 @@ export type IpcEventPayload<C extends IpcEventChannel> = IpcEventChannels[C];
 export const INVOKE_CHANNELS = [
   'project:get',
   'project:refresh',
+  'template:list',
+  'project:list',
+  'project:create',
+  'project:open',
   'file:read',
   'file:write',
   'app:info',
