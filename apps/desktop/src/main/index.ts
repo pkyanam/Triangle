@@ -103,6 +103,21 @@ function registerIpc(): void {
       return { ok: false, error: (err as Error).message };
     }
   });
+  handle('project:import-dir', async () => {
+    try {
+      const win = mainWindow ?? BrowserWindow.getAllWindows()[0];
+      const result = await dialog.showOpenDialog(win!, {
+        title: 'Import Triangle project folder',
+        properties: ['openDirectory'],
+      });
+      if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true };
+      const info = await project.importProjectFromDir(result.filePaths[0]);
+      send('project:changed', info);
+      return { ok: true, info };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
   handle('file:read', (req) => project.readFile(req.path));
   handle('file:write', (req) => project.writeFile(req.path, req.content, req.suppressWatch));
 

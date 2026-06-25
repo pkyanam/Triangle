@@ -98,3 +98,40 @@ export async function writeZipEntries(
   }
   return written;
 }
+
+/**
+ * Recursively copy `srcDir` into `destDir`, skipping ignored segments and any
+ * entry that would resolve outside `destDir` (traversal guard, mirroring
+ * {@link writeZipEntries}). Used by directory import so a project folder
+ * (which may contain `node_modules` / `.git`) is copied with the same rules as
+ * a zip import. Returns the number of files written.
+ */
+export async function copyDirTree(
+  srcDir: string,
+  destDir: string,
+  ignore: ReadonlySet<string> = ARCHIVE_IGNORE,
+): Promise<number> {
+  let written = 0;
+  async function walk(src: string, dest: string): Promise<void> {
+    const entries = await fs.readdir(src, { withFileTypes: true });
+    for (const entry of entries) {
+      if (ignore.has(entry.name)) continue;
+      const destAbs = path.join(dest, entry.name);
+      // Traversal guard: the destination must stay under destDir.
+      const relCheck = path.relative(destDir, destAbs);
+      if (relCheck.startsWith('..') || path.isAbsolute(relCheck)) continue;
+      const srcAbs = path.join(src, entry.name);
+      if (entry.isDirectory()) {
+        await fs.mkdir(destAbs, { recursive: true });
+        await walk(srcAbs, destAbs);
+      } else if (entry.isFile()) {
+        await fs.mkdir(path.dirname(destAbs), { recursive: true });
+        await fs.copyFile(srcAbs, destAbs);
+        written++;
+      }
+    }
+  }
+  await fs.mkdir(destDir, { recursive: true });
+  await walk(srcDir, destDir);
+  return written;
+}

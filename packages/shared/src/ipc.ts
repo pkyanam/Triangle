@@ -74,6 +74,16 @@ export interface IpcInvokeChannels {
     request: void;
     response: { ok: boolean; info?: ProjectInfo; canceled?: boolean; error?: string };
   };
+  /**
+   * Import a project from a user-picked directory (containing `triangle.json`)
+   * into a fresh workspace dir and switch to it (also pushed via
+   * `project:changed`). The renderer never sees a raw fs path — main owns the
+   * open dialog and the copy.
+   */
+  'project:import-dir': {
+    request: void;
+    response: { ok: boolean; info?: ProjectInfo; canceled?: boolean; error?: string };
+  };
   /** Read a UTF-8 text file by project-relative path. */
   'file:read': {
     request: { path: string };
@@ -199,6 +209,7 @@ export const INVOKE_CHANNELS = [
   'project:open',
   'project:export',
   'project:import',
+  'project:import-dir',
   'file:read',
   'file:write',
   'app:info',

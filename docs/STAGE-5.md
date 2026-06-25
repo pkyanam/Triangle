@@ -23,13 +23,19 @@ the bundled MCP-entry fix).
       with traversal-safe slug ids, a `workspace.json` remembering the active
       project, and `template:list` / `project:list` / `project:create` /
       `project:open` typed IPC. A title-bar `ProjectMenu` provides the switcher +
-      new-project gallery. All disk work stays in main; the renderer reacts to the
-      `project:changed` event.
+      new-project gallery, with template cards surfaced **directly in the default
+      view** (visible by default, not one click deep — clicking a card pre-fills
+      the new-project form). All disk work stays in main; the renderer reacts to
+      the `project:changed` event.
 - [x] **Export / import.** An electron-free `archive.ts` (fflate) packs a project
       to a zip (excluding `node_modules` / `.git` / `.triangle`) and unpacks one
       with project-root prefix stripping + per-entry traversal guards.
       `project:export` / `project:import` own the Electron dialogs; import lands in
-      a fresh, uniquely-named project and switches to it.
+      a fresh, uniquely-named project and switches to it. **Directory import**
+      (`project:import-dir` / `importProjectFromDir`) lets the user pick a project
+      *folder* (containing `triangle.json`) and copies it via a traversal-safe
+      `copyDirTree` helper with the same ignored-segment rules; the UI exposes
+      explicit "Import .zip…" and "Import folder…" items.
 - [x] **Session history.** A main-side `SessionStore` records each run (prompt,
       harness, streamed assistant/tool/log events, approval outcomes, terminal
       status) to `<userData>/sessions/<projectId>/<runId>.json` — coalesced writes,
@@ -65,8 +71,11 @@ full-screen fragment-shader ray-marcher, complementing the geometry-based starte
 
 `archive.ts` is intentionally electron-free and headlessly tested:
 `packDirToZip` / `parseZip` / `findProjectPrefix` / `readZipManifestName` /
-`writeZipEntries`. **fflate** was chosen for being pure-JS with no native bindings
-— the safest dependency for cross-platform electron-builder packaging.
+`writeZipEntries` / `copyDirTree`. **fflate** was chosen for being pure-JS with
+no native bindings — the safest dependency for cross-platform electron-builder
+packaging. Directory import reuses `copyDirTree` (mirroring `writeZipEntries`'
+ignored-segment + traversal guards) so a project folder with `node_modules` /
+`.git` is copied cleanly into a fresh, uniquely-named workspace dir.
 
 ### Session history (ADR 0016)
 
@@ -95,7 +104,8 @@ the long-deferred ADR 0008/0013 item.
   `mcp.js` and asserts `initialize` + the **9 domain tools** + `tools/call`
   forwarding (regression guard). `pnpm --filter @triangle/desktop probe:mcp`.
 - Headless `node:test` coverage for `archive.ts`: pack/unpack roundtrip,
-  project-root prefix detection, ignored-dir exclusion, and traversal safety.
+  project-root prefix detection, ignored-dir exclusion, traversal safety, and
+  `copyDirTree` exclusion/roundtrip (backs directory import).
   `pnpm --filter @triangle/desktop test`.
 - Boot smoke test: `electron-vite preview` launches main + renderer with no errors.
 - **Packaged-build check (macOS):** `electron-builder --dir` produced
@@ -108,6 +118,8 @@ the long-deferred ADR 0008/0013 item.
 
 - Create a project from each template and confirm hot-reload + domain tools work.
 - Export then re-import a project and confirm the copy opens.
+- Import a project *folder* (with `node_modules` / `.git`) and confirm the copy
+  opens and the ignored dirs are absent.
 - Run an agent turn, restart the app, and confirm the History view replays it.
 - Produce a signed `dmg` / `nsis` (and confirm the bundled MCP server launches from
   an *installed* build, especially on Windows).

@@ -76,12 +76,30 @@ workspace dir and switches to it. The renderer never sees a raw filesystem path.
 **fflate** was chosen (over `archiver`/`adm-zip`) for being pure-JS with zero
 native bindings — the safest choice for cross-platform electron-builder packaging.
 
+### Directory import
+
+A project folder (a directory containing `triangle.json`) can be imported
+without first zipping it. `archive.ts` gains a `copyDirTree(src, dest)` helper
+that mirrors `writeZipEntries`'s ignored-segment + traversal guards, so a source
+folder (which may carry `node_modules` / `.git`) is copied with the same rules as
+a zip import. `ProjectManager.importProjectFromDir(absPath)` validates the
+`triangle.json`, derives a fresh unique id from the manifest's display name,
+copies the tree, re-stamps the manifest, activates the project, and returns
+`ProjectInfo`. A separate typed IPC channel `project:import-dir` (and preload
+`project.importDir()`) owns the `openDirectory` dialog; the renderer never
+receives a raw fs path. macOS dialogs allow `openFile` + `openDirectory` together
+but the combined picker is confusing, so the UI exposes two explicit items
+("Import .zip…" and "Import folder…") instead.
+
 ### UI
 
 A `ProjectMenu` in the title bar replaces the static project name: a switcher
-(recency-sorted, active flagged), a **New project** gallery (name + template
-cards), and **Import** / **Export current** actions — all with loading / empty /
-error states. The `LayoutTemplate` affordance hinted at in the TopBar is realized
+(recency-sorted, active flagged), a **Start from a template** gallery surfaced
+directly in the default view (template cards are visible by default, not hidden
+one click deep — clicking a card pre-fills the new-project form), a **New
+project** form (name + template cards), and **Import .zip…** / **Import
+folder…** / **Export current** actions — all with loading / empty / error
+states. The `LayoutTemplate` affordance hinted at in the TopBar is realized
 here.
 
 ## Consequences
@@ -94,10 +112,12 @@ here.
 - **Verified (this session):** `pnpm typecheck` + `pnpm build` clean (`mcp.js` +
   its `chunks/tools-*.js` still emit); headless `node:test` coverage for the
   archive (pack/unpack roundtrip, prefix detection, ignored-dir exclusion,
-  traversal safety); the app boots via `electron-vite preview`.
+  traversal safety, and `copyDirTree` exclusion/roundtrip); the app boots via
+  `electron-vite preview`.
 - **Operator-verify (needs a GUI):** creating a project from each template and
   confirming hot-reload + domain tools; export-then-reimport round-trips a
-  project and switches to the copy.
+  project and switches to the copy; importing a project *folder* (with
+  `node_modules` / `.git`) lands a clean copy and switches to it.
 
 ## Known limitations / gotchas
 

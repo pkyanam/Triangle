@@ -39,6 +39,8 @@ export interface TriangleApi {
     export: (id?: string) => Promise<IpcResponse<'project:export'>>;
     /** Import a project from a user-picked `.zip` and switch to it. */
     import: () => Promise<IpcResponse<'project:import'>>;
+    /** Import a project from a user-picked folder (containing triangle.json). */
+    importDir: () => Promise<IpcResponse<'project:import-dir'>>;
     /** Subscribe to file-change events for the active project. */
     onFileChanged: (cb: (event: FileChangeEvent) => void) => Unsubscribe;
     /** Subscribe to active-project changes. */

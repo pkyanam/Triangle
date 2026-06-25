@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { zipSync, strToU8 } from 'fflate';
 import {
+  copyDirTree,
   findProjectPrefix,
   packDirToZip,
   parseZip,
@@ -91,4 +92,24 @@ test('pack -> unpack is a faithful roundtrip', async () => {
     await fs.readFile(path.join(dest, 'shaders', 'frag.glsl'), 'utf8'),
     'void main(){}',
   );
+});
+
+test('copyDirTree copies files, excludes ignored dirs, and roundtrips', async () => {
+  const src = await tmpDir('tri-cp-src-');
+  await fs.mkdir(path.join(src, 'src'), { recursive: true });
+  await fs.mkdir(path.join(src, 'node_modules', 'dep'), { recursive: true });
+  await fs.mkdir(path.join(src, '.git'), { recursive: true });
+  await fs.writeFile(path.join(src, 'triangle.json'), '{"name":"Copy Me","entry":"src/main.js"}');
+  await fs.writeFile(path.join(src, 'src', 'main.js'), 'export const z = 3;');
+  await fs.writeFile(path.join(src, 'node_modules', 'dep', 'index.js'), 'skip');
+  await fs.writeFile(path.join(src, '.git', 'HEAD'), 'ref');
+
+  const dest = await tmpDir('tri-cp-dest-');
+  const written = await copyDirTree(src, dest);
+  // triangle.json + src/main.js only; node_modules + .git excluded.
+  assert.equal(written, 2);
+  assert.equal(await fs.readFile(path.join(dest, 'triangle.json'), 'utf8'), '{"name":"Copy Me","entry":"src/main.js"}');
+  assert.equal(await fs.readFile(path.join(dest, 'src', 'main.js'), 'utf8'), 'export const z = 3;');
+  await assert.rejects(() => fs.readFile(path.join(dest, 'node_modules', 'dep', 'index.js')));
+  await assert.rejects(() => fs.readFile(path.join(dest, '.git', 'HEAD')));
 });

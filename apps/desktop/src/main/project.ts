@@ -4,6 +4,7 @@ import path from 'node:path';
 import { app } from 'electron';
 import chokidar, { type FSWatcher } from 'chokidar';
 import {
+  copyDirTree,
   findProjectPrefix,
   packDirToZip,
   parseZip,
@@ -268,6 +269,39 @@ export class ProjectManager {
       await fs.rm(dir, { recursive: true, force: true });
       throw new Error('Archive contained no importable files.');
     }
+    await this.activate(id);
+    return this.getInfo();
+  }
+
+  /**
+   * Import a project from a directory on disk (containing `triangle.json`) into
+   * a fresh, uniquely-named workspace dir, then make it active. The tree is
+   * copied with the same traversal-safe + ignored-segment rules as a zip import
+   * (see {@link copyDirTree}): `node_modules` / `.git` / `.triangle` are
+   * excluded. The manifest's display name is preserved and used to derive the
+   * workspace id.
+   */
+  async importProjectFromDir(absPath: string): Promise<ProjectInfo> {
+    if (!existsSync(absPath) || !existsSync(path.join(absPath, 'triangle.json'))) {
+      throw new Error('Not a Triangle project directory (no triangle.json found).');
+    }
+    const manifest = await this.parseManifest(path.join(absPath, 'triangle.json'), path.basename(absPath));
+    const display = manifest.name || 'Imported Project';
+    const id = await this.uniqueId(display);
+    const dir = this.projectDir(id);
+    await fs.mkdir(dir, { recursive: true });
+    const written = await copyDirTree(absPath, dir, IGNORED);
+    if (written === 0) {
+      await fs.rm(dir, { recursive: true, force: true });
+      throw new Error('Directory contained no importable files.');
+    }
+    // Re-stamp the display name so the copied manifest is normalized.
+    manifest.name = display;
+    await fs.writeFile(
+      path.join(dir, 'triangle.json'),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      'utf8',
+    );
     await this.activate(id);
     return this.getInfo();
   }

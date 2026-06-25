@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Download, FolderPlus, Loader2, Upload } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Download,
+  FileArchive,
+  FolderInput,
+  FolderPlus,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
 import type { ProjectSummary, TemplateInfo } from '@triangle/shared';
 
 interface ProjectMenuProps {
@@ -116,6 +125,28 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
       .finally(() => setBusy(false));
   };
 
+  const importProjectDir = (): void => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    void window.triangle.project
+      .importDir()
+      .then((res) => {
+        if (res.error) setError(res.error);
+        else if (res.ok) close();
+      })
+      .catch((e: unknown) => setError(String((e as Error).message ?? e)))
+      .finally(() => setBusy(false));
+  };
+
+  /** Jump to the create view with a template pre-selected (and a default name). */
+  const startFromTemplate = (t: TemplateInfo): void => {
+    setTemplateId(t.id);
+    setName(t.name);
+    setView('create');
+    setError(null);
+  };
+
   const createProject = (): void => {
     const trimmed = name.trim();
     if (!trimmed || !templateId || busy) return;
@@ -169,6 +200,33 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
                 ))
               )}
               <div className="menu__divider" />
+              <div className="menu__section-label">
+                <Sparkles size={11} /> Start from a template
+              </div>
+              {templates === null ? (
+                <div className="menu__empty">
+                  <Loader2 size={13} className="spin" /> Loading templates…
+                </div>
+              ) : templates.length === 0 ? (
+                <div className="menu__empty">No templates found.</div>
+              ) : (
+                <div className="project-create__templates project-create__templates--inline">
+                  {templates.map((t) => (
+                    <button
+                      key={t.id}
+                      className="template-card"
+                      onClick={() => startFromTemplate(t)}
+                      title={t.description ?? t.name}
+                    >
+                      <span className="template-card__name">{t.name}</span>
+                      {t.description && (
+                        <span className="template-card__desc">{t.description}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="menu__divider" />
               <button className="menu__item" onClick={() => setView('create')}>
                 <span className="menu__item-check">
                   <FolderPlus size={13} />
@@ -177,9 +235,15 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
               </button>
               <button className="menu__item" onClick={importProject} disabled={busy}>
                 <span className="menu__item-check">
-                  <Upload size={13} />
+                  <FileArchive size={13} />
                 </span>
-                <span className="menu__item-label">Import project…</span>
+                <span className="menu__item-label">Import .zip…</span>
+              </button>
+              <button className="menu__item" onClick={importProjectDir} disabled={busy}>
+                <span className="menu__item-check">
+                  <FolderInput size={13} />
+                </span>
+                <span className="menu__item-label">Import folder…</span>
               </button>
               <button className="menu__item" onClick={exportProject} disabled={busy}>
                 <span className="menu__item-check">
