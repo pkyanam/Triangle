@@ -84,11 +84,12 @@ test('buildStandaloneHtml inlines runtime + entry and is a valid self-contained 
   // The three runtime + entry are inlined verbatim.
   assert.ok(html.includes(threeCore));
   assert.ok(html.includes(entry));
-  // OrbitControls is inlined with its `from 'three'` import rewritten to the
-  // three blob URL (so the inlined module resolves at runtime).
+  // OrbitControls is inlined with its `from 'three'` import rewritten to a
+  // dynamic import from the three blob URL (so the inlined module resolves at
+  // runtime — a static import can't use a variable specifier).
   assert.ok(html.includes('export const OrbitControls = class {};'));
   assert.ok(!html.includes("from 'three'"));
-  assert.ok(html.includes('from /*@__PURE__*/ threeUrl'));
+  assert.ok(html.includes('await import(globalThis.__threeUrl)'));
   // Text assets are inlined as the __triangleAssets map.
   assert.ok(html.includes('"shaders/frag.glsl":"void main(){}"'));
   // The bootstrap mirrors PreviewRuntime defaults.
@@ -109,6 +110,24 @@ test('buildStandaloneHtml escapes backticks and ${} in inlined source safely', a
   // backticks and ${ are escaped, so the doc still parses as one module script.
   assert.ok(html.includes('const s = \\\`price is \\${10} bucks\\\`'));
   assert.ok(html.includes('</html>'));
+});
+
+test('rewriteThreeImports converts static imports to dynamic (named, as-rename, namespace, default)', async () => {
+  // Named import with an `as` rename — the most common pattern (OrbitControls).
+  const named = "import {\n  Controls,\n  MOUSE as M,\n  Vector2\n} from 'three';\nexport class OC {}";
+  const htmlNamed = buildStandaloneHtml({
+    threeCoreSource: 'export const THREE = {};',
+    orbitControlsSource: named,
+    entrySource: 'export function setup(){}',
+    manifest: { name: 'T', entry: 'src/main.js' },
+  });
+  // `as` → `:` for destructuring; multi-line import handled. The original
+  // whitespace from the import block is preserved, so check for the key tokens
+  // rather than an exact string match. `MOUSE as M` → `MOUSE : M` (spaces
+  // around the replaced `as` are kept, which is valid JS destructuring).
+  assert.ok(/MOUSE\s*:\s*M/.test(htmlNamed));
+  assert.ok(htmlNamed.includes('await import(globalThis.__threeUrl)'));
+  assert.ok(!htmlNamed.includes("from 'three'"));
 });
 
 test('collectTextAssets inlines glsl/json/txt and skips binaries + ignored dirs', async () => {

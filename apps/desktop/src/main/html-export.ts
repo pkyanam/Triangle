@@ -111,6 +111,43 @@ function escapeForHtml(s: string): string {
 }
 
 /**
+ * Rewrite bare `import … from 'three'` statements in a module so it can be
+ * loaded from a blob URL. Static `import { x } from 'three'` requires a string
+ * literal specifier — a variable (`threeUrl`) is a syntax error. We convert
+ * each form to its dynamic-import equivalent so the module resolves `three`
+ * from the blob URL at runtime:
+ *
+ *   import { a, b as c } from 'three'   →  const { a, b: c } = await import(globalThis.__threeUrl)
+ *   import * as THREE from 'three'       →  const THREE = await import(globalThis.__threeUrl)
+ *   import THREE from 'three'            →  const { default: THREE } = await import(globalThis.__threeUrl)
+ *
+ * The `as` → `:` rename conversion only applies inside named-import braces.
+ * Multi-line imports are handled (the `s` flag makes `.` match newlines).
+ */
+function rewriteThreeImports(source: string): string {
+  // Named imports: import { a, b as c, ... } from 'three'
+  let out = source.replace(
+    /import\s*\{([^}]*?)\}\s*from\s*['"]three['"]/gs,
+    (_m, names: string) => {
+      // Convert ESM `as` renames to destructuring `:` syntax.
+      const destructured = names.replace(/\bas\b/g, ':');
+      return `const { ${destructured.trim()} } = await import(globalThis.__threeUrl)`;
+    },
+  );
+  // Namespace import: import * as THREE from 'three'
+  out = out.replace(
+    /import\s*\*\s*as\s+(\w+)\s*from\s*['"]three['"]/g,
+    'const $1 = await import(globalThis.__threeUrl)',
+  );
+  // Default import: import THREE from 'three'
+  out = out.replace(
+    /import\s+(\w+)\s+from\s*['"]three['"]/g,
+    'const { default: $1 } = await import(globalThis.__threeUrl)',
+  );
+  return out;
+}
+
+/**
  * Build the self-contained HTML document. Pure function: takes the inlined
  * runtime sources + entry source + manifest and returns the HTML string.
  *
@@ -129,12 +166,12 @@ export function buildStandaloneHtml(opts: {
   const { threeCoreSource, orbitControlsSource, entrySource, manifest, assets = {} } = opts;
   const title = escapeForHtml(manifest.name || 'Triangle Project');
 
-  // OrbitControls imports `from 'three'`; rewrite those to the three blob URL.
-  // (three.core.js is self-contained — no relative imports.)
-  const orbitFixed = orbitControlsSource.replace(
-    /from\s+['"]three['"]/g,
-    'from /*@__PURE__*/ threeUrl',
-  );
+  // OrbitControls has a static `import { … } from 'three'` at the top. A
+  // static import requires a string-literal specifier, so we can't just swap
+  // 'three' for a variable (threeUrl) — that's a syntax error. Instead, rewrite
+  // it to a dynamic `const { … } = await import(threeUrl)` so the blob-URL
+  // module resolves at runtime. (three.core.js is self-contained — no imports.)
+  const orbitFixed = rewriteThreeImports(orbitControlsSource);
 
   // Inline text assets as a virtual fs the entry can opt into via a global
   // `__triangleAssets` map (keys are POSIX project-relative paths). Entries that
@@ -159,6 +196,7 @@ const __triangleAssets = ${assetsJson};
 
 const threeBlob = new Blob([THREE_SRC], { type: 'text/javascript' });
 const threeUrl = URL.createObjectURL(threeBlob);
+globalThis.__threeUrl = threeUrl;
 const ocBlob = new Blob([OC_SRC], { type: 'text/javascript' });
 const ocUrl = URL.createObjectURL(ocBlob);
 
