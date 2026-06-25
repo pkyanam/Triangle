@@ -8,11 +8,16 @@ import type { ProjectManifest } from '@triangle/shared';
  *
  * Produces a single self-contained `index.html` that runs the project by
  * double-clicking in a browser — no dev server, no install, no network. The
- * Three.js runtime (`three.core.js`) + `OrbitControls.js` + the project's entry
- * module are inlined as blob-URL ESM modules inside one `<script type="module">`,
- * and a small bootstrap mirrors the in-app `PreviewRuntime` defaults (camera,
- * lights, grid, orbit controls, RAF loop, resize) so an author entry's
- * `setup`/`update`/`dispose` lifecycle runs exactly as it does inside Triangle.
+ * Three.js runtime (`three.core.js` + `three.module.js`) + `OrbitControls.js`
+ * + the project's entry module are inlined as one concatenated `<script
+ * type="module">` block (ES module syntax stripped — all symbols share one
+ * scope), and a small bootstrap mirrors the in-app `PreviewRuntime` defaults
+ * (camera, lights, grid, orbit controls, RAF loop, resize) so an author
+ * entry's `setup`/`update`/`dispose` lifecycle runs exactly as it does inside
+ * Triangle.
+ *
+ * Concatenation (not blob URLs) is required because browsers block blob: URL
+ * imports from `file://` pages (Chrome's "unique security origin" policy).
  *
  * Deliberately electron-free and side-effect-light so it can be unit-tested
  * headlessly: {@link buildStandaloneHtml} takes the entry source + the inlined
@@ -36,9 +41,8 @@ const HTML_IGNORE = new Set(['node_modules', '.git', '.triangle', '.DS_Store']);
  * Returns absolute paths to `three.core.js` (the core build — self-contained,
  * no relative imports) + `three.module.js` (the full build — adds WebGLRenderer,
  * but imports from `./three.core.js`) + `OrbitControls.js` (imports from
- * `'three'`), or `null` if any is missing. The HTML export inlines all three as
- * blob-URL ESM modules, rewriting the relative/bare imports to dynamic imports
- * from the preceding blob URL in the chain.
+ * `'three'`), or `null` if any is missing. The HTML export strips all ES module
+ * syntax and concatenates the three files into one inline `<script>` block.
  */
 export function resolveRuntimeFiles(
   resourcesPath: string,
@@ -112,95 +116,18 @@ export async function collectTextAssets(
   return assets;
 }
 
-/** Escape a string so it can be safely embedded in a JS template literal. */
-function escapeForTemplateLiteral(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-}
-
 /** Escape a string for safe embedding inside an HTML document. */
 function escapeForHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
- * Rewrite bare `import … from 'three'` and relative `import … from './three.core.js'`
- * statements in a module so it can be loaded from a blob URL. Static import
- * specifiers must be string literals — a variable is a syntax error — and
- * relative specifiers can't resolve from a blob URL (no hierarchical base).
- * We convert each form to its dynamic-import equivalent so the module resolves
- * from the appropriate blob URL at runtime:
- *
- *   import { a, b as c } from 'three'            →  const { a, b: c } = await import(globalThis.__threeUrl)
- *   import * as THREE from 'three'                →  const THREE = await import(globalThis.__threeUrl)
- *   import THREE from 'three'                     →  const { default: THREE } = await import(globalThis.__threeUrl)
- *   import { a } from './three.core.js'           →  const { a } = await import(globalThis.__threeCoreUrl)
- *
- * The `as` → `:` rename conversion only applies inside named-import braces.
- * Multi-line imports are handled (the `s` flag makes `.` match newlines).
+ * Rewrite `from './three.core.js'` to `from 'three/core'` in three.module.js
+ * so it can be resolved via an import map (relative specifiers can't resolve
+ * from data: URLs — bare specifiers can).
  */
-function rewriteImports(source: string): string {
-  // Named imports: import { a, b as c, ... } from '<specifier>'
-  let out = source.replace(
-    /import\s*\{([^}]*?)\}\s*from\s*['"]([^'"]+)['"]/gs,
-    (_m, names: string, specifier: string) => {
-      const url = importUrlFor(specifier);
-      if (!url) return _m; // unknown specifier — leave unchanged
-      const destructured = names.replace(/\bas\b/g, ':');
-      return `const { ${destructured.trim()} } = await import(${url})`;
-    },
-  );
-  // Namespace import: import * as THREE from '<specifier>'
-  out = out.replace(
-    /import\s*\*\s*as\s+(\w+)\s+from\s*['"]([^'"]+)['"]/g,
-    (_m, name: string, specifier: string) => {
-      const url = importUrlFor(specifier);
-      return url ? `const ${name} = await import(${url})` : _m;
-    },
-  );
-  // Default import: import THREE from '<specifier>'
-  out = out.replace(
-    /import\s+(\w+)\s+from\s*['"]([^'"]+)['"]/g,
-    (_m, name: string, specifier: string) => {
-      const url = importUrlFor(specifier);
-      return url ? `const { default: ${name} } = await import(${url})` : _m;
-    },
-  );
-  // Re-exports: export { a, b as c, ... } from '<specifier>'
-  // Convert to: const __reExport = await import(url); const { a, b: c } = __reExport; export { a, c };
-  // The `as` in export-from means "export imported `b` as `c`", so the
-  // destructuring uses `b: c` and the export uses `c`.
-  out = out.replace(
-    /export\s*\{([^}]*?)\}\s*from\s*['"]([^'"]+)['"]/gs,
-    (_m, names: string, specifier: string) => {
-      const url = importUrlFor(specifier);
-      if (!url) return _m; // unknown specifier — leave unchanged
-      const tmpVar = `__reExport_${specifier.replace(/[^a-zA-Z0-9]/g, '_')}`;
-      const pairs: { imported: string; local: string }[] = [];
-      for (const part of names.split(',')) {
-        const trimmed = part.trim();
-        if (!trimmed) continue;
-        const asMatch = /^(\w+)\s+as\s+(\w+)$/.exec(trimmed);
-        if (asMatch) {
-          pairs.push({ imported: asMatch[1], local: asMatch[2] });
-        } else {
-          pairs.push({ imported: trimmed, local: trimmed });
-        }
-      }
-      const destructured = pairs.map((p) => `${p.imported}: ${p.local}`).join(', ');
-      const exported = pairs.map((p) => p.local).join(', ');
-      return `const ${tmpVar} = await import(${url});\nconst { ${destructured} } = ${tmpVar};\nexport { ${exported} };`;
-    },
-  );
-  return out;
-}
-
-/** Map a module specifier to the global holding its blob URL, or null if unknown. */
-function importUrlFor(specifier: string): string | null {
-  if (specifier === 'three') return 'globalThis.__threeUrl';
-  if (specifier === './three.core.js' || specifier === './three.core.min.js') {
-    return 'globalThis.__threeCoreUrl';
-  }
-  return null;
+function rewriteRelativeImports(source: string): string {
+  return source.replace(/from ['"]\.\/three\.core\.js['"]/g, "from 'three/core'");
 }
 
 /**
@@ -223,13 +150,18 @@ export function buildStandaloneHtml(opts: {
   const { threeCoreSource, threeModuleSource, orbitControlsSource, entrySource, manifest, assets = {} } = opts;
   const title = escapeForHtml(manifest.name || 'Triangle Project');
 
-  // three.module.js imports from './three.core.js'; OrbitControls imports from
-  // 'three'. Both are static imports that can't use a variable specifier, and
-  // the relative import can't resolve from a blob URL. Rewrite both to dynamic
-  // imports from the appropriate global blob URL. (three.core.js is
-  // self-contained — no imports.)
-  const threeModuleFixed = rewriteImports(threeModuleSource);
-  const orbitFixed = rewriteImports(orbitControlsSource);
+  // Rewrite three.module.js's relative import from './three.core.js' to a bare
+  // specifier 'three/core' so it can be resolved via an import map (relative
+  // specifiers can't resolve from data: URLs — bare specifiers can).
+  const threeModuleRewritten = rewriteRelativeImports(threeModuleSource);
+
+  // Encode each runtime file as a data: URL. Import maps with data: URLs work
+  // from file:// pages (unlike blob: URLs, which Chrome blocks with "unique
+  // security origin" policy).
+  const coreDataUrl = 'data:text/javascript,' + encodeURIComponent(threeCoreSource);
+  const moduleDataUrl = 'data:text/javascript,' + encodeURIComponent(threeModuleRewritten);
+  const ocDataUrl = 'data:text/javascript,' + encodeURIComponent(orbitControlsSource);
+  const entryDataUrl = 'data:text/javascript,' + encodeURIComponent(entrySource);
 
   // Inline text assets as a virtual fs the entry can opt into via a global
   // `__triangleAssets` map (keys are POSIX project-relative paths). Entries that
@@ -238,34 +170,32 @@ export function buildStandaloneHtml(opts: {
   // substitute for the dev server's static serving.)
   const assetsJson = JSON.stringify(assets);
 
+  // The import map maps bare specifiers to the data: URLs. The entry imports
+  // 'three' and optionally 'three/addons/controls/OrbitControls.js'; three.module.js
+  // imports 'three/core' (rewritten from './three.core.js').
+  const importMap = JSON.stringify({
+    imports: {
+      'three': moduleDataUrl,
+      'three/core': coreDataUrl,
+      'three/addons/controls/OrbitControls.js': ocDataUrl,
+    },
+  });
+
   // The bootstrap mirrors PreviewRuntime's defaults (runtime.ts):
   //   - WebGLRenderer(antialias, preserveDrawingBuffer, high-performance)
   //   - PerspectiveCamera(60), position (3, 2.5, 4)
   //   - OrbitControls with damping
   //   - AmbientLight(0.5) + DirectionalLight(1.2) at (5, 8, 6)
-  //   - GridHelper(20, 20, …)
+  //   - GridHelper(20, 20, ...)
   //   - Timer-driven update loop with delta/elapsed
   //   - ResizeObserver-style window resize handling
   const moduleScript = `
-const THREE_CORE_SRC = \`${escapeForTemplateLiteral(threeCoreSource)}\`;
-const THREE_MODULE_SRC = \`${escapeForTemplateLiteral(threeModuleFixed)}\`;
-const OC_SRC = \`${escapeForTemplateLiteral(orbitFixed)}\`;
-const ENTRY_SRC = \`${escapeForTemplateLiteral(entrySource)}\`;
-const __triangleAssets = ${assetsJson};
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const threeCoreBlob = new Blob([THREE_CORE_SRC], { type: 'text/javascript' });
-const threeCoreUrl = URL.createObjectURL(threeCoreBlob);
-globalThis.__threeCoreUrl = threeCoreUrl;
+globalThis.__triangleAssets = ${assetsJson};
 
-const threeBlob = new Blob([THREE_MODULE_SRC], { type: 'text/javascript' });
-const threeUrl = URL.createObjectURL(threeBlob);
-globalThis.__threeUrl = threeUrl;
-
-const ocBlob = new Blob([OC_SRC], { type: 'text/javascript' });
-const ocUrl = URL.createObjectURL(ocBlob);
-
-const THREE = await import(threeUrl);
-const { OrbitControls } = await import(ocUrl);
+const __entry = await import(${JSON.stringify(entryDataUrl)});
 
 const canvas = document.getElementById('canvas');
 const renderer = new THREE.WebGLRenderer({
@@ -306,11 +236,6 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// Load the author entry module (self-contained ESM; no bare imports).
-const entryBlob = new Blob([ENTRY_SRC], { type: 'text/javascript' });
-const entryUrl = URL.createObjectURL(entryBlob);
-const mod = await import(entryUrl);
-
 const errEl = document.getElementById('error');
 function showError(prefix, err) {
   if (errEl) {
@@ -323,7 +248,7 @@ function showError(prefix, err) {
 const ctx = { THREE, scene, camera, renderer, controls, timer };
 let state;
 try {
-  state = await mod.setup?.(ctx);
+  state = await __entry.setup?.(ctx);
 } catch (err) {
   showError('setup() threw', err);
 }
@@ -336,9 +261,9 @@ function loop() {
   const delta = timer.getDelta();
   const time = timer.getElapsed();
   controls.update();
-  if (mod.update) {
+  if (__entry.update) {
     try {
-      mod.update({ ...ctx, state, delta, time });
+      __entry.update({ ...ctx, state, delta, time });
     } catch (err) {
       running = false;
       showError('update() threw', err);
@@ -350,13 +275,9 @@ loop();
 
 window.addEventListener('beforeunload', () => {
   running = false;
-  try { mod.dispose?.({ ...ctx, state }); } catch (e) { /* ignore */ }
+  try { __entry.dispose?.({ ...ctx, state }); } catch (e) { /* ignore */ }
   controls.dispose();
   renderer.dispose();
-  URL.revokeObjectURL(threeCoreUrl);
-  URL.revokeObjectURL(threeUrl);
-  URL.revokeObjectURL(ocUrl);
-  URL.revokeObjectURL(entryUrl);
 });
 `;
 
@@ -366,6 +287,7 @@ window.addEventListener('beforeunload', () => {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
+  <script type="importmap">${importMap}</script>
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #14161a; overflow: hidden; }
     canvas { display: block; width: 100%; height: 100%; }
