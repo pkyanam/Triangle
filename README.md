@@ -124,13 +124,15 @@ key list.
 | 4 | Rich agent capabilities & protocol support (ACP / MCP) | ✅ |
 | 4.5 | Devin CLI (ACP) as the preferred harness | ✅ |
 | 5 | Polish, rich features & internal prototype | ✅ |
+| 5.5 | Share, snapshot & scope (standalone HTML, snapshots, per-project layout) | ✅ |
 | 6 | Post-prototype hardening & web path | ⬜ |
 
 The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Stage write-ups:
 [Stage 1](docs/STAGE-1.md) · [Stage 2](docs/STAGE-2.md) ·
 [Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md) ·
 [Stage 4](docs/STAGE-4.md) · [Stage 4.5](docs/STAGE-4.5-devin-acp.md) ·
-[Stage 5](docs/STAGE-5.md).
+[Stage 5](docs/STAGE-5.md) · [Stage 5.5](docs/STAGE-5.5.md).
+For effective prompting, see [`docs/PROMPTING.md`](docs/PROMPTING.md).
 
 ## Architecture
 
@@ -162,8 +164,9 @@ the [design system & dock layout](docs/adr/0006-visual-design-and-dock-layout.md
 [standalone MCP endpoint & ACP client](docs/adr/0013-standalone-mcp-and-acp.md), the
 [Devin CLI (ACP) harness](docs/adr/0014-devin-acp-harness.md),
 [project templates & lifecycle](docs/adr/0015-project-templates-and-lifecycle.md),
-[session history](docs/adr/0016-session-history.md), and
-[packaging & distribution](docs/adr/0017-packaging-and-distribution.md).
+[session history](docs/adr/0016-session-history.md),
+[packaging & distribution](docs/adr/0017-packaging-and-distribution.md), and
+[share, snapshot & scope](docs/adr/0018-share-snapshot-scope.md).
 
 ## Contributing
 

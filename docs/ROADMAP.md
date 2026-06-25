@@ -12,6 +12,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | ✅ Done |
 | 4.5 | Devin CLI (ACP) as the preferred harness | ✅ Done |
 | 5 | Polish, Rich Features & Internal Prototype | ✅ Done |
+| 5.5 | Share, Snapshot & Scope | ✅ Done |
 | 6 | Post-Prototype Hardening & Web Path | ⬜ Future |
 
 ## Stage 0 — Foundations & Architecture
@@ -121,6 +122,28 @@ See [`STAGE-5.md`](STAGE-5.md) and
 [ADR 0015](adr/0015-project-templates-and-lifecycle.md),
 [ADR 0016](adr/0016-session-history.md),
 [ADR 0017](adr/0017-packaging-and-distribution.md).
+
+## Stage 5.5 — Share, Snapshot & Scope
+
+- [x] Standalone-HTML project export: a single self-contained `index.html` that
+      runs by double-clicking in a browser, inlining the Three.js runtime
+      (`three.core.js`) + `OrbitControls.js` + the entry module + text assets. A
+      new `copyRuntime` vite plugin ships the runtime files to `out/main/runtime/`;
+      a new `project:export-html` IPC channel owns its save dialog.
+- [x] Iteration snapshots + lightweight versioning: per-project snapshots of the
+      tree under the gitignored `.triangle/snapshots/<id>/`, listable and
+      restorable. Restore rewrites the tree (preserving `.triangle`) and pushes
+      `project:changed`. New `snapshot:list` / `snapshot:create` /
+      `snapshot:restore` IPC + a Snapshots view in the project menu.
+- [x] Per-project dockview layout: the panel arrangement is keyed by project id
+      (`triangle.layout.v2.<projectId>`) instead of one global key, so each
+      project keeps its own layout (with a default fallback).
+- [x] Session-history retention cap: `SessionStore` prunes the oldest sessions
+      per project (default 50, configurable via `TRIANGLE_SESSION_RETENTION`).
+- [x] Prompting & tool-usage docs: [`PROMPTING.md`](PROMPTING.md) — a practical
+      guide for end users, linked from the README.
+
+See [`STAGE-5.5.md`](STAGE-5.5.md).
 
 ## Stages 4–6
 
