@@ -18,7 +18,7 @@ the bundled MCP-entry fix).
 ## Deliverable checklist
 
 - [x] **Project templates + lifecycle.** `templates/` is a real gallery (starter +
-      a new `raymarch` SDF template), discovered by scan. `ProjectManager` is
+      `raymarch` SDF + `fps` first-person shooter templates), discovered by scan. `ProjectManager` is
       generalized to list/create/open projects under `<userData>/projects/<id>`
       with traversal-safe slug ids, a `workspace.json` remembering the active
       project, and `template:list` / `project:list` / `project:create` /

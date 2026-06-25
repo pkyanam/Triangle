@@ -1,0 +1,6 @@
+{
+  "name": "FPS Game",
+  "version": 1,
+  "description": "A first-person shooter: WASD + mouse-look, click to shoot raycast targets, with AABB wall collision and a score/ammo HUD.",
+  "entry": "src/main.js"
+}
