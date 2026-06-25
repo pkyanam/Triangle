@@ -1,4 +1,4 @@
-import type { AgentEvent, HarnessId } from '@triangle/shared';
+import type { ApprovalFileChange, ApprovalScope, AgentEvent, HarnessId } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
 import type { TriangleToolset } from './tools.js';
 
@@ -22,6 +22,23 @@ export interface ToolBridgeInfo {
   serverScriptPath: string;
 }
 
+/** A request to route an out-of-process harness action through Triangle's gate. */
+export interface ApprovalAsk {
+  /** Tool/action label (e.g. `apply_patch`, `command`). */
+  tool: string;
+  /** Proposed file changes (empty for a pure command approval). */
+  changes: ApprovalFileChange[];
+  /** For command approvals: the command line. */
+  command?: string;
+  reason?: string;
+}
+
+/** The user's decision, with the scope they granted. */
+export interface ApprovalOutcome {
+  approved: boolean;
+  scope: ApprovalScope;
+}
+
 export interface RunContext {
   prompt: string;
   /** Absolute project root (harnesses set their cwd here). */
@@ -31,6 +48,16 @@ export interface RunContext {
   toolset: TriangleToolset;
   /** Loopback bridge for out-of-process tool access (Codex/MCP). */
   toolBridge: ToolBridgeInfo;
+  /** When true, the run auto-approves writes (the gate is bypassed). */
+  autoApproveWrites: boolean;
+  /**
+   * Route a harness-driven action (file change / command) through Triangle's
+   * unified approval gate (ADR 0012). In-process harnesses (Claude) approve
+   * tool writes via the toolset instead and can ignore this; out-of-process
+   * harnesses (Codex App Server) call it from their approval-request handler.
+   * Resolves once the user (or the auto-approve policy) decides.
+   */
+  requestApproval: (ask: ApprovalAsk) => Promise<ApprovalOutcome>;
   /** Push a streamed event to the UI. */
   emit: (event: HarnessEvent) => void;
   /** Aborts when the user cancels the run. */

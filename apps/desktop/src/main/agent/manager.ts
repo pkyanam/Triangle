@@ -4,6 +4,7 @@ import type {
   AgentStartRequest,
   AgentStartResult,
   ApprovalDecision,
+  ApprovalFileChange,
   ApprovalRequest,
   HarnessAvailability,
   HarnessId,
@@ -13,17 +14,42 @@ import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
 import type { ToolBridgeServer } from '../tool-bridge.js';
 import { createToolset, type ApprovalGate } from './tools.js';
-import type { AgentHarness } from './harness.js';
+import type { AgentHarness, ApprovalAsk, ApprovalOutcome } from './harness.js';
 import { mockHarness } from './mock.js';
 import { claudeHarness } from './claude.js';
 import { codexHarness } from './codex.js';
 
 const MAX_APPROVAL_PREVIEW = 4000;
 
+/** Clip a string for the approval UI, returning the text and whether it was cut. */
+function clip(text: string): { text: string; truncated: boolean } {
+  return text.length > MAX_APPROVAL_PREVIEW
+    ? { text: text.slice(0, MAX_APPROVAL_PREVIEW), truncated: true }
+    : { text, truncated: false };
+}
+
+/** Clip the (possibly large) content/diff fields of a harness-supplied change. */
+function clipChange(change: ApprovalFileChange): ApprovalFileChange {
+  let truncated = change.truncated ?? false;
+  const out: ApprovalFileChange = { path: change.path, kind: change.kind };
+  for (const key of ['oldContent', 'newContent', 'diff'] as const) {
+    const value = change[key];
+    if (value !== undefined) {
+      const c = clip(value);
+      out[key] = c.text;
+      truncated = truncated || c.truncated;
+    }
+  }
+  out.truncated = truncated;
+  return out;
+}
+
 interface ActiveRun {
   controller: AbortController;
   /** Approval ids outstanding for this run (rejected on cancel). */
   approvals: Set<string>;
+  /** Once true, the rest of this run's writes are auto-approved (session scope). */
+  autoApproveAll: boolean;
 }
 
 /**
@@ -36,7 +62,7 @@ export class AgentManager {
   private readonly runs = new Map<string, ActiveRun>();
   private readonly pendingApprovals = new Map<
     string,
-    { resolve: (approved: boolean) => void; runId: string }
+    { resolve: (outcome: ApprovalOutcome) => void; runId: string }
   >();
   private approvalCounter = 0;
 
@@ -89,7 +115,11 @@ export class AgentManager {
     }
 
     const controller = new AbortController();
-    const run: ActiveRun = { controller, approvals: new Set() };
+    const run: ActiveRun = {
+      controller,
+      approvals: new Set(),
+      autoApproveAll: req.autoApproveWrites,
+    };
     this.runs.set(req.runId, run);
 
     void this.execute(req, harness, config, run);
@@ -108,9 +138,42 @@ export class AgentManager {
 
     emitStatus('started');
 
+    // Triangle tool writes (Claude in-process / MCP via the bridge): read the
+    // current file so the UI can render a real diff, then route through the gate.
     const approveWrite: ApprovalGate = async ({ tool, path, content, exists }) => {
-      if (req.autoApproveWrites) return true;
-      return this.requestApproval(run, runId, { tool, path, content, exists });
+      if (run.autoApproveAll) return true;
+      let oldContent: string | undefined;
+      if (exists) {
+        try {
+          oldContent = (await this.project.readFile(path)).content;
+        } catch {
+          /* unreadable (binary/perms) — fall back to a content-only preview. */
+        }
+      }
+      const newClip = clip(content);
+      const oldClip = oldContent !== undefined ? clip(oldContent) : undefined;
+      const change: ApprovalFileChange = {
+        path,
+        kind: exists ? 'update' : 'create',
+        newContent: newClip.text,
+        ...(oldClip ? { oldContent: oldClip.text } : {}),
+        truncated: newClip.truncated || (oldClip?.truncated ?? false),
+      };
+      const outcome = await this.requestApproval(run, runId, req.harness, { tool, changes: [change] });
+      return outcome.approved;
+    };
+
+    // Out-of-process harness actions (Codex App Server file-change / command
+    // approvals) reach the same gate; the harness chooses how to honour the scope.
+    const requestApproval = async (ask: ApprovalAsk): Promise<ApprovalOutcome> => {
+      if (run.autoApproveAll) return { approved: true, scope: 'session' };
+      const changes = ask.changes.map((c) => clipChange(c));
+      return this.requestApproval(run, runId, req.harness, {
+        tool: ask.tool,
+        changes,
+        ...(ask.command ? { command: ask.command } : {}),
+        ...(ask.reason ? { reason: ask.reason } : {}),
+      });
     };
 
     const toolset = createToolset({
@@ -135,6 +198,8 @@ export class AgentManager {
           token: bridgeToken,
           serverScriptPath: this.mcpServerScriptPath,
         },
+        autoApproveWrites: req.autoApproveWrites,
+        requestApproval,
         signal: run.controller.signal,
         emit: (event) => {
           if (event.type === 'assistant') {
@@ -162,46 +227,46 @@ export class AgentManager {
     }
   }
 
+  private static readonly REJECTED: ApprovalOutcome = { approved: false, scope: 'once' };
+
   /** Cancel a run and reject any approvals it's waiting on. */
   cancel(runId: string): { ok: boolean } {
     const run = this.runs.get(runId);
     if (!run) return { ok: false };
     run.controller.abort();
     for (const approvalId of run.approvals) {
-      this.pendingApprovals.get(approvalId)?.resolve(false);
+      this.pendingApprovals.get(approvalId)?.resolve(AgentManager.REJECTED);
       this.pendingApprovals.delete(approvalId);
     }
     run.approvals.clear();
     return { ok: true };
   }
 
-  /** Resolve a write-approval prompt from the renderer. */
+  /** Resolve a pending approval prompt from the renderer. */
   resolveApproval(decision: ApprovalDecision): { ok: boolean } {
     const pending = this.pendingApprovals.get(decision.approvalId);
     if (!pending) return { ok: false };
     this.pendingApprovals.delete(decision.approvalId);
-    this.runs.get(pending.runId)?.approvals.delete(decision.approvalId);
-    pending.resolve(decision.approved);
+    const run = this.runs.get(pending.runId);
+    run?.approvals.delete(decision.approvalId);
+    const scope = decision.scope ?? 'once';
+    // "Approve for the rest of this run" lifts the gate for subsequent writes.
+    if (run && decision.approved && scope === 'session') run.autoApproveAll = true;
+    pending.resolve({ approved: decision.approved, scope });
     return { ok: true };
   }
 
   private requestApproval(
     run: ActiveRun,
     runId: string,
-    req: { tool: string; path: string; content: string; exists: boolean },
-  ): Promise<boolean> {
-    if (run.controller.signal.aborted) return Promise.resolve(false);
+    source: HarnessId,
+    body: { tool: string; changes: ApprovalFileChange[]; command?: string; reason?: string },
+  ): Promise<ApprovalOutcome> {
+    if (run.controller.signal.aborted) return Promise.resolve(AgentManager.REJECTED);
     const approvalId = `ap${Date.now()}_${++this.approvalCounter}`;
     run.approvals.add(approvalId);
-    const payload: ApprovalRequest = {
-      approvalId,
-      runId,
-      tool: req.tool,
-      path: req.path,
-      content: req.content.slice(0, MAX_APPROVAL_PREVIEW),
-      exists: req.exists,
-    };
-    return new Promise<boolean>((resolve) => {
+    const payload: ApprovalRequest = { approvalId, runId, source, ...body };
+    return new Promise<ApprovalOutcome>((resolve) => {
       this.pendingApprovals.set(approvalId, { resolve, runId });
       this.sendApproval(payload);
     });
@@ -211,7 +276,7 @@ export class AgentManager {
     const run = this.runs.get(runId);
     if (run) {
       for (const approvalId of run.approvals) {
-        this.pendingApprovals.get(approvalId)?.resolve(false);
+        this.pendingApprovals.get(approvalId)?.resolve(AgentManager.REJECTED);
         this.pendingApprovals.delete(approvalId);
       }
     }

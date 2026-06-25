@@ -958,30 +958,153 @@ button {
   letter-spacing: 0.12em;
   color: color-mix(in srgb, var(--primary) 30%, var(--foreground));
 }
-.approval__path {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--foreground);
-  word-break: break-all;
+.approval__source {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--background);
 }
-.approval__preview {
-  max-height: 150px;
-  overflow: auto;
+.approval__reason {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+.approval__command {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
   background: var(--background);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 9px;
+  padding: 8px 9px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--muted-foreground);
+  font-size: 11.5px;
+  color: var(--foreground);
   white-space: pre-wrap;
+  word-break: break-all;
   user-select: text;
+}
+.approval__diffs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
 }
 .approval__actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ---------- Diff view (approval gate) ---------- */
+.diff {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  overflow: hidden;
+}
+.diff__file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+.diff__kind--create {
+  color: var(--diff-add-fg, #46a758);
+}
+.diff__kind--delete {
+  color: var(--diff-del-fg, #e5484d);
+}
+.diff__kind--update {
+  color: var(--primary);
+}
+.diff__path {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--foreground);
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+.diff__counts {
+  display: flex;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.diff__add-count {
+  color: var(--diff-add-fg, #46a758);
+}
+.diff__del-count {
+  color: var(--diff-del-fg, #e5484d);
+}
+.diff__body {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  user-select: text;
+  overflow-x: auto;
+}
+.diff__empty {
+  padding: 8px 9px;
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.diff__row {
+  display: flex;
+  white-space: pre;
+}
+.diff__row--add {
+  background: color-mix(in srgb, var(--diff-add-fg, #46a758) 14%, transparent);
+}
+.diff__row--del {
+  background: color-mix(in srgb, var(--diff-del-fg, #e5484d) 14%, transparent);
+}
+.diff__row--hunk {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--muted-foreground);
+}
+.diff__gutter {
+  flex: 0 0 auto;
+  width: 34px;
+  padding: 0 6px;
+  text-align: right;
+  color: var(--muted-foreground);
+  opacity: 0.7;
+  user-select: none;
+}
+.diff__marker {
+  flex: 0 0 auto;
+  width: 14px;
+  text-align: center;
+  user-select: none;
+}
+.diff__row--add .diff__marker {
+  color: var(--diff-add-fg, #46a758);
+}
+.diff__row--del .diff__marker {
+  color: var(--diff-del-fg, #e5484d);
+}
+.diff__code {
+  flex: 1;
+  padding-right: 9px;
+  color: var(--foreground);
+}
+.diff__truncated {
+  padding: 5px 9px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  border-top: 1px solid var(--border);
 }
 
 /* ---------- Harness / model picker (Trifecta port) ---------- */

@@ -90,20 +90,62 @@ export type AgentEvent =
   | { type: 'tool'; runId: string; trace: ToolCallTrace }
   | { type: 'log'; runId: string; level: 'info' | 'warn' | 'error'; text: string };
 
-/** Raised by the main process when a gated write needs human approval. */
+/** Whether a proposed change creates, updates, or deletes a file. */
+export type FileChangeKind = 'create' | 'update' | 'delete';
+
+/** A single proposed file change inside an {@link ApprovalRequest}. */
+export interface ApprovalFileChange {
+  /** Target path (project-relative for tool writes; as-reported for harnesses). */
+  path: string;
+  kind: FileChangeKind;
+  /**
+   * Current on-disk contents, so the UI can render a diff. Present for tool-driven
+   * writes (Claude/MCP) where main reads the file first. May be truncated.
+   */
+  oldContent?: string;
+  /** Proposed new contents (absent for deletes). May be truncated. */
+  newContent?: string;
+  /**
+   * A precomputed unified diff. Codex's `fileChange` item already carries one, so
+   * the UI renders it directly instead of diffing `oldContent`/`newContent`.
+   */
+  diff?: string;
+  /** True if any content/diff field above was truncated for display. */
+  truncated?: boolean;
+}
+
+/**
+ * Raised by the main process when an agent action needs human approval.
+ *
+ * This is Triangle's *unified* approval gate (ADR 0012): it covers both Triangle
+ * tool writes (Claude / MCP) and the Codex App Server's file-change and
+ * command-execution approvals, so every harness flows through the same diff +
+ * approve / reject surface with the same default-on, human-in-the-loop policy.
+ */
 export interface ApprovalRequest {
   approvalId: string;
   runId: string;
+  /** Which harness raised the request (provenance + UI label). */
+  source: HarnessId;
+  /** The tool/action that produced the change(s) (e.g. `triangle_write_file`, `apply_patch`). */
   tool: string;
-  /** Project-relative target path. */
-  path: string;
-  /** Proposed new file contents (may be truncated for display). */
-  content: string;
-  /** True if the file already exists (overwrite vs create). */
-  exists: boolean;
+  /** File changes to approve as one batch (may be empty for a pure command approval). */
+  changes: ApprovalFileChange[];
+  /** For command-execution approvals (Codex): the command line awaiting approval. */
+  command?: string;
+  /** Optional human-readable reason supplied by the harness. */
+  reason?: string;
 }
+
+/** How broadly an approval applies. `session` auto-approves later writes this run. */
+export type ApprovalScope = 'once' | 'session';
 
 export interface ApprovalDecision {
   approvalId: string;
   approved: boolean;
+  /**
+   * `session` keeps approving subsequent writes for the rest of this run without
+   * prompting (maps to Codex's `acceptForSession`); defaults to `once`.
+   */
+  scope?: ApprovalScope;
 }

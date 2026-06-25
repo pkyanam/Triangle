@@ -7,17 +7,20 @@ import {
   Send,
   ShieldCheck,
   Square,
+  Terminal,
   TriangleAlert,
 } from 'lucide-react';
 import {
   type AgentEvent,
   type ApprovalRequest,
+  type ApprovalScope,
   type ChatMessage,
   type HarnessAvailability,
   type HarnessId,
   type ToolCallTrace,
 } from '@triangle/shared';
 import { HarnessPicker } from './HarnessPicker.js';
+import { DiffView } from './DiffView.js';
 import {
   activePerformanceSnapshot,
   captureScreenshotPath,
@@ -198,9 +201,9 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
     if (runRef.current) void window.triangle.agent.cancel(runRef.current);
   };
 
-  const decideApproval = (approved: boolean): void => {
+  const decideApproval = (approved: boolean, scope: ApprovalScope = 'once'): void => {
     if (!approval) return;
-    void window.triangle.agent.approve({ approvalId: approval.approvalId, approved });
+    void window.triangle.agent.approve({ approvalId: approval.approvalId, approved, scope });
     setApproval(null);
   };
 
@@ -325,14 +328,35 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
           <div className="approval__head">
             <ShieldCheck size={14} style={{ color: 'var(--primary)' }} />
             <span className="approval__title">
-              Approve write {approval.exists ? '(overwrite)' : '(new file)'}
+              {approval.command
+                ? 'Approve command'
+                : `Approve ${approval.changes.length} change${approval.changes.length === 1 ? '' : 's'}`}
             </span>
+            <span className="approval__source">{approval.source}</span>
           </div>
-          <div className="approval__path">{approval.path}</div>
-          <pre className="approval__preview">{approval.content}</pre>
+          {approval.reason && <div className="approval__reason">{approval.reason}</div>}
+          {approval.command && (
+            <pre className="approval__command">
+              <Terminal size={12} /> {approval.command}
+            </pre>
+          )}
+          {approval.changes.length > 0 && (
+            <div className="approval__diffs">
+              {approval.changes.map((change, i) => (
+                <DiffView key={`${change.path}:${i}`} change={change} />
+              ))}
+            </div>
+          )}
           <div className="approval__actions">
             <button className="btn" onClick={() => decideApproval(false)}>
               Reject
+            </button>
+            <button
+              className="btn"
+              title="Approve this and all further changes for the rest of this run"
+              onClick={() => decideApproval(true, 'session')}
+            >
+              Approve all
             </button>
             <button className="btn btn--primary" onClick={() => decideApproval(true)}>
               Approve

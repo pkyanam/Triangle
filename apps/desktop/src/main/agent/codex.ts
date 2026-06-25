@@ -1,7 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import readline from 'node:readline';
+import type { ApprovalFileChange, FileChangeKind } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
-import { harnessTraceId, type AgentHarness, type RunContext } from './harness.js';
+import { harnessTraceId, type AgentHarness, type ApprovalOutcome, type RunContext } from './harness.js';
 
 /**
  * Codex harness backed by the **Codex App Server** (`codex app-server`) — the same
@@ -117,6 +118,45 @@ function mcpResultText(result: unknown): string | undefined {
   return text || undefined;
 }
 
+/** Map a Codex file-change kind onto Triangle's. */
+function toChangeKind(kind: unknown): FileChangeKind {
+  switch (String(kind)) {
+    case 'add':
+    case 'create':
+      return 'create';
+    case 'delete':
+    case 'remove':
+      return 'delete';
+    default:
+      return 'update';
+  }
+}
+
+/** Parse a Codex `fileChange` item's `changes` into Triangle approval changes. */
+function parseFileChanges(item: Record<string, unknown> | undefined): ApprovalFileChange[] {
+  const raw = (item?.['changes'] as Array<Record<string, unknown>> | undefined) ?? [];
+  return raw
+    .filter((c) => typeof c['path'] === 'string')
+    .map((c) => {
+      const diff = typeof c['diff'] === 'string' ? c['diff'] : undefined;
+      return {
+        path: String(c['path']),
+        kind: toChangeKind(c['kind']),
+        ...(diff ? { diff } : {}),
+      } satisfies ApprovalFileChange;
+    });
+}
+
+/**
+ * Map a Triangle approval outcome onto a Codex `FileChangeApprovalDecision`
+ * (`accept` / `acceptForSession` / `decline`). Command approvals reuse
+ * `accept` / `decline` (the App Server ignores `acceptForSession` there).
+ */
+function toCodexDecision(outcome: ApprovalOutcome, allowSession: boolean): string {
+  if (!outcome.approved) return 'decline';
+  return allowSession && outcome.scope === 'session' ? 'acceptForSession' : 'accept';
+}
+
 const TERMINAL_TOOL_STATUS = new Set(['completed', 'failed', 'declined']);
 const toTraceStatus = (status: string): 'running' | 'ok' | 'error' =>
   status === 'failed' || status === 'declined' ? 'error' : status === 'inProgress' ? 'running' : 'ok';
@@ -158,6 +198,14 @@ export const codexHarness: AgentHarness = {
   run(ctx: RunContext): Promise<void> {
     const { prompt, projectRoot, config, toolBridge, emit, signal } = ctx;
     const bin = codexBin(config);
+    // When the run is gated, Codex must surface writes for approval rather than
+    // applying them silently inside the workspace sandbox. We put it in a
+    // read-only sandbox with `on-request` approvals so every file change (and any
+    // write-capable command) escalates to a server-initiated approval request,
+    // which we route through Triangle's unified gate (ADR 0012). When the user
+    // opted into auto-approve, we keep the Stage 3 workspace-write + `never`
+    // model so Codex proceeds without prompts.
+    const gated = !ctx.autoApproveWrites;
 
     return new Promise<void>((resolve, reject) => {
       const child = spawn(bin, ['app-server'], {
@@ -171,6 +219,9 @@ export const codexHarness: AgentHarness = {
       let turnId = '';
       let failure: string | null = null;
       const agentText = new Map<string, string>();
+      // fileChange items arrive (via item/started) before their approval request;
+      // stash their diffs by itemId so the gate can show them. See ADR 0008/0012.
+      const fileChangeItems = new Map<string, ApprovalFileChange[]>();
       const stderrTail: string[] = [];
 
       const finish = (err?: Error): void => {
@@ -241,6 +292,7 @@ export const codexHarness: AgentHarness = {
           }
         } else if (type === 'fileChange') {
           const changes = (item['changes'] as Array<{ path?: string }> | undefined) ?? [];
+          fileChangeItems.set(id, parseFileChanges(item));
           emit({
             type: 'tool',
             trace: {
@@ -266,17 +318,34 @@ export const codexHarness: AgentHarness = {
       };
 
       const handleServerRequest = (msg: RpcMessage): void => {
-        // Codex drives approvals as server→client requests. We run with sandbox
-        // `workspace-write` scoped to the project (the Stage 2 boundary), so accept
-        // command/file approvals. Codex also gates every MCP tool call behind an
-        // `mcpServer/elicitation/request` (codex_approval_kind: mcp_tool_call); those
-        // are Triangle's *own* trusted domain tools, so auto-accept form-mode
-        // elicitations. Decline url-mode (OAuth) and anything else so a turn never hangs.
+        // Codex drives approvals as server→client requests. File-change and
+        // command approvals are routed through Triangle's unified gate (ADR 0012):
+        // the user sees the diff/command and accepts (optionally for the session)
+        // or rejects. When the run is auto-approve, the gate resolves immediately.
+        // MCP tool calls are gated by Codex behind an `mcpServer/elicitation/request`
+        // (codex_approval_kind: mcp_tool_call); those are Triangle's *own* trusted
+        // domain tools (transient live edits, not disk writes), so we auto-accept
+        // form-mode elicitations. url-mode (OAuth) and anything else is declined so
+        // a turn never hangs.
+        const reason = typeof msg.params?.['reason'] === 'string' ? (msg.params['reason'] as string) : undefined;
         switch (msg.method) {
-          case 'item/commandExecution/requestApproval':
-          case 'item/fileChange/requestApproval':
-            client.respond(msg.id, { decision: 'accept' });
+          case 'item/fileChange/requestApproval': {
+            const itemId = String(msg.params?.['itemId'] ?? '');
+            const changes = fileChangeItems.get(itemId) ?? [];
+            void ctx
+              .requestApproval({ tool: 'apply_patch', changes, reason })
+              .then((outcome) => client.respond(msg.id, { decision: toCodexDecision(outcome, true) }))
+              .catch(() => client.respond(msg.id, { decision: 'decline' }));
             break;
+          }
+          case 'item/commandExecution/requestApproval': {
+            const command = String(msg.params?.['command'] ?? '(command)');
+            void ctx
+              .requestApproval({ tool: 'command', changes: [], command, reason })
+              .then((outcome) => client.respond(msg.id, { decision: toCodexDecision(outcome, false) }))
+              .catch(() => client.respond(msg.id, { decision: 'decline' }));
+            break;
+          }
           case 'mcpServer/elicitation/request':
             if (msg.params?.['mode'] === 'form') {
               client.respond(msg.id, { action: 'accept', content: {}, _meta: null });
@@ -342,8 +411,8 @@ export const codexHarness: AgentHarness = {
           };
           const thread = (await client.request('thread/start', {
             cwd: projectRoot,
-            approvalPolicy: 'never',
-            sandbox: 'workspace-write',
+            approvalPolicy: gated ? 'on-request' : 'never',
+            sandbox: gated ? 'read-only' : 'workspace-write',
             developerInstructions: DEVELOPER_INSTRUCTIONS,
             config: threadConfig,
             ...(config.codexModel ? { model: config.codexModel } : {}),
