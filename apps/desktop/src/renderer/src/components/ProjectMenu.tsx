@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, FolderPlus, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Download, FolderPlus, Loader2, Upload } from 'lucide-react';
 import type { ProjectSummary, TemplateInfo } from '@triangle/shared';
 
 interface ProjectMenuProps {
@@ -24,6 +24,7 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
   const [templateId, setTemplateId] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
@@ -75,6 +76,35 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
     void window.triangle.project
       .open(id)
       .then(() => close())
+      .catch((e: unknown) => setError(String((e as Error).message ?? e)))
+      .finally(() => setBusy(false));
+  };
+
+  const exportProject = (): void => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    void window.triangle.project
+      .export()
+      .then((res) => {
+        if (res.error) setError(res.error);
+        else if (res.ok && res.path) setNotice('Exported.');
+      })
+      .catch((e: unknown) => setError(String((e as Error).message ?? e)))
+      .finally(() => setBusy(false));
+  };
+
+  const importProject = (): void => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    void window.triangle.project
+      .import()
+      .then((res) => {
+        if (res.error) setError(res.error);
+        else if (res.ok) close();
+      })
       .catch((e: unknown) => setError(String((e as Error).message ?? e)))
       .finally(() => setBusy(false));
   };
@@ -138,6 +168,19 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
                 </span>
                 <span className="menu__item-label">New project…</span>
               </button>
+              <button className="menu__item" onClick={importProject} disabled={busy}>
+                <span className="menu__item-check">
+                  <Upload size={13} />
+                </span>
+                <span className="menu__item-label">Import project…</span>
+              </button>
+              <button className="menu__item" onClick={exportProject} disabled={busy}>
+                <span className="menu__item-check">
+                  <Download size={13} />
+                </span>
+                <span className="menu__item-label">Export current project…</span>
+              </button>
+              {notice && <div className="menu__notice">{notice}</div>}
               {error && <div className="menu__error">{error}</div>}
             </>
           ) : (

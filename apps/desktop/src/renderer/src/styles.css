@@ -1436,6 +1436,14 @@ button {
   background: color-mix(in srgb, oklch(0.65 0.2 25) 12%, transparent);
   border-radius: var(--radius-md);
 }
+.menu__notice {
+  margin: 4px 6px 2px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-radius: var(--radius-md);
+}
 .project-create {
   display: flex;
   flex-direction: column;

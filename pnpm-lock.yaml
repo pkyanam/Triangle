@@ -32,6 +32,9 @@ importers:
       dockview-react:
         specifier: 6.6.1
         version: 6.6.1(react@19.2.7)
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       lucide-react:
         specifier: 1.18.0
         version: 1.18.0(react@19.2.7)

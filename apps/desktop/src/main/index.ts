@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import type {
   IpcEventChannel,
   IpcEventPayload,
@@ -66,6 +67,39 @@ function registerIpc(): void {
     const info = await project.openProject(req.id);
     send('project:changed', info);
     return info;
+  });
+  handle('project:export', async (req) => {
+    try {
+      const { bytes, filename } = await project.exportProject(req.id);
+      const win = mainWindow ?? BrowserWindow.getAllWindows()[0];
+      const result = await dialog.showSaveDialog(win!, {
+        title: 'Export Triangle project',
+        defaultPath: filename,
+        filters: [{ name: 'Zip archive', extensions: ['zip'] }],
+      });
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+      await fsp.writeFile(result.filePath, Buffer.from(bytes));
+      return { ok: true, path: result.filePath };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+  handle('project:import', async () => {
+    try {
+      const win = mainWindow ?? BrowserWindow.getAllWindows()[0];
+      const result = await dialog.showOpenDialog(win!, {
+        title: 'Import Triangle project',
+        properties: ['openFile'],
+        filters: [{ name: 'Zip archive', extensions: ['zip'] }],
+      });
+      if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true };
+      const bytes = new Uint8Array(await fsp.readFile(result.filePaths[0]));
+      const info = await project.importProjectFromZip(bytes);
+      send('project:changed', info);
+      return { ok: true, info };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   });
   handle('file:read', (req) => project.readFile(req.path));
   handle('file:write', (req) => project.writeFile(req.path, req.content, req.suppressWatch));

@@ -56,6 +56,23 @@ export interface IpcInvokeChannels {
     request: { id: string };
     response: ProjectInfo;
   };
+  /**
+   * Export a project (default: the active one) to a `.zip` the user chooses via a
+   * save dialog, excluding node_modules/.git/.triangle. The renderer never sees
+   * raw fs — main packs and writes the archive.
+   */
+  'project:export': {
+    request: { id?: string };
+    response: { ok: boolean; path?: string; canceled?: boolean; error?: string };
+  };
+  /**
+   * Import a project from a user-picked `.zip` into a fresh workspace dir and
+   * switch to it (also pushed via `project:changed`).
+   */
+  'project:import': {
+    request: void;
+    response: { ok: boolean; info?: ProjectInfo; canceled?: boolean; error?: string };
+  };
   /** Read a UTF-8 text file by project-relative path. */
   'file:read': {
     request: { path: string };
@@ -164,6 +181,8 @@ export const INVOKE_CHANNELS = [
   'project:list',
   'project:create',
   'project:open',
+  'project:export',
+  'project:import',
   'file:read',
   'file:write',
   'app:info',

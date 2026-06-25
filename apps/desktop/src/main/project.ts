@@ -3,6 +3,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import chokidar, { type FSWatcher } from 'chokidar';
+import {
+  findProjectPrefix,
+  packDirToZip,
+  parseZip,
+  readZipManifestName,
+  writeZipEntries,
+} from './archive.js';
 import type {
   FileChangeEvent,
   FileChangeType,
@@ -221,6 +228,45 @@ export class ProjectManager {
     const dir = this.projectDir(id);
     if (!existsSync(path.join(dir, 'triangle.json'))) {
       throw new Error(`Project not found: ${id}`);
+    }
+    await this.activate(id);
+    return this.getInfo();
+  }
+
+  /**
+   * Pack a project (default: the active one) into a zip, excluding
+   * node_modules/.git/.triangle. Returns the bytes + a suggested filename; the
+   * IPC handler owns the save dialog and writing the file to disk.
+   */
+  async exportProject(id?: string): Promise<{ bytes: Uint8Array; filename: string }> {
+    const targetId = id ?? this.getActiveId();
+    const dir = this.projectDir(targetId);
+    if (!existsSync(path.join(dir, 'triangle.json'))) {
+      throw new Error(`Project not found: ${targetId}`);
+    }
+    const bytes = await packDirToZip(dir);
+    return { bytes, filename: `${targetId}.zip` };
+  }
+
+  /**
+   * Import a project from zip bytes into a fresh, uniquely-named workspace dir,
+   * then make it active. Entry paths are validated against traversal and ignored
+   * segments are skipped (see {@link writeZipEntries}).
+   */
+  async importProjectFromZip(zipBytes: Uint8Array): Promise<ProjectInfo> {
+    const files = parseZip(zipBytes);
+    const prefix = findProjectPrefix(files);
+    if (prefix === null) {
+      throw new Error('Not a Triangle project (no triangle.json found in the archive).');
+    }
+    const name = readZipManifestName(files, prefix) ?? 'Imported Project';
+    const id = await this.uniqueId(name);
+    const dir = this.projectDir(id);
+    await fs.mkdir(dir, { recursive: true });
+    const written = await writeZipEntries(files, prefix, dir, IGNORED);
+    if (written === 0) {
+      await fs.rm(dir, { recursive: true, force: true });
+      throw new Error('Archive contained no importable files.');
     }
     await this.activate(id);
     return this.getInfo();

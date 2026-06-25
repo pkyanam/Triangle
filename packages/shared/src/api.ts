@@ -34,6 +34,10 @@ export interface TriangleApi {
     create: (req: { name: string; templateId: string }) => Promise<ProjectInfo>;
     /** Open (switch to) an existing project by id. */
     open: (id: string) => Promise<ProjectInfo>;
+    /** Export a project (default: active) to a user-chosen `.zip`. */
+    export: (id?: string) => Promise<IpcResponse<'project:export'>>;
+    /** Import a project from a user-picked `.zip` and switch to it. */
+    import: () => Promise<IpcResponse<'project:import'>>;
     /** Subscribe to file-change events for the active project. */
     onFileChanged: (cb: (event: FileChangeEvent) => void) => Unsubscribe;
     /** Subscribe to active-project changes. */
