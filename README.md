@@ -45,6 +45,9 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
 - 🧠 **Three.js domain tools** — agents capture screenshots, summarize the live scene
   graph, validate GLSL shaders, and read performance counters for real **visual feedback**
   — reachable by Claude in-process and by Codex via a bundled MCP server.
+- 🎛️ **Live scene manipulation** — agents set uniforms, material colors, transforms,
+  visibility, and lights on the running scene with **immediate visual reflection**
+  (transient, persisted via a source write); the preview runtime survives dock moves.
 - 🧱 **Dockable workspace** — resizable, movable, dockable, floatable, collapsible
   panes (powered by [dockview](https://dockview.dev)) with a persisted layout.
 - 🎨 **Centralized theming** — a single CSS-variable design system; the Monaco theme
@@ -104,13 +107,14 @@ key list.
 | 2 | Editor + basic agent orchestration | ✅ |
 | 2.5 | Visual & layout overhaul (design system + dockview) | ✅ |
 | 3 | Three.js domain tooling & visual feedback loop | ✅ |
-| 4 | Rich agent capabilities & protocol support (ACP / MCP) | ⬜ Next |
+| 4 | Rich agent capabilities & protocol support (ACP / MCP) | 🟡 In progress |
 | 5 | Polish, rich features & internal prototype | ⬜ |
 | 6 | Post-prototype hardening & web path | ⬜ |
 
 The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Stage write-ups:
 [Stage 1](docs/STAGE-1.md) · [Stage 2](docs/STAGE-2.md) ·
-[Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md).
+[Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md) ·
+[Stage 4](docs/STAGE-4.md).
 
 ## Architecture
 
@@ -133,8 +137,10 @@ Key decisions are recorded as Architecture Decision Records in
 [process model & IPC](docs/adr/0003-process-model-and-ipc.md), the
 [editor & GLSL](docs/adr/0004-editor-and-glsl.md), [agent orchestration](docs/adr/0005-agent-orchestration.md),
 the [design system & dock layout](docs/adr/0006-visual-design-and-dock-layout.md), the
-[preview bridge & domain tooling](docs/adr/0007-preview-bridge-and-domain-tooling.md), and the
-[Codex App Server & MCP bridge](docs/adr/0008-codex-app-server-and-mcp-bridge.md).
+[preview bridge & domain tooling](docs/adr/0007-preview-bridge-and-domain-tooling.md), the
+[Codex App Server & MCP bridge](docs/adr/0008-codex-app-server-and-mcp-bridge.md),
+[live scene manipulation](docs/adr/0010-live-scene-manipulation.md), and the
+[persistent preview canvas](docs/adr/0011-persistent-preview-canvas.md).
 
 ## Contributing
 

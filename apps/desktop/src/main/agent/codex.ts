@@ -25,8 +25,13 @@ const DEVELOPER_INSTRUCTIONS =
   'module hot-reloads on save. Triangle exposes MCP tools under the "triangle" server for ' +
   'visual grounding: triangle_capture_screenshot (saves a PNG you can view), ' +
   'triangle_describe_scene, triangle_validate_shader (compile GLSL and get diagnostics before ' +
-  'writing it), and triangle_performance_snapshot. Prefer validating shaders and capturing a ' +
-  'screenshot to confirm visual changes. Make minimal, targeted edits.';
+  'writing it), and triangle_performance_snapshot. You can also drive the live scene for fast ' +
+  'iteration: triangle_set_uniform, triangle_set_material_color, triangle_set_transform, ' +
+  'triangle_set_visibility, and triangle_set_light each take a target (an object name or uuid ' +
+  'from triangle_describe_scene) and reflect immediately. Those live edits are transient — a ' +
+  'hot-reload resets them — so once a look is right, persist it by editing the source file. ' +
+  'Prefer validating shaders and capturing a screenshot to confirm visual changes. Make ' +
+  'minimal, targeted edits.';
 
 type JsonValue = unknown;
 interface RpcMessage {

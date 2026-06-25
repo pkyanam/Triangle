@@ -6,6 +6,8 @@ import type {
   PreviewModule,
   PreviewStats,
   PreviewStatus,
+  SceneEdit,
+  SceneEditResult,
   SceneSummary,
   SetupContext,
   ShaderStage,
@@ -16,6 +18,7 @@ import {
   performanceSnapshot as inspectPerformance,
   validateShader as inspectShader,
 } from './inspect.js';
+import { applySceneEdit as mutateScene } from './mutate.js';
 
 export interface PreviewRuntimeOptions {
   /** Called whenever the load/run status changes (idle/loading/running/error). */
@@ -100,12 +103,32 @@ export class PreviewRuntime {
     this.emitStatus({ phase: 'idle' });
   }
 
-  /** Start the render loop. Safe to call once. */
+  /** Start (or resume) the render loop. Idempotent and safe to call repeatedly. */
   start(): void {
     if (this.running || this.disposed) return;
     this.running = true;
     this.lastStatsAt = performance.now();
     this.loop();
+  }
+
+  /**
+   * Suspend the render loop without disposing GPU resources. Used while the
+   * persistent canvas is detached from the dock (ADR 0009): the scene + WebGL
+   * context survive, but we stop drawing offscreen. Resume with {@link start}.
+   */
+  suspend(): void {
+    if (!this.running) return;
+    this.running = false;
+    cancelAnimationFrame(this.rafId);
+  }
+
+  /**
+   * Resize the renderer/camera to the canvas's current parent. Call after the
+   * canvas is reparented (ADR 0009) so it adopts the new panel's dimensions
+   * immediately rather than waiting for the next ResizeObserver tick.
+   */
+  syncSize(): void {
+    this.applyResize();
   }
 
   /** Pause/resume the update + render loop (orbit controls stay interactive on resume). */
@@ -192,6 +215,15 @@ export class PreviewRuntime {
   /** Compile a GLSL shader against the live GL context (no scene mutation). */
   validateShader(stage: ShaderStage, source: string): ShaderValidationResult {
     return inspectShader(this.renderer, stage, source);
+  }
+
+  /**
+   * Apply a live scene edit (Stage 4, ADR 0010) — set a uniform/material/transform/
+   * light on a named object with immediate visual reflection. Transient: a
+   * hot-reload rebuilds the scene and discards it.
+   */
+  applySceneEdit(edit: SceneEdit): SceneEditResult {
+    return mutateScene(this.scene, edit);
   }
 
   /** Tear everything down and release GPU resources. Idempotent. */
@@ -303,19 +335,26 @@ export class PreviewRuntime {
     this.lastStatsAt = now;
   }
 
+  /**
+   * Size the renderer/camera to the canvas's parent. The canvas always lives
+   * inside its own holder element (the persistent-canvas host, ADR 0009), so the
+   * observed parent is stable across dock reparents and a 0×0 size (detached)
+   * is simply skipped.
+   */
+  private applyResize = (): void => {
+    const parent = this.canvas.parentElement;
+    if (!parent) return;
+    const { clientWidth: w, clientHeight: h } = parent;
+    if (w === 0 || h === 0) return;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  };
+
   private observeResize(): void {
-    const apply = () => {
-      const parent = this.canvas.parentElement;
-      if (!parent) return;
-      const { clientWidth: w, clientHeight: h } = parent;
-      if (w === 0 || h === 0) return;
-      this.renderer.setSize(w, h, false);
-      this.camera.aspect = w / h;
-      this.camera.updateProjectionMatrix();
-    };
-    this.resizeObserver = new ResizeObserver(apply);
+    this.resizeObserver = new ResizeObserver(this.applyResize);
     if (this.canvas.parentElement) this.resizeObserver.observe(this.canvas.parentElement);
-    apply();
+    this.applyResize();
   }
 
   private emitStatus(status: PreviewStatus): void {

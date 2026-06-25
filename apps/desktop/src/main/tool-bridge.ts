@@ -23,6 +23,20 @@ interface BridgeRequest {
   args?: Record<string, unknown>;
 }
 
+/** Coerce a tool argument into a number array (accepts a JSON-encoded string too). */
+function numberArray(value: unknown): number[] | undefined {
+  if (Array.isArray(value) && value.every((n) => typeof n === 'number')) return value as number[];
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed) && parsed.every((n) => typeof n === 'number')) return parsed as number[];
+    } catch {
+      /* ignore */
+    }
+  }
+  return undefined;
+}
+
 export class ToolBridgeServer {
   private server: net.Server | null = null;
   private port = 0;
@@ -116,6 +130,32 @@ export class ToolBridgeServer {
         return toolset.validateShader(args['stage'] as ShaderStage, String(args['source'] ?? ''));
       case 'triangle_performance_snapshot':
         return toolset.performanceSnapshot();
+      // Live scene manipulation (Stage 4).
+      case 'triangle_set_uniform':
+        return toolset.setUniform(
+          String(args['target'] ?? ''),
+          String(args['uniform'] ?? ''),
+          String(args['value'] ?? ''),
+        );
+      case 'triangle_set_material_color':
+        return toolset.setMaterialColor(
+          String(args['target'] ?? ''),
+          String(args['color'] ?? ''),
+          typeof args['property'] === 'string' ? args['property'] : undefined,
+        );
+      case 'triangle_set_transform':
+        return toolset.setTransform(String(args['target'] ?? ''), {
+          position: numberArray(args['position']),
+          rotationDeg: numberArray(args['rotationDeg']),
+          scale: numberArray(args['scale']),
+        });
+      case 'triangle_set_visibility':
+        return toolset.setVisibility(String(args['target'] ?? ''), Boolean(args['visible']));
+      case 'triangle_set_light':
+        return toolset.setLight(String(args['target'] ?? ''), {
+          intensity: typeof args['intensity'] === 'number' ? args['intensity'] : undefined,
+          color: typeof args['color'] === 'string' ? args['color'] : undefined,
+        });
       default:
         return Promise.reject(new Error(`Unknown tool: ${tool}`));
     }

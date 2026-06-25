@@ -1,4 +1,11 @@
-import type { FileNode, ShaderStage, ShaderValidationResult, ToolCallTrace } from '@triangle/shared';
+import type {
+  FileNode,
+  SceneEdit,
+  SceneEditValue,
+  ShaderStage,
+  ShaderValidationResult,
+  ToolCallTrace,
+} from '@triangle/shared';
 import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
 
@@ -83,6 +90,43 @@ export interface TriangleToolset {
   describeScene(): Promise<string>;
   validateShader(stage: ShaderStage, source: string): Promise<string>;
   performanceSnapshot(): Promise<string>;
+  // Live scene manipulation (Stage 4) — transient edits to the live scene.
+  setUniform(target: string, uniform: string, value: string): Promise<string>;
+  setMaterialColor(target: string, color: string, property?: string): Promise<string>;
+  setTransform(
+    target: string,
+    t: { position?: number[]; rotationDeg?: number[]; scale?: number[] },
+  ): Promise<string>;
+  setVisibility(target: string, visible: boolean): Promise<string>;
+  setLight(target: string, fields: { intensity?: number; color?: string }): Promise<string>;
+}
+
+/**
+ * Parse an agent-supplied uniform value. The wire contract (shared across Claude,
+ * Codex/MCP and ACP) is a JSON-encoded string so every harness sends the same
+ * shape: `"1.5"`, `"[1,0,0]"`, `"true"`, or a hex color `"#ff8800"`. Values that
+ * aren't valid JSON (bare hex colors) are passed through as-is.
+ */
+function parseUniformValue(raw: string): SceneEditValue {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed === 'number' ||
+      typeof parsed === 'boolean' ||
+      typeof parsed === 'string' ||
+      (Array.isArray(parsed) && parsed.every((n) => typeof n === 'number'))
+    ) {
+      return parsed as SceneEditValue;
+    }
+  } catch {
+    /* not JSON — treat as a raw string (e.g. "#ff8800"). */
+  }
+  return raw;
+}
+
+/** Coerce a number triple from agent input, or undefined if not a 3-tuple. */
+function triple(v: number[] | undefined): [number, number, number] | undefined {
+  return Array.isArray(v) && v.length === 3 ? [v[0], v[1], v[2]] : undefined;
 }
 
 export function createToolset(ctx: ToolContext): TriangleToolset {
@@ -177,5 +221,61 @@ export function createToolset(ctx: ToolContext): TriangleToolset {
           summary: `${snap.fps} fps · ${snap.drawCalls} draws · ${snap.triangles} tris · ~${snap.gpuMemoryEstimateMb} MB GPU.`,
         };
       }),
+
+    setUniform: (target, uniform, value) =>
+      applyEdit('triangle_set_uniform', { target, uniform, value }, {
+        op: 'set_uniform',
+        target,
+        uniform,
+        value: parseUniformValue(value),
+      }),
+
+    setMaterialColor: (target, color, property) =>
+      applyEdit('triangle_set_material_color', { target, color, ...(property ? { property } : {}) }, {
+        op: 'set_material_color',
+        target,
+        color,
+        ...(property ? { property } : {}),
+      }),
+
+    setTransform: (target, t) =>
+      applyEdit('triangle_set_transform', { target, ...t }, {
+        op: 'set_transform',
+        target,
+        ...(triple(t.position) ? { position: triple(t.position) } : {}),
+        ...(triple(t.rotationDeg) ? { rotationDeg: triple(t.rotationDeg) } : {}),
+        ...(triple(t.scale) ? { scale: triple(t.scale) } : {}),
+      }),
+
+    setVisibility: (target, visible) =>
+      applyEdit('triangle_set_visibility', { target, visible }, {
+        op: 'set_visibility',
+        target,
+        visible,
+      }),
+
+    setLight: (target, fields) =>
+      applyEdit('triangle_set_light', { target, ...fields }, {
+        op: 'set_light',
+        target,
+        ...(typeof fields.intensity === 'number' ? { intensity: fields.intensity } : {}),
+        ...(fields.color ? { color: fields.color } : {}),
+      }),
   };
+
+  /** Apply a live scene edit, tracing it under `toolName` and surfacing failures. */
+  async function applyEdit(
+    toolName: string,
+    args: Record<string, unknown>,
+    edit: SceneEdit,
+  ): Promise<string> {
+    return traced(toolName, args, async () => {
+      const res = await preview.applySceneEdit(edit);
+      if (!res.ok) throw new ToolError(res.summary);
+      const text = res.target
+        ? `${res.summary} (target: ${res.target.name} · ${res.target.type} · ${res.target.uuid})`
+        : res.summary;
+      return { result: text, summary: res.summary };
+    });
+  }
 }

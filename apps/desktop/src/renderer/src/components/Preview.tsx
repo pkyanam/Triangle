@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Grid3x3, Pause, Play, RotateCw, TriangleAlert } from 'lucide-react';
-import { createPreviewRuntime, type PreviewRuntime } from '@triangle/preview-runtime';
 import type { PreviewStats, PreviewStatus } from '@triangle/shared';
-import { setActiveRuntime } from '../preview/bridge.js';
+import { attachPreview, getRuntime, loadPreviewModule, reloadPreview } from '../preview/host.js';
 
 interface PreviewProps {
   /** Entry module source; reloading it hot-reloads the scene. */
@@ -12,60 +11,49 @@ interface PreviewProps {
 }
 
 export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.Element {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const runtimeRef = useRef<PreviewRuntime | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const statusCb = useRef(onStatus);
   const statsCb = useRef(onStats);
   statusCb.current = onStatus;
   statsCb.current = onStats;
 
-  const [paused, setPaused] = useState(false);
-  const [grid, setGrid] = useState(true);
+  // The runtime persists across dock remounts (ADR 0009); read live toggle state.
+  const [paused, setPaused] = useState(() => getRuntime().isPaused());
+  const [grid, setGrid] = useState(() => getRuntime().isGridVisible());
   const [error, setError] = useState<string | null>(null);
 
-  // Create the runtime exactly once for this canvas.
+  // Reparent the persistent canvas into this panel's stage; detach on unmount.
   useEffect(() => {
-    if (!canvasRef.current) return;
-    const rt = createPreviewRuntime(canvasRef.current, {
+    if (!stageRef.current) return;
+    return attachPreview(stageRef.current, {
       onStatus: (s) => {
         setError(s.phase === 'error' ? `${s.message}${s.stack ? `\n\n${s.stack}` : ''}` : null);
         statusCb.current?.(s);
       },
       onStats: (s) => statsCb.current?.(s),
     });
-    runtimeRef.current = rt;
-    // Expose this runtime to the agent preview bridge (screenshot/scene/perf/shader).
-    const unregister = setActiveRuntime(rt);
-    rt.start();
-    return () => {
-      unregister();
-      rt.dispose();
-      runtimeRef.current = null;
-    };
   }, []);
 
   // (Re)load the author module whenever the source changes.
   useEffect(() => {
-    if (runtimeRef.current && source) void runtimeRef.current.loadModule(source);
+    loadPreviewModule(source);
   }, [source]);
 
-  const reload = (): void => {
-    if (runtimeRef.current && source) void runtimeRef.current.loadModule(source);
-  };
+  const reload = (): void => reloadPreview();
   const togglePause = (): void =>
     setPaused((p) => {
       const next = !p;
-      runtimeRef.current?.setPaused(next);
+      getRuntime().setPaused(next);
       return next;
     });
   const toggleGrid = (): void =>
     setGrid((g) => {
       const next = !g;
-      runtimeRef.current?.setGridVisible(next);
+      getRuntime().setGridVisible(next);
       return next;
     });
   const screenshot = (): void => {
-    const url = runtimeRef.current?.screenshot();
+    const url = getRuntime().screenshot();
     if (!url) return;
     const a = document.createElement('a');
     a.href = url;
@@ -99,8 +87,8 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
           <Camera size={14} /> Screenshot
         </button>
       </div>
-      <div className="preview__stage">
-        <canvas ref={canvasRef} className="preview__canvas" />
+      <div className="preview__stage" ref={stageRef}>
+        {/* The persistent canvas is reparented in here by the preview host (ADR 0009). */}
         {error && (
           <div className="preview__error">
             <div className="preview__error-title">

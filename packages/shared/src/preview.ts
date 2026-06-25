@@ -180,6 +180,40 @@ export interface CaptureResult {
   height: number;
 }
 
+// --- Stage 4: live scene manipulation ---------------------------------------
+//
+// Agents drive the *live* scene for fast visual iteration. These edits apply
+// immediately and (thanks to the persistent canvas, ADR 0009) survive dock
+// remounts, but they are transient: a hot-reload re-runs the author module and
+// rebuilds the scene, discarding them. To persist a change the agent writes the
+// source file (the Stage 2 write path). See ADR 0010.
+
+/** A scalar / vector / color value an agent can push into the live scene. */
+export type SceneEditValue = number | number[] | boolean | string;
+
+/** A single live mutation against a named (or uuid-addressed) object. */
+export type SceneEdit =
+  | { op: 'set_uniform'; target: string; uniform: string; value: SceneEditValue }
+  | { op: 'set_material_color'; target: string; color: string; property?: string }
+  | {
+      op: 'set_transform';
+      target: string;
+      position?: [number, number, number];
+      rotationDeg?: [number, number, number];
+      scale?: [number, number, number];
+    }
+  | { op: 'set_visibility'; target: string; visible: boolean }
+  | { op: 'set_light'; target: string; intensity?: number; color?: string };
+
+/** Result of applying a {@link SceneEdit}. */
+export interface SceneEditResult {
+  ok: boolean;
+  /** Human-readable summary of what changed (or why it failed). */
+  summary: string;
+  /** The matched target, echoed back for confirmation. */
+  target?: { name: string; uuid: string; type: string };
+}
+
 // --- Preview bridge protocol (main -> renderer request/response) ------------
 
 /** Kinds of request the agent layer can make against the live preview. */
@@ -187,14 +221,16 @@ export type PreviewRequestKind =
   | 'describe_scene'
   | 'performance_snapshot'
   | 'capture_screenshot'
-  | 'validate_shader';
+  | 'validate_shader'
+  | 'apply_scene_edit';
 
 /** A request issued by main and serviced by the renderer's active runtime. */
 export type PreviewRequest =
   | { requestId: string; kind: 'describe_scene' }
   | { requestId: string; kind: 'performance_snapshot' }
   | { requestId: string; kind: 'capture_screenshot'; width?: number; height?: number }
-  | { requestId: string; kind: 'validate_shader'; stage: ShaderStage; source: string };
+  | { requestId: string; kind: 'validate_shader'; stage: ShaderStage; source: string }
+  | { requestId: string; kind: 'apply_scene_edit'; edit: SceneEdit };
 
 /** Maps each request kind to the payload the renderer returns on success. */
 export interface PreviewResultData {
@@ -202,6 +238,7 @@ export interface PreviewResultData {
   performance_snapshot: PerformanceSnapshot;
   capture_screenshot: CaptureResult;
   validate_shader: ShaderValidationResult;
+  apply_scene_edit: SceneEditResult;
 }
 
 /** The renderer's reply, correlated by `requestId`. */

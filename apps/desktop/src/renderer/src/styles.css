@@ -670,6 +670,11 @@ button {
       var(--background) 70%
     );
 }
+/* The persistent canvas holder is reparented into the stage (ADR 0009). */
+.preview__canvas-host {
+  position: absolute;
+  inset: 0;
+}
 .preview__canvas {
   display: block;
   width: 100%;

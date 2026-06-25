@@ -45,6 +45,8 @@ function service(req: PreviewRequest): PreviewResult['data'] {
       return rt.capture({ width: req.width, height: req.height });
     case 'validate_shader':
       return rt.validateShader(req.stage, req.source);
+    case 'apply_scene_edit':
+      return rt.applySceneEdit(req.edit);
   }
 }
 

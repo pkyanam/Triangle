@@ -41,7 +41,7 @@ export interface ToolDefinition {
  * to real implementations; later-stage tools remain forward declarations. Keeping a
  * single constant means `available` flags below stay in sync with reality.
  */
-export const CURRENT_STAGE = 3;
+export const CURRENT_STAGE = 4;
 
 /**
  * The canonical Triangle tool catalog. Grouped by domain; expanded each stage.
@@ -129,20 +129,94 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
     stage: 3,
   },
 
-  // --- Live scene manipulation (Stage 4) ---
+  // --- Live scene manipulation (Stage 4) — transient edits to the live scene ---
+  // All target objects by `name` (preferred) or `uuid`, both surfaced by
+  // triangle_describe_scene. Edits reflect immediately but are reset by a
+  // hot-reload; persist a change by writing the source file. See ADR 0010.
   {
     name: 'triangle_set_uniform',
-    description: 'Set a uniform value on a named material with immediate visual reflection.',
+    description:
+      'Set a ShaderMaterial uniform on a named object with immediate visual reflection. ' +
+      'value is JSON-encoded: a number "1.5", a vector "[1,0,0]", a boolean "true", or a hex color "#ff8800".',
     parameters: {
       type: 'object',
       properties: {
-        object: { type: 'string', description: 'Name/uuid of the target object.' },
+        target: { type: 'string', description: 'Name or uuid of the target object.' },
         uniform: { type: 'string', description: 'Uniform name.' },
-        value: { type: 'string', description: 'JSON-encoded value.' },
+        value: { type: 'string', description: 'JSON-encoded uniform value.' },
       },
-      required: ['object', 'uniform', 'value'],
+      required: ['target', 'uniform', 'value'],
     },
-    available: false,
+    available: true,
+    stage: 4,
+  },
+  {
+    name: 'triangle_set_material_color',
+    description:
+      "Set a color on a named object's material (e.g. color or emissive) with immediate reflection.",
+    parameters: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Name or uuid of the target object.' },
+        color: { type: 'string', description: 'Hex color, e.g. "#ff8800".' },
+        property: {
+          type: 'string',
+          description: 'Material color property to set (default "color"; e.g. "emissive").',
+        },
+      },
+      required: ['target', 'color'],
+    },
+    available: true,
+    stage: 4,
+  },
+  {
+    name: 'triangle_set_transform',
+    description:
+      'Set the position, rotation (degrees), and/or scale of a named object. Provide any subset.',
+    parameters: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Name or uuid of the target object.' },
+        position: { type: 'array', description: '[x, y, z] world position.', items: { type: 'number' } },
+        rotationDeg: {
+          type: 'array',
+          description: '[x, y, z] Euler rotation in degrees.',
+          items: { type: 'number' },
+        },
+        scale: { type: 'array', description: '[x, y, z] scale.', items: { type: 'number' } },
+      },
+      required: ['target'],
+    },
+    available: true,
+    stage: 4,
+  },
+  {
+    name: 'triangle_set_visibility',
+    description: 'Show or hide a named object in the live scene.',
+    parameters: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Name or uuid of the target object.' },
+        visible: { type: 'boolean', description: 'Whether the object is visible.' },
+      },
+      required: ['target', 'visible'],
+    },
+    available: true,
+    stage: 4,
+  },
+  {
+    name: 'triangle_set_light',
+    description: 'Set the intensity and/or color of a named light. Provide any subset.',
+    parameters: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Name or uuid of the target light.' },
+        intensity: { type: 'number', description: 'Light intensity.' },
+        color: { type: 'string', description: 'Hex color, e.g. "#ffffff".' },
+      },
+      required: ['target'],
+    },
+    available: true,
     stage: 4,
   },
 ];

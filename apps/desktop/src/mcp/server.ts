@@ -21,17 +21,14 @@ const PROTOCOL_VERSION = '2025-06-18';
 const BRIDGE_PORT = Number(process.env['TRIANGLE_BRIDGE_PORT'] ?? '0');
 const BRIDGE_TOKEN = process.env['TRIANGLE_BRIDGE_TOKEN'] ?? '';
 
-/** The domain tools this server advertises (Stage 3 catalog entries). */
-const DOMAIN_TOOLS = TRIANGLE_TOOLS.filter(
-  (t) =>
-    t.stage === 3 &&
-    [
-      'triangle_capture_screenshot',
-      'triangle_describe_scene',
-      'triangle_validate_shader',
-      'triangle_performance_snapshot',
-    ].includes(t.name),
-);
+/**
+ * The domain tools this server advertises: the live-preview tooling (Stage 3
+ * inspection + Stage 4 manipulation). Filesystem tools (stage 2) are intentionally
+ * excluded — external agents like Codex edit files through their own sandbox; this
+ * server only bridges the tools that need Triangle's live WebGL runtime. Filtering
+ * by stage (not a hard-coded name list) auto-includes future domain tools.
+ */
+const DOMAIN_TOOLS = TRIANGLE_TOOLS.filter((t) => t.available && t.stage >= 3);
 
 interface JsonRpcMessage {
   jsonrpc?: string;

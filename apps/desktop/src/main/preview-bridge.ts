@@ -3,6 +3,8 @@ import type {
   PerformanceSnapshot,
   PreviewRequest,
   PreviewResult,
+  SceneEdit,
+  SceneEditResult,
   SceneSummary,
   ShaderStage,
   ShaderValidationResult,
@@ -79,6 +81,10 @@ export class PreviewBridge {
 
   validateShader(stage: ShaderStage, source: string): Promise<ShaderValidationResult> {
     return this.request((requestId) => ({ requestId, kind: 'validate_shader', stage, source }));
+  }
+
+  applySceneEdit(edit: SceneEdit): Promise<SceneEditResult> {
+    return this.request((requestId) => ({ requestId, kind: 'apply_scene_edit', edit }));
   }
 
   /** Reject all in-flight requests (called on quit). */

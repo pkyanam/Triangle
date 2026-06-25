@@ -1,6 +1,7 @@
 # ADR 0009 — Preview runtime persistence across dock remounts
 
-- **Status:** Accepted (decision: defer the canvas-persistence refactor)
+- **Status:** Superseded by [ADR 0011](0011-persistent-preview-canvas.md) — the
+  deferred Option 1 (persistent reparented canvas) was implemented in Stage 4.
 - **Date:** 2026-06-24
 
 ## Context

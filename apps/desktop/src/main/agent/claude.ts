@@ -18,6 +18,11 @@ const TRIANGLE_TOOL_NAMES = [
   'mcp__triangle__triangle_describe_scene',
   'mcp__triangle__triangle_validate_shader',
   'mcp__triangle__triangle_performance_snapshot',
+  'mcp__triangle__triangle_set_uniform',
+  'mcp__triangle__triangle_set_material_color',
+  'mcp__triangle__triangle_set_transform',
+  'mcp__triangle__triangle_set_visibility',
+  'mcp__triangle__triangle_set_light',
 ];
 
 const SYSTEM_PROMPT =
@@ -27,9 +32,13 @@ const SYSTEM_PROMPT =
   'relative). Entry modules receive an injected THREE context and must not use bare imports. ' +
   'For visual grounding you can call triangle_capture_screenshot (saves a PNG you can then Read), ' +
   'triangle_describe_scene (the live scene graph), triangle_validate_shader (compile GLSL and get ' +
-  'diagnostics before writing it to disk), and triangle_performance_snapshot. Prefer validating a ' +
-  'shader and capturing a screenshot to confirm your changes look right. Make minimal, targeted ' +
-  'edits and briefly explain what you changed.';
+  'diagnostics before writing it to disk), and triangle_performance_snapshot. You can also drive ' +
+  'the live scene directly for fast iteration: triangle_set_uniform, triangle_set_material_color, ' +
+  'triangle_set_transform, triangle_set_visibility, and triangle_set_light all take a target (an ' +
+  'object name or uuid from triangle_describe_scene) and reflect immediately. These live edits are ' +
+  'transient — a hot-reload (file save) resets them — so once a look is right, persist it by writing ' +
+  'the source file. Prefer validating a shader and capturing a screenshot to confirm your changes ' +
+  'look right. Make minimal, targeted edits and briefly explain what you changed.';
 
 /** Extract concatenated text from a Beta assistant message's content blocks. */
 function extractText(message: { content?: unknown }): string {
@@ -141,6 +150,74 @@ export const claudeHarness: AgentHarness = {
         {},
         async () => {
           const text = await toolset.performanceSnapshot();
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_set_uniform',
+        'Set a ShaderMaterial uniform on a live object (transient until hot-reload). value is JSON-encoded: a number "1.5", a vector "[1,0,0]", a boolean "true", or a hex color "#ff8800".',
+        {
+          target: z.string().describe('Object name or uuid (from triangle_describe_scene).'),
+          uniform: z.string().describe('Uniform name.'),
+          value: z.string().describe('JSON-encoded uniform value.'),
+        },
+        async ({ target, uniform, value }) => {
+          const text = await toolset.setUniform(target, uniform, value);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_set_material_color',
+        "Set a color on a live object's material (transient until hot-reload).",
+        {
+          target: z.string().describe('Object name or uuid.'),
+          color: z.string().describe('Hex color, e.g. "#ff8800".'),
+          property: z
+            .string()
+            .optional()
+            .describe('Material color property (default "color"; e.g. "emissive").'),
+        },
+        async ({ target, color, property }) => {
+          const text = await toolset.setMaterialColor(target, color, property);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_set_transform',
+        'Set position, rotation (degrees), and/or scale of a live object (transient until hot-reload). Provide any subset.',
+        {
+          target: z.string().describe('Object name or uuid.'),
+          position: z.array(z.number()).length(3).optional().describe('[x, y, z] world position.'),
+          rotationDeg: z.array(z.number()).length(3).optional().describe('[x, y, z] degrees.'),
+          scale: z.array(z.number()).length(3).optional().describe('[x, y, z] scale.'),
+        },
+        async ({ target, position, rotationDeg, scale }) => {
+          const text = await toolset.setTransform(target, { position, rotationDeg, scale });
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_set_visibility',
+        'Show or hide a live object (transient until hot-reload).',
+        {
+          target: z.string().describe('Object name or uuid.'),
+          visible: z.boolean().describe('Whether the object is visible.'),
+        },
+        async ({ target, visible }) => {
+          const text = await toolset.setVisibility(target, visible);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_set_light',
+        'Set the intensity and/or color of a live light (transient until hot-reload). Provide any subset.',
+        {
+          target: z.string().describe('Light name or uuid.'),
+          intensity: z.number().optional().describe('Light intensity.'),
+          color: z.string().optional().describe('Hex color, e.g. "#ffffff".'),
+        },
+        async ({ target, intensity, color }) => {
+          const text = await toolset.setLight(target, { intensity, color });
           return { content: [{ type: 'text' as const, text }] };
         },
       ),
