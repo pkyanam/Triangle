@@ -2,21 +2,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
+  Camera,
   Download,
   FileArchive,
   FolderInput,
   FolderPlus,
+  History,
   Loader2,
+  RotateCcw,
   Sparkles,
 } from 'lucide-react';
-import type { ProjectSummary, TemplateInfo } from '@triangle/shared';
+import type { ProjectSummary, SnapshotInfo, TemplateInfo } from '@triangle/shared';
 
 interface ProjectMenuProps {
   /** Active project display name (shown in the trigger). */
   projectName: string;
 }
 
-type View = 'list' | 'create';
+type View = 'list' | 'create' | 'snapshots';
 
 /**
  * Project switcher + new-project gallery (Stage 5). Lists every project in the
@@ -29,6 +32,8 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
   const [view, setView] = useState<View>('list');
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
   const [templates, setTemplates] = useState<TemplateInfo[] | null>(null);
+  const [snapshots, setSnapshots] = useState<SnapshotInfo[] | null>(null);
+  const [snapshotName, setSnapshotName] = useState('');
   const [name, setName] = useState('');
   const [templateId, setTemplateId] = useState<string>('');
   const [busy, setBusy] = useState(false);
@@ -46,11 +51,21 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
     );
   }, []);
 
+  const refreshSnapshots = useCallback(() => {
+    setSnapshots(null);
+    void window.triangle.snapshot.list().then(setSnapshots).catch(() => setSnapshots([]));
+  }, []);
+
   // Load (and keep fresh) the project + template lists while the menu is open.
   useEffect(() => {
     if (!open) return;
     refresh();
   }, [open, refresh]);
+
+  // Load snapshots when entering the snapshots view.
+  useEffect(() => {
+    if (open && view === 'snapshots') refreshSnapshots();
+  }, [open, view, refreshSnapshots]);
 
   // Auto-dismiss the transient "Exported." confirmation.
   useEffect(() => {
@@ -81,6 +96,7 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
     setView('list');
     setError(null);
     setName('');
+    setSnapshotName('');
   };
 
   const openProject = (id: string, active: boolean): void => {
@@ -134,6 +150,57 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
       .then((res) => {
         if (res.error) setError(res.error);
         else if (res.ok) close();
+      })
+      .catch((e: unknown) => setError(String((e as Error).message ?? e)))
+      .finally(() => setBusy(false));
+  };
+
+  const exportProjectHtml = (): void => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    void window.triangle.project
+      .exportHtml()
+      .then((res) => {
+        if (res.error) setError(res.error);
+        else if (res.ok && res.path) setNotice('Exported standalone HTML.');
+      })
+      .catch((e: unknown) => setError(String((e as Error).message ?? e)))
+      .finally(() => setBusy(false));
+  };
+
+  const createSnapshot = (): void => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    void window.triangle.snapshot
+      .create(snapshotName.trim() || undefined)
+      .then((res) => {
+        if (res.error || !res.ok) {
+          setError(res.error ?? 'Failed to create snapshot.');
+          return;
+        }
+        setSnapshotName('');
+        refreshSnapshots();
+      })
+      .catch((e: unknown) => setError(String((e as Error).message ?? e)))
+      .finally(() => setBusy(false));
+  };
+
+  const restoreSnapshot = (id: string): void => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    void window.triangle.snapshot
+      .restore(id)
+      .then((res) => {
+        if (res.error || !res.ok) {
+          setError(res.error ?? 'Failed to restore snapshot.');
+          return;
+        }
+        // A restore pushes project:changed from main, which reloads the app.
+        close();
       })
       .catch((e: unknown) => setError(String((e as Error).message ?? e)))
       .finally(() => setBusy(false));
@@ -251,9 +318,89 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
                 </span>
                 <span className="menu__item-label">Export current project…</span>
               </button>
+              <button className="menu__item" onClick={exportProjectHtml} disabled={busy}>
+                <span className="menu__item-check">
+                  <Camera size={13} />
+                </span>
+                <span className="menu__item-label">Export standalone HTML…</span>
+              </button>
+              <button className="menu__item" onClick={() => setView('snapshots')} disabled={busy}>
+                <span className="menu__item-check">
+                  <History size={13} />
+                </span>
+                <span className="menu__item-label">Snapshots…</span>
+              </button>
               {notice && <div className="menu__notice">{notice}</div>}
               {error && <div className="menu__error">{error}</div>}
             </>
+          ) : view === 'snapshots' ? (
+            <div className="project-create">
+              <div className="menu__section-label">Snapshots</div>
+              <div className="menu__empty" style={{ paddingLeft: 0 }}>
+                Lightweight, restorable copies of this project's tree. Stored
+                under its gitignored <code>.triangle/</code> dir.
+              </div>
+              <label className="hconfig__field">
+                <span className="hconfig__label">Name (optional)</span>
+                <input
+                  className="hconfig__input"
+                  autoFocus
+                  placeholder="Before refactor"
+                  value={snapshotName}
+                  onChange={(e) => setSnapshotName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') createSnapshot();
+                    if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setView('list');
+                      setError(null);
+                    }
+                  }}
+                />
+              </label>
+              <div className="hconfig__label">Saved snapshots</div>
+              {snapshots === null ? (
+                <div className="menu__empty">
+                  <Loader2 size={13} className="spin" /> Loading…
+                </div>
+              ) : snapshots.length === 0 ? (
+                <div className="menu__empty">No snapshots yet.</div>
+              ) : (
+                <div className="project-create__templates">
+                  {snapshots.map((s) => (
+                    <div key={s.id} className="snapshot-row">
+                      <div className="snapshot-row__meta">
+                        <span className="snapshot-row__name">{s.name}</span>
+                        <span className="snapshot-row__time">
+                          {new Date(s.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <button
+                        className="btn btn--ghost btn--xs"
+                        onClick={() => restoreSnapshot(s.id)}
+                        disabled={busy}
+                        title="Restore this snapshot (overwrites the current tree)"
+                      >
+                        {busy ? <Loader2 size={12} className="spin" /> : <RotateCcw size={12} />} Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {error && <div className="menu__error">{error}</div>}
+              <div className="project-create__actions">
+                <button className="btn btn--ghost btn--xs" onClick={() => setView('list')} disabled={busy}>
+                  Back
+                </button>
+                <button
+                  className="btn btn--primary btn--xs"
+                  onClick={createSnapshot}
+                  disabled={busy}
+                >
+                  {busy ? <Loader2 size={12} className="spin" /> : <History size={12} />} Snapshot
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="project-create">
               <div className="menu__section-label">New project</div>

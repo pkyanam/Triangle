@@ -86,6 +86,22 @@ function registerIpc(): void {
       return { ok: false, error: (err as Error).message };
     }
   });
+  handle('project:export-html', async (req) => {
+    try {
+      const { html, filename } = await project.exportProjectHtml(req.id);
+      const win = mainWindow ?? BrowserWindow.getAllWindows()[0];
+      const result = await dialog.showSaveDialog(win!, {
+        title: 'Export standalone HTML',
+        defaultPath: filename,
+        filters: [{ name: 'HTML document', extensions: ['html'] }],
+      });
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+      await fsp.writeFile(result.filePath, html, 'utf8');
+      return { ok: true, path: result.filePath };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
   handle('project:import', async () => {
     try {
       const win = mainWindow ?? BrowserWindow.getAllWindows()[0];
@@ -135,6 +151,29 @@ function registerIpc(): void {
   handle('session:clear', async () => {
     await sessions.clear(project.getActiveId());
     return { ok: true };
+  });
+
+  // Iteration snapshots (Stage 5.5, ADR 0018) — scoped to the active project.
+  // A restore rewrites the project tree, so we re-activate (rebind the watcher)
+  // and push `project:changed` so the renderer reloads the tree + entry.
+  handle('snapshot:list', () => project.listSnapshots());
+  handle('snapshot:create', async (req) => {
+    try {
+      const snapshot = await project.createSnapshot(req.name);
+      return { ok: true, snapshot };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+  handle('snapshot:restore', async (req) => {
+    try {
+      await project.restoreSnapshot(req.id);
+      const info = await project.reactivateActive();
+      send('project:changed', info);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   });
 
   // Stage 3 preview bridge: the renderer replies to main's `preview:request`s here,

@@ -28,6 +28,7 @@ const api: TriangleApi = {
     create: (req) => ipcRenderer.invoke('project:create', req),
     open: (id) => ipcRenderer.invoke('project:open', { id }),
     export: (id) => ipcRenderer.invoke('project:export', { id }),
+    exportHtml: (id) => ipcRenderer.invoke('project:export-html', { id }),
     import: () => ipcRenderer.invoke('project:import'),
     importDir: () => ipcRenderer.invoke('project:import-dir'),
     onFileChanged: (cb) => subscribe<FileChangeEvent>('project:file-changed', cb),
@@ -49,6 +50,11 @@ const api: TriangleApi = {
     list: () => ipcRenderer.invoke('session:list'),
     get: (id) => ipcRenderer.invoke('session:get', { id }),
     clear: () => ipcRenderer.invoke('session:clear'),
+  },
+  snapshot: {
+    list: () => ipcRenderer.invoke('snapshot:list'),
+    create: (name) => ipcRenderer.invoke('snapshot:create', { name }),
+    restore: (id) => ipcRenderer.invoke('snapshot:restore', { id }),
   },
   mcp: {
     endpoint: () => ipcRenderer.invoke('mcp:endpoint'),

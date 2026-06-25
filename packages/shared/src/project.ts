@@ -72,3 +72,22 @@ export interface FileChangeEvent {
   /** POSIX-style path relative to the project root. */
   path: string;
 }
+
+/**
+ * A lightweight versioning snapshot of a project tree (Stage 5.5, ADR 0018).
+ *
+ * A snapshot is a full copy of the project tree (excluding `node_modules` /
+ * `.git` / `.triangle`) stored under the project's gitignored
+ * `.triangle/snapshots/<snapshotId>/` directory, plus a small `meta.json`. It
+ * can be listed and restored (copied back over the project tree) so users can
+ * roll back an iteration without leaving the app. The renderer reads these via
+ * typed IPC and never sees a raw filesystem path.
+ */
+export interface SnapshotInfo {
+  /** Stable snapshot id (a slug, also the directory name under `.triangle/snapshots/`). */
+  id: string;
+  /** Human-readable label (user-supplied or auto-generated). */
+  name: string;
+  /** Epoch ms of when the snapshot was taken. */
+  createdAt: number;
+}

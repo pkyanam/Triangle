@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import {
   DockviewReact,
   type DockviewApi,
@@ -11,7 +11,14 @@ import { Preview } from '../components/Preview.js';
 import { AgentPanel } from '../components/AgentPanel.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
-const LAYOUT_KEY = 'triangle.layout.v2';
+/**
+ * localStorage key prefix for the persisted dockview layout. Stage 5.5 scopes
+ * the key per-project (`triangle.layout.v2.<projectId>`) so each project keeps
+ * its own panel arrangement; earlier stages used one global key. A project with
+ * no saved layout falls back to {@link buildDefaultLayout}.
+ */
+const LAYOUT_KEY_PREFIX = 'triangle.layout.v2';
+const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
 export const PANEL_IDS = ['explorer', 'editor', 'preview', 'agent'] as const;
@@ -128,6 +135,8 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
 ): React.JSX.Element {
   const apiRef = useRef<DockviewApi | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
+  /** The project id whose layout is currently applied (drives the storage key). */
+  const activeProjectRef = useRef<string | null>(null);
 
   const reportPanels = (): void => {
     const api = apiRef.current;
@@ -171,21 +180,21 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
   const persist = (): void => {
     const api = apiRef.current;
     if (!api) return;
+    const pid = activeProjectRef.current;
+    if (!pid) return; // nothing to key the layout under yet
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       try {
-        localStorage.setItem(LAYOUT_KEY, JSON.stringify(api.toJSON()));
+        localStorage.setItem(layoutKey(pid), JSON.stringify(api.toJSON()));
       } catch {
         /* non-fatal */
       }
     }, 250);
   };
 
-  const onReady = (event: DockviewReadyEvent): void => {
-    const api = event.api;
-    apiRef.current = api;
-
-    const saved = localStorage.getItem(LAYOUT_KEY);
+  /** Apply the layout for `projectId` from localStorage, else the default. */
+  const applyLayout = (api: DockviewApi, projectId: string): void => {
+    const saved = localStorage.getItem(layoutKey(projectId));
     let restored = false;
     if (saved) {
       try {
@@ -199,6 +208,15 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
       api.clear();
       buildDefaultLayout(api);
     }
+  };
+
+  const onReady = (event: DockviewReadyEvent): void => {
+    const api = event.api;
+    apiRef.current = api;
+    const pid = state.project?.id ?? null;
+    activeProjectRef.current = pid;
+    if (pid) applyLayout(api, pid);
+    else buildDefaultLayout(api);
 
     api.onDidLayoutChange(() => {
       persist();
@@ -206,6 +224,26 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
     });
     reportPanels();
   };
+
+  // When the active project changes (after onReady), persist the outgoing
+  // project's layout under its own key and apply the incoming project's layout
+  // (or the default). This keeps each project's panel arrangement independent.
+  useEffect(() => {
+    const api = apiRef.current;
+    const pid = state.project?.id ?? null;
+    if (!api || pid === activeProjectRef.current) return;
+    // Flush the outgoing layout to its key before switching.
+    if (activeProjectRef.current) {
+      try {
+        localStorage.setItem(layoutKey(activeProjectRef.current), JSON.stringify(api.toJSON()));
+      } catch {
+        /* non-fatal */
+      }
+    }
+    activeProjectRef.current = pid;
+    if (pid) applyLayout(api, pid);
+    reportPanels();
+  }, [state.project?.id]);
 
   const togglePanel = (id: PanelId): void => {
     const api = apiRef.current;

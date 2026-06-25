@@ -1509,6 +1509,35 @@ button {
   justify-content: flex-end;
   gap: 6px;
 }
+/* Snapshot rows (Stage 5.5). */
+.snapshot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+}
+.snapshot-row__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.snapshot-row__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.snapshot-row__time {
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
 
 /* ---------- Session history ---------- */
 .history {

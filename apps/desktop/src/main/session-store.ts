@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
@@ -15,12 +16,29 @@ import type {
  * run streams (coalesced) and flushed on completion, so history survives a
  * restart. Lives entirely in main; the renderer reads via typed IPC. Secrets are
  * never recorded — only the prompt, streamed events, and approval outcomes.
+ *
+ * Stage 5.5 adds a per-project retention cap (default 50, configurable): the
+ * oldest sessions are pruned on `begin()` and `list()` so history never grows
+ * without bound. `clear()` still wipes everything.
  */
 export class SessionStore {
   /** In-flight records keyed by runId, kept in memory until the run finishes. */
   private readonly active = new Map<string, SessionRecord>();
   /** Pending coalesced-write timers keyed by runId. */
   private readonly writeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /**
+   * Max number of sessions kept per project. Older files are pruned on
+   * `begin()`/`list()`. Override via the `TRIANGLE_SESSION_RETENTION` env var
+   * (parsed as a positive integer; falls back to the default on any error).
+   */
+  readonly retentionLimit: number;
+
+  constructor() {
+    const env = process.env['TRIANGLE_SESSION_RETENTION'];
+    const parsed = env ? Number.parseInt(env, 10) : NaN;
+    this.retentionLimit = Number.isFinite(parsed) && parsed > 0 ? parsed : 50;
+  }
 
   private baseDir(projectId: string): string {
     return path.join(app.getPath('userData'), 'sessions', projectId);
@@ -45,6 +63,8 @@ export class SessionStore {
     };
     this.active.set(id, record);
     this.scheduleWrite(record);
+    // Prune oldest asynchronously so a chatty begin() stays cheap.
+    void this.prune(projectId);
   }
 
   /**
@@ -129,7 +149,45 @@ export class SessionStore {
         /* skip unreadable/corrupt file */
       }
     }
-    return summaries.sort((a, b) => b.startedAt - a.startedAt);
+    summaries.sort((a, b) => b.startedAt - a.startedAt);
+    // Prune oldest beyond the retention cap (best-effort, never throws).
+    await this.prune(projectId, summaries);
+    return summaries.slice(0, this.retentionLimit);
+  }
+
+  /**
+   * Delete the oldest session files for a project until the count is within
+   * {@link retentionLimit}. Best-effort: any unlink error is swallowed. If a
+   * pre-sorted `summaries` is supplied (newest first) it's used to pick the
+   * oldest; otherwise the directory is scanned and sorted by `startedAt`.
+   */
+  async prune(
+    projectId: string,
+    summaries?: SessionSummary[],
+  ): Promise<void> {
+    const dir = this.baseDir(projectId);
+    if (!existsSync(dir)) return;
+    if (!summaries) {
+      const files = await fs.readdir(dir).catch(() => [] as string[]);
+      summaries = [];
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        try {
+          const record = JSON.parse(
+            await fs.readFile(path.join(dir, file), 'utf8'),
+          ) as SessionRecord;
+          const { entries: _entries, ...summary } = record;
+          summaries.push(summary);
+        } catch {
+          /* skip unreadable/corrupt file */
+        }
+      }
+      summaries.sort((a, b) => b.startedAt - a.startedAt);
+    }
+    const excess = summaries.slice(this.retentionLimit);
+    for (const s of excess) {
+      await fs.rm(this.file(projectId, s.id), { force: true }).catch(() => undefined);
+    }
   }
 
   /** Read one full session record (transcript included). */

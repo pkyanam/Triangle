@@ -7,7 +7,7 @@
  * Main (handlers), preload (bindings), and renderer (the `window.triangle` typings)
  * all import these so the contract can never drift.
  */
-import type { FileChangeEvent, ProjectInfo, ProjectSummary, TemplateInfo } from './project.js';
+import type { FileChangeEvent, ProjectInfo, ProjectSummary, SnapshotInfo, TemplateInfo } from './project.js';
 import type { SessionRecord, SessionSummary } from './session.js';
 import type {
   AgentEvent,
@@ -63,6 +63,17 @@ export interface IpcInvokeChannels {
    * raw fs — main packs and writes the archive.
    */
   'project:export': {
+    request: { id?: string };
+    response: { ok: boolean; path?: string; canceled?: boolean; error?: string };
+  };
+  /**
+   * Export a project (default: the active one) as a single self-contained
+   * `index.html` that runs by double-clicking in a browser — inlining the
+   * Three.js runtime + OrbitControls + the project's entry module so no dev
+   * server or install is needed. Main owns the save dialog (.html filter) and
+   * the file write; the renderer never sees raw fs.
+   */
+  'project:export-html': {
     request: { id?: string };
     response: { ok: boolean; path?: string; canceled?: boolean; error?: string };
   };
@@ -158,6 +169,24 @@ export interface IpcInvokeChannels {
     response: { ok: boolean };
   };
   /**
+   * Iteration snapshots (Stage 5.5, ADR 0018). Each snapshot is a full copy of
+   * the project tree under its gitignored `.triangle/snapshots/<id>/` directory.
+   * All three are scoped to the active project; the renderer never sees raw fs
+   * paths. A restore pushes `project:changed` so the UI reloads the tree.
+   */
+  'snapshot:list': {
+    request: void;
+    response: SnapshotInfo[];
+  };
+  'snapshot:create': {
+    request: { name?: string };
+    response: { ok: boolean; snapshot?: SnapshotInfo; error?: string };
+  };
+  'snapshot:restore': {
+    request: { id: string };
+    response: { ok: boolean; error?: string };
+  };
+  /**
    * The renderer's reply to a `preview:request` (Stage 3 preview bridge). The
    * active preview runtime services the request and returns the result here,
    * correlated by `requestId`. See ADR 0007.
@@ -208,6 +237,7 @@ export const INVOKE_CHANNELS = [
   'project:create',
   'project:open',
   'project:export',
+  'project:export-html',
   'project:import',
   'project:import-dir',
   'file:read',
@@ -223,6 +253,9 @@ export const INVOKE_CHANNELS = [
   'session:list',
   'session:get',
   'session:clear',
+  'snapshot:list',
+  'snapshot:create',
+  'snapshot:restore',
   'preview:result',
   'preview:save-capture',
 ] as const satisfies readonly IpcInvokeChannel[];

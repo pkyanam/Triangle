@@ -4,7 +4,7 @@
  * consumes it via a global `Window` augmentation.
  */
 import type { IpcRequest, IpcResponse } from './ipc.js';
-import type { FileChangeEvent, ProjectInfo, ProjectSummary, TemplateInfo } from './project.js';
+import type { FileChangeEvent, ProjectInfo, ProjectSummary, SnapshotInfo, TemplateInfo } from './project.js';
 import type { SessionRecord, SessionSummary } from './session.js';
 import type {
   AgentEvent,
@@ -37,6 +37,8 @@ export interface TriangleApi {
     open: (id: string) => Promise<ProjectInfo>;
     /** Export a project (default: active) to a user-chosen `.zip`. */
     export: (id?: string) => Promise<IpcResponse<'project:export'>>;
+    /** Export a project (default: active) as a self-contained `index.html`. */
+    exportHtml: (id?: string) => Promise<IpcResponse<'project:export-html'>>;
     /** Import a project from a user-picked `.zip` and switch to it. */
     import: () => Promise<IpcResponse<'project:import'>>;
     /** Import a project from a user-picked folder (containing triangle.json). */
@@ -72,6 +74,20 @@ export interface TriangleApi {
     get: (id: string) => Promise<SessionRecord | null>;
     /** Delete all recorded sessions for the active project. */
     clear: () => Promise<{ ok: boolean }>;
+  };
+  /**
+   * Iteration snapshots for the active project (Stage 5.5, ADR 0018). Each
+   * snapshot is a full copy of the project tree under its gitignored
+   * `.triangle/snapshots/<id>/` directory; restore copies it back and pushes
+   * `project:changed`.
+   */
+  snapshot: {
+    /** List snapshots (newest first). */
+    list: () => Promise<SnapshotInfo[]>;
+    /** Create a snapshot (optional label; auto-generated otherwise). */
+    create: (name?: string) => Promise<IpcResponse<'snapshot:create'>>;
+    /** Restore a snapshot by id (reloads the active project). */
+    restore: (id: string) => Promise<IpcResponse<'snapshot:restore'>>;
   };
   /** Standalone MCP endpoint (ADR 0013): how external MCP clients connect to Triangle. */
   mcp: {

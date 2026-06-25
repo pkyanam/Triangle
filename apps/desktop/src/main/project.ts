@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, type Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
@@ -11,6 +11,11 @@ import {
   readZipManifestName,
   writeZipEntries,
 } from './archive.js';
+import {
+  buildStandaloneHtml,
+  collectTextAssets,
+  resolveRuntimeFiles,
+} from './html-export.js';
 import type {
   FileChangeEvent,
   FileChangeType,
@@ -18,6 +23,7 @@ import type {
   ProjectInfo,
   ProjectManifest,
   ProjectSummary,
+  SnapshotInfo,
   TemplateInfo,
 } from '@triangle/shared';
 
@@ -250,6 +256,49 @@ export class ProjectManager {
   }
 
   /**
+   * Export a project (default: the active one) as a single self-contained
+   * `index.html` that runs by double-clicking in a browser. Inlines the Three.js
+   * runtime (`three.core.js`) + `OrbitControls.js` + the project's entry module
+   * + text assets, mirroring the in-app `PreviewRuntime` defaults. Returns the
+   * HTML string + a suggested filename; the IPC handler owns the save dialog.
+   */
+  async exportProjectHtml(id?: string): Promise<{ html: string; filename: string }> {
+    const targetId = id ?? this.getActiveId();
+    const dir = this.projectDir(targetId);
+    if (!existsSync(path.join(dir, 'triangle.json'))) {
+      throw new Error(`Project not found: ${targetId}`);
+    }
+    const manifest = await this.parseManifest(path.join(dir, 'triangle.json'), targetId);
+    const runtime = resolveRuntimeFiles(
+      process.resourcesPath,
+      app.getAppPath(),
+      path.resolve(app.getAppPath(), '..', '..'),
+    );
+    if (!runtime) {
+      throw new Error(
+        'Standalone HTML export needs the bundled Three.js runtime files ' +
+          '(three.core.js + OrbitControls.js), which were not found. ' +
+          'Rebuild the app so they ship under out/main/runtime/ (dev) or ' +
+          '<resources>/runtime/ (packaged).',
+      );
+    }
+    const [threeCoreSource, orbitControlsSource, entrySource, assets] = await Promise.all([
+      fs.readFile(runtime.threeCore, 'utf8'),
+      fs.readFile(runtime.orbitControls, 'utf8'),
+      fs.readFile(path.join(dir, manifest.entry), 'utf8'),
+      collectTextAssets(dir),
+    ]);
+    const html = buildStandaloneHtml({
+      threeCoreSource,
+      orbitControlsSource,
+      entrySource,
+      manifest,
+      assets,
+    });
+    return { html, filename: `${slugify(manifest.name || targetId) || targetId}.html` };
+  }
+
+  /**
    * Import a project from zip bytes into a fresh, uniquely-named workspace dir,
    * then make it active. Entry paths are validated against traversal and ignored
    * segments are skipped (see {@link writeZipEntries}).
@@ -306,6 +355,99 @@ export class ProjectManager {
     return this.getInfo();
   }
 
+  // --- Iteration snapshots (Stage 5.5, ADR 0018) ---------------------------
+
+  /**
+   * The active project's gitignored snapshots directory
+   * (`<root>/.triangle/snapshots/`). `.triangle` is in {@link IGNORED}, so
+   * snapshots never appear in the file tree, trigger a hot-reload, or ship in
+   * an export.
+   */
+  private snapshotsDir(): string {
+    return path.join(this.getRoot(), '.triangle', 'snapshots');
+  }
+
+  /** Resolve a snapshot directory by id, rejecting traversal/escapes. */
+  private snapshotDir(id: string): string {
+    if (!ID_RE.test(id)) throw new Error(`Invalid snapshot id: ${id}`);
+    const base = this.snapshotsDir();
+    const dir = path.join(base, id);
+    if (path.dirname(dir) !== base) throw new Error(`Snapshot id escapes snapshots dir: ${id}`);
+    return dir;
+  }
+
+  /** List snapshots for the active project (newest first). */
+  async listSnapshots(): Promise<SnapshotInfo[]> {
+    const base = this.snapshotsDir();
+    const entries = await fs.readdir(base, { withFileTypes: true }).catch(() => [] as Dirent[]);
+    const snapshots: SnapshotInfo[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !ID_RE.test(entry.name)) continue;
+      const metaPath = path.join(base, entry.name, 'meta.json');
+      try {
+        const meta = JSON.parse(await fs.readFile(metaPath, 'utf8')) as Partial<SnapshotInfo>;
+        snapshots.push({
+          id: entry.name,
+          name: typeof meta.name === 'string' ? meta.name : entry.name,
+          createdAt: typeof meta.createdAt === 'number' ? meta.createdAt : 0,
+        });
+      } catch {
+        /* skip unreadable/incomplete snapshot */
+      }
+    }
+    return snapshots.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /**
+   * Create a snapshot of the active project's tree under
+   * `.triangle/snapshots/<id>/`. The tree is copied with the same traversal-safe
+   * + ignored-segment rules as an export (so `node_modules` / `.git` /
+   * `.triangle` are excluded — snapshots never recurse into themselves). A small
+   * `meta.json` records the id, label, and timestamp.
+   */
+  async createSnapshot(name?: string): Promise<SnapshotInfo> {
+    const root = this.getRoot();
+    const now = Date.now();
+    const label = name?.trim() || `Snapshot ${new Date(now).toLocaleString()}`;
+    const id = `${slugify(label).slice(0, 32) || 'snapshot'}-${now.toString(36)}`;
+    const dir = this.snapshotDir(id);
+    await fs.mkdir(dir, { recursive: true });
+    const written = await copyDirTree(root, dir, IGNORED);
+    if (written === 0) {
+      await fs.rm(dir, { recursive: true, force: true });
+      throw new Error('Project tree is empty; nothing to snapshot.');
+    }
+    const meta: SnapshotInfo = { id, name: label, createdAt: now };
+    await fs.writeFile(path.join(dir, 'meta.json'), `${JSON.stringify(meta, null, 2)}\n`, 'utf8');
+    return meta;
+  }
+
+  /**
+   * Restore a snapshot by copying its tree back over the active project. The
+   * project's non-ignored top-level entries are removed first (`.triangle` is
+   * preserved, so snapshots/captures/history survive a restore); then the
+   * snapshot's files are copied in with the same traversal-safe rules. The
+   * caller re-activates the project afterwards so the watcher + `project:changed`
+   * fire.
+   */
+  async restoreSnapshot(id: string): Promise<void> {
+    const root = this.getRoot();
+    const src = this.snapshotDir(id);
+    if (!existsSync(path.join(src, 'meta.json'))) {
+      throw new Error(`Snapshot not found: ${id}`);
+    }
+    // Wipe the project tree's non-ignored top-level entries (keep .triangle).
+    const entries = await fs.readdir(root, { withFileTypes: true });
+    for (const entry of entries) {
+      if (IGNORED.has(entry.name)) continue;
+      await fs.rm(path.join(root, entry.name), { recursive: true, force: true });
+    }
+    const written = await copyDirTree(src, root, IGNORED);
+    if (written === 0) {
+      throw new Error('Snapshot was empty; project left in an inconsistent state.');
+    }
+  }
+
   /** Set the active project, (re)start its watcher, and persist the selection. */
   private async activate(id: string): Promise<void> {
     const dir = this.projectDir(id);
@@ -313,6 +455,18 @@ export class ProjectManager {
     this.activeId = id;
     this.startWatching(dir);
     await this.writeState({ activeProjectId: id });
+  }
+
+  /**
+   * Re-activate the currently active project (restart its watcher on the
+   * on-disk tree and re-persist the selection). Used after a snapshot restore
+   * rewrites the tree, so the watcher re-binds to the new inodes and the caller
+   * can push a fresh `project:changed`.
+   */
+  async reactivateActive(): Promise<ProjectInfo> {
+    if (!this.activeId) throw new Error('Project not initialized');
+    await this.activate(this.activeId);
+    return this.getInfo();
   }
 
   /** Ensure there is a working project on disk and return its root. */
