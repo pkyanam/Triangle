@@ -23,6 +23,68 @@ function vec3(v: THREE.Vector3): [number, number, number] {
   return [round(v.x), round(v.y), round(v.z)];
 }
 
+/** A single ShaderMaterial uniform with a primitive, serializable value. */
+export interface UniformDetail {
+  name: string;
+  type: 'number' | 'boolean' | 'color' | 'vec2' | 'vec3' | 'vec4' | 'other';
+  value: unknown;
+}
+
+/** A material attached to a scene object, with full uniform values. */
+export interface MaterialDetail {
+  type: string;
+  name?: string;
+  color?: string;
+  transparent?: boolean;
+  uniforms?: UniformDetail[];
+}
+
+/** Geometry read-out for the Inspector. */
+export interface GeometryDetail {
+  type: string;
+  vertices?: number;
+  indices?: number;
+}
+
+/** Detailed single-object read-out for the human Inspector (Stage 5.75). */
+export interface SceneObjectDetail {
+  name: string;
+  type: string;
+  uuid: string;
+  visible: boolean;
+  position: [number, number, number];
+  rotationDeg: [number, number, number];
+  scale: [number, number, number];
+  worldPos: [number, number, number];
+  geometry?: GeometryDetail;
+  materials?: MaterialDetail[];
+  light?: { type: string; color: string; intensity: number };
+}
+
+function rad2deg(r: number): number {
+  return Math.round((r * 180) / Math.PI);
+}
+
+function classifyUniform(value: unknown): UniformDetail['type'] {
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (value && typeof value === 'object' && 'isColor' in value && (value as { isColor: boolean }).isColor) return 'color';
+  if (value && typeof value === 'object' && 'isVector2' in value && (value as { isVector2: boolean }).isVector2) return 'vec2';
+  if (value && typeof value === 'object' && 'isVector3' in value && (value as { isVector3: boolean }).isVector3) return 'vec3';
+  if (value && typeof value === 'object' && 'isVector4' in value && (value as { isVector4: boolean }).isVector4) return 'vec4';
+  return 'other';
+}
+
+function serializeUniformValue(value: unknown): unknown {
+  if (value && typeof value === 'object' && 'isColor' in value && (value as { isColor: boolean }).isColor) {
+    return `#${(value as THREE.Color).getHexString()}`;
+  }
+  if (value && typeof value === 'object' && 'toArray' in value && typeof (value as { toArray: unknown }).toArray === 'function') {
+    return (value as THREE.Vector2 | THREE.Vector3 | THREE.Vector4).toArray();
+  }
+  return value;
+}
+
 function hexColor(c: THREE.Color | undefined): string | undefined {
   return c ? `#${c.getHexString()}` : undefined;
 }
@@ -66,6 +128,70 @@ function summarizeObject(obj: THREE.Object3D): SceneObjectSummary {
   const children = obj.children.map(summarizeObject);
   if (children.length > 0) summary.children = children;
   return summary;
+}
+
+/** Summarize a single object for the human Inspector (full detail). */
+export function summarizeObjectDetail(obj: THREE.Object3D): SceneObjectDetail {
+  const mesh = obj as THREE.Mesh;
+  const light = obj as THREE.Light;
+  const worldPos = new THREE.Vector3();
+  obj.getWorldPosition(worldPos);
+
+  const detail: SceneObjectDetail = {
+    name: obj.name || '(unnamed)',
+    type: obj.type,
+    uuid: obj.uuid,
+    visible: obj.visible,
+    position: vec3(obj.position),
+    rotationDeg: [rad2deg(obj.rotation.x), rad2deg(obj.rotation.y), rad2deg(obj.rotation.z)],
+    scale: vec3(obj.scale),
+    worldPos: vec3(worldPos),
+  };
+
+  if (mesh.geometry) {
+    detail.geometry = {
+      type: mesh.geometry.type,
+      vertices: mesh.geometry.getAttribute?.('position')?.count,
+      indices: mesh.geometry.index?.count,
+    };
+  }
+
+  if (mesh.material) {
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    detail.materials = mats.map((material) => {
+      const m = material as THREE.Material & {
+        color?: THREE.Color;
+        uniforms?: Record<string, { value: unknown }>;
+      };
+      const md: MaterialDetail = {
+        type: material.type,
+        ...(material.name ? { name: material.name } : {}),
+        ...(hexColor(m.color) ? { color: hexColor(m.color) } : {}),
+        ...(material.transparent ? { transparent: true } : {}),
+      };
+      if (m.uniforms && typeof m.uniforms === 'object') {
+        md.uniforms = Object.entries(m.uniforms).map(([name, u]) => {
+          const value = (u as { value: unknown } | undefined)?.value;
+          return {
+            name,
+            type: classifyUniform(value),
+            value: serializeUniformValue(value),
+          };
+        });
+      }
+      return md;
+    });
+  }
+
+  if (light.isLight) {
+    detail.light = {
+      type: light.type,
+      color: hexColor(light.color) ?? '#ffffff',
+      intensity: round(light.intensity),
+    };
+  }
+
+  return detail;
 }
 
 /**

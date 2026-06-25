@@ -1,4 +1,4 @@
-import type { PreviewRequest, PreviewResult, ShaderStage, ShaderValidationResult } from '@triangle/shared';
+import type { PreviewRequest, PreviewResult, SceneEdit, ShaderStage, ShaderValidationResult } from '@triangle/shared';
 import type { PreviewRuntime } from '@triangle/preview-runtime';
 
 /**
@@ -98,4 +98,57 @@ export function validateActiveShader(
 ): ShaderValidationResult | null {
   if (!activeRuntime) return null;
   return activeRuntime.validateShader(stage, source);
+}
+
+// --- Engine UX helpers (Stage 5.75) -----------------------------------------
+
+/** Describe a single live object by name/uuid for the Inspector. */
+export function describeActiveObject(target: string): ReturnType<PreviewRuntime['describeObject']> {
+  if (!activeRuntime) throw new NoPreviewError();
+  return activeRuntime.describeObject(target);
+}
+
+/** Highlight a live object in the viewport and remember the selection. */
+export function setActiveSelection(target: string | null): void {
+  if (!activeRuntime) throw new NoPreviewError();
+  activeRuntime.setSelection(target);
+}
+
+/** Return the currently selected object uuid, if any. */
+export function getActiveSelection(): string | null {
+  if (!activeRuntime) return null;
+  return activeRuntime.getSelection();
+}
+
+/** Toggle between lit and wireframe view modes. */
+export function setActiveViewMode(mode: 'lit' | 'wireframe'): void {
+  if (!activeRuntime) throw new NoPreviewError();
+  activeRuntime.setViewMode(mode);
+}
+
+/** Current view mode from the active runtime. */
+export function getActiveViewMode(): 'lit' | 'wireframe' {
+  if (!activeRuntime) return 'lit';
+  return activeRuntime.getViewMode();
+}
+
+/** Apply a live scene edit from the human Inspector (same path as agent edits). */
+export function applyActiveSceneEdit(edit: SceneEdit): ReturnType<PreviewRuntime['applySceneEdit']> {
+  if (!activeRuntime) throw new NoPreviewError();
+  return activeRuntime.applySceneEdit(edit);
+}
+
+let sceneChangeListener: (() => void) | null = null;
+
+/** Subscribe to scene changes (loadModule / applySceneEdit). Renderer-local only. */
+export function onSceneChanged(cb: () => void): () => void {
+  sceneChangeListener = cb;
+  return () => {
+    if (sceneChangeListener === cb) sceneChangeListener = null;
+  };
+}
+
+/** Notify the renderer-local scene-change subscriber (called by the host). */
+export function emitSceneChanged(): void {
+  sceneChangeListener?.();
 }

@@ -1,6 +1,6 @@
 import { createPreviewRuntime, type PreviewRuntime } from '@triangle/preview-runtime';
 import type { PreviewStats, PreviewStatus } from '@triangle/shared';
-import { setActiveRuntime } from './bridge.js';
+import { emitSceneChanged, setActiveRuntime } from './bridge.js';
 
 /**
  * Persistent preview host (ADR 0009).
@@ -46,6 +46,7 @@ function ensure(): { holder: HTMLDivElement; runtime: PreviewRuntime } {
       subscriber?.onStatus?.(s);
     },
     onStats: (s) => subscriber?.onStats?.(s),
+    onSceneChanged: () => emitSceneChanged(),
   });
   // Register once for the app's lifetime; the runtime outlives any single mount.
   setActiveRuntime(rt);
@@ -92,4 +93,29 @@ export function reloadPreview(): void {
 /** The live runtime — used by the toolbar (pause/grid/screenshot) and quick-actions. */
 export function getRuntime(): PreviewRuntime {
   return ensure().runtime;
+}
+
+/** Return the current selected object uuid (persists across dock remounts). */
+export function getSelectedObject(): string | null {
+  return ensure().runtime.getSelection();
+}
+
+/** Select or clear the active object. */
+export function selectObject(target: string | null): void {
+  ensure().runtime.setSelection(target);
+}
+
+/** Current view mode from the persistent runtime. */
+export function getViewMode(): 'lit' | 'wireframe' {
+  return ensure().runtime.getViewMode();
+}
+
+/** Set the runtime view mode (lit/wireframe). */
+export function setViewMode(mode: 'lit' | 'wireframe'): void {
+  ensure().runtime.setViewMode(mode);
+}
+
+/** Advance one frame and pause again. */
+export function stepFrame(): void {
+  ensure().runtime.step();
 }

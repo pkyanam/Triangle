@@ -16,19 +16,26 @@ import type {
 import {
   describeScene as inspectScene,
   performanceSnapshot as inspectPerformance,
+  summarizeObjectDetail,
+  type SceneObjectDetail,
   validateShader as inspectShader,
 } from './inspect.js';
 import { applySceneEdit as mutateScene } from './mutate.js';
+import { SelectionHighlight } from './selection.js';
 
 export interface PreviewRuntimeOptions {
   /** Called whenever the load/run status changes (idle/loading/running/error). */
   onStatus?: (status: PreviewStatus) => void;
   /** Called ~4x/second with fresh performance metrics. */
   onStats?: (stats: PreviewStats) => void;
+  /** Called after the scene graph is rebuilt (loadModule) or mutated (applySceneEdit). */
+  onSceneChanged?: () => void;
   /** Background clear color. Defaults to a dark studio grey. */
   background?: number;
   /** Whether the helper grid is visible initially. */
   grid?: boolean;
+  /** Hex color for the selection highlight. */
+  selectionColor?: number;
 }
 
 /**
@@ -66,6 +73,13 @@ export class PreviewRuntime {
   private lastStatsAt = 0;
   private lastFps = 0;
 
+  // Stage 5.75: engine UX state.
+  private readonly selection: SelectionHighlight;
+  private selectedUuid: string | null = null;
+  private viewMode: 'lit' | 'wireframe' = 'lit';
+  private stepUntil = 0;
+  private readonly wireframeSnapshot = new Map<string, boolean>();
+
   constructor(canvas: HTMLCanvasElement, options: PreviewRuntimeOptions = {}) {
     this.canvas = canvas;
     this.options = options;
@@ -98,6 +112,9 @@ export class PreviewRuntime {
     this.grid.visible = options.grid ?? true;
     this.scene.add(this.grid);
     this.persistent.add(this.grid);
+
+    this.selection = new SelectionHighlight(this.scene, options.selectionColor);
+    this.persistent.add(this.selection.persistent);
 
     this.observeResize();
     this.emitStatus({ phase: 'idle' });
@@ -162,7 +179,10 @@ export class PreviewRuntime {
       this.module = next;
       const ctx = this.setupContext();
       this.moduleState = (await next.setup?.(ctx)) ?? undefined;
+      this.applyWireframe(this.viewMode === 'wireframe');
+      this.restoreSelection();
       this.emitStatus({ phase: 'running' });
+      this.options.onSceneChanged?.();
     } catch (err) {
       const e = err as Error;
       this.emitStatus({ phase: 'error', message: e.message, stack: e.stack });
@@ -217,13 +237,62 @@ export class PreviewRuntime {
     return inspectShader(this.renderer, stage, source);
   }
 
+  /** Describe a single object by name or uuid, with full detail for the Inspector. */
+  describeObject(target: string): SceneObjectDetail | null {
+    let match: THREE.Object3D | null = null;
+    this.scene.traverse((obj) => {
+      if (match) return;
+      if (obj.name === target || obj.uuid === target) match = obj;
+    });
+    return match ? summarizeObjectDetail(match) : null;
+  }
+
+  /** Highlight the selected object in the viewport and remember its uuid. */
+  setSelection(target: string | null): void {
+    if (!target) {
+      this.selectedUuid = null;
+      this.selection.setTarget(null);
+      return;
+    }
+    const obj = this.findObject(target);
+    this.selectedUuid = obj?.uuid ?? null;
+    this.selection.setTarget(obj);
+  }
+
+  /** Return the current selected uuid, if any. */
+  getSelection(): string | null {
+    return this.selectedUuid;
+  }
+
+  /** Toggle wireframe view on all author materials. */
+  setViewMode(mode: 'lit' | 'wireframe'): void {
+    this.viewMode = mode;
+    this.applyWireframe(mode === 'wireframe');
+  }
+
+  /** Current view mode. */
+  getViewMode(): 'lit' | 'wireframe' {
+    return this.viewMode;
+  }
+
+  /** Advance the animation loop by exactly one frame, then pause again. */
+  step(): void {
+    this.paused = false;
+    this.stepUntil = performance.now() + 100;
+  }
+
   /**
    * Apply a live scene edit (Stage 4, ADR 0010) — set a uniform/material/transform/
    * light on a named object with immediate visual reflection. Transient: a
    * hot-reload rebuilds the scene and discards it.
    */
   applySceneEdit(edit: SceneEdit): SceneEditResult {
-    return mutateScene(this.scene, edit);
+    const result = mutateScene(this.scene, edit);
+    if (result.ok) {
+      this.selection.update();
+      this.options.onSceneChanged?.();
+    }
+    return result;
   }
 
   /** Tear everything down and release GPU resources. Idempotent. */
@@ -235,6 +304,7 @@ export class PreviewRuntime {
     this.teardownModule();
     this.resizeObserver?.disconnect();
     this.controls.dispose();
+    this.selection.dispose();
     this.renderer.dispose();
   }
 
@@ -302,7 +372,8 @@ export class PreviewRuntime {
     const time = this.timer.getElapsed();
     this.controls.update();
 
-    if (!this.paused && this.module?.update) {
+    const shouldStep = this.stepUntil > 0 && performance.now() < this.stepUntil;
+    if ((shouldStep || !this.paused) && this.module?.update) {
       try {
         this.module.update({ ...this.setupContext(), state: this.moduleState, delta, time });
       } catch (err) {
@@ -312,7 +383,12 @@ export class PreviewRuntime {
         return;
       }
     }
+    if (this.stepUntil > 0 && performance.now() >= this.stepUntil) {
+      this.paused = true;
+      this.stepUntil = 0;
+    }
 
+    this.selection.update();
     this.renderer.render(this.scene, this.camera);
     this.sampleStats();
   };
@@ -359,6 +435,45 @@ export class PreviewRuntime {
 
   private emitStatus(status: PreviewStatus): void {
     this.options.onStatus?.(status);
+  }
+
+  private findObject(target: string): THREE.Object3D | null {
+    let match: THREE.Object3D | null = null;
+    this.scene.traverse((obj) => {
+      if (match) return;
+      if (obj.name === target || obj.uuid === target) match = obj;
+    });
+    return match;
+  }
+
+  private restoreSelection(): void {
+    if (!this.selectedUuid) {
+      this.selection.setTarget(null);
+      return;
+    }
+    const obj = this.findObject(this.selectedUuid);
+    this.selection.setTarget(obj);
+    if (!obj) this.selectedUuid = null;
+  }
+
+  private applyWireframe(enable: boolean): void {
+    this.scene.traverse((obj) => {
+      if (this.persistent.has(obj)) return;
+      const mesh = obj as THREE.Mesh;
+      const materials = mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+      for (const material of materials) {
+        const m = material as THREE.Material & { wireframe?: boolean; uuid: string };
+        if (enable) {
+          if (!this.wireframeSnapshot.has(m.uuid)) {
+            this.wireframeSnapshot.set(m.uuid, m.wireframe ?? false);
+          }
+          m.wireframe = true;
+        } else {
+          m.wireframe = this.wireframeSnapshot.get(m.uuid) ?? false;
+        }
+      }
+    });
+    if (!enable) this.wireframeSnapshot.clear();
   }
 }
 
