@@ -135,3 +135,24 @@ export async function copyDirTree(
   await walk(srcDir, destDir);
   return written;
 }
+
+/**
+ * Replace `destDir`'s contents with a copy of `srcDir`, preserving `destDir`'s
+ * ignored top-level entries (e.g. its `.triangle/` so snapshots/captures/history
+ * survive a restore). Used by snapshot restore (Stage 5.5, ADR 0018): the
+ * project tree's non-ignored entries are removed, then the snapshot's files are
+ * copied in with the same traversal-safe rules as {@link copyDirTree}. Returns
+ * the number of files written.
+ */
+export async function replaceDirTree(
+  srcDir: string,
+  destDir: string,
+  ignore: ReadonlySet<string> = ARCHIVE_IGNORE,
+): Promise<number> {
+  const entries = await fs.readdir(destDir, { withFileTypes: true }).catch(() => [] as import('node:fs').Dirent[]);
+  for (const entry of entries) {
+    if (ignore.has(entry.name)) continue;
+    await fs.rm(path.join(destDir, entry.name), { recursive: true, force: true });
+  }
+  return copyDirTree(srcDir, destDir, ignore);
+}

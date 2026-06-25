@@ -9,6 +9,7 @@ import {
   packDirToZip,
   parseZip,
   readZipManifestName,
+  replaceDirTree,
   writeZipEntries,
 } from './archive.js';
 import {
@@ -436,13 +437,9 @@ export class ProjectManager {
     if (!existsSync(path.join(src, 'meta.json'))) {
       throw new Error(`Snapshot not found: ${id}`);
     }
-    // Wipe the project tree's non-ignored top-level entries (keep .triangle).
-    const entries = await fs.readdir(root, { withFileTypes: true });
-    for (const entry of entries) {
-      if (IGNORED.has(entry.name)) continue;
-      await fs.rm(path.join(root, entry.name), { recursive: true, force: true });
-    }
-    const written = await copyDirTree(src, root, IGNORED);
+    // Wipe the project tree's non-ignored top-level entries (keep .triangle so
+    // snapshots/captures/history survive) then copy the snapshot back in.
+    const written = await replaceDirTree(src, root, IGNORED);
     if (written === 0) {
       throw new Error('Snapshot was empty; project left in an inconsistent state.');
     }
