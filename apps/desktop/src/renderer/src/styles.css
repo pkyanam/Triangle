@@ -749,6 +749,18 @@ button {
   color: var(--warn-signal-fg);
 }
 
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
 .hud {
   position: absolute;
   top: 10px;
