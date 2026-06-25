@@ -13,6 +13,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 4.5 | Devin CLI (ACP) as the preferred harness | ✅ Done |
 | 5 | Polish, Rich Features & Internal Prototype | ✅ Done |
 | 5.5 | Share, Snapshot & Scope | ✅ Done |
+| 5.75 | Game-Engine Visual Overhaul (Outliner, Inspector, HUD, Console) | ✅ Done |
 | 6 | Post-Prototype Hardening & Web Path | ⬜ Future |
 
 ## Stage 0 — Foundations & Architecture
@@ -144,6 +145,40 @@ See [`STAGE-5.md`](STAGE-5.md) and
       guide for end users, linked from the README.
 
 See [`STAGE-5.5.md`](STAGE-5.5.md).
+
+## Stage 5.75 — Game-Engine Visual Overhaul (Planned)
+
+A visual + UX overhaul that repositions Triangle from a "creative-coding IDE"
+into an "agentic Three.js engine" — borrowing the Outliner / Inspector /
+Viewport-HUD / Console paradigm of Unity/Unreal/Godot while keeping the agentic
+loop and Three.js specificity intact. Predominantly renderer-side + small
+additive `@triangle/preview-runtime` methods; **no IPC contract or main-process
+changes.**
+
+- [x] Design system extension: signal accents (cyan/emerald for live/selected/
+      running, amber for warnings) on top of the indigo brand; denser engine
+      chrome; tabular-numeric stats; viewport vignette.
+- [x] Outliner — live scene hierarchy tree (from `describeActiveScene` +
+      `onSceneChanged`), Lights/Camera sections, visibility toggles, click →
+      selection.
+- [x] Inspector — live-editable selected-object properties (transform, material
+      color, uniforms, light, visibility) via the existing `applySceneEdit`;
+      transient-edit semantics matching agent edits.
+- [x] Viewport HUD — in-canvas FPS sparkline, frame time, draw calls, tris, GPU
+      mem, programs + an axis gizmo overlay.
+- [x] Console — collapsible filterable log strip (preview + agent + errors).
+- [x] Viewport toolbar — Play/Pause/Step, view modes (Lit/Wireframe), Grid,
+      HUD/Gizmo toggles, camera presets, screenshot.
+- [x] Engine-style dockview layout — tabbed left rail (Explorer/Outliner),
+      tabbed right rail (Inspector/Agent), hero viewport, Console strip; layout
+      key bumped to `v3`.
+- [x] Play focus-mode + agent-panel/approval-gate restyle to the engine idiom.
+- [x] Additive runtime methods: `describeObject`, `setSelection`/`getSelection`
+      (BoxHelper highlight), `setViewMode`, `step`, `onSceneChanged`.
+
+See [`STAGE-5.75.md`](STAGE-5.75.md), the handoff prompt
+[`STAGE-5.75-HANDOFF.md`](STAGE-5.75-HANDOFF.md), and ADR
+[`adr/0019-engine-visual-overhaul.md`](adr/0019-engine-visual-overhaul.md).
 
 ## Stages 4–6
 
