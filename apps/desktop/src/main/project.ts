@@ -278,19 +278,21 @@ export class ProjectManager {
     if (!runtime) {
       throw new Error(
         'Standalone HTML export needs the bundled Three.js runtime files ' +
-          '(three.module.js + OrbitControls.js), which were not found. ' +
+          '(three.core.js + three.module.js + OrbitControls.js), which were not found. ' +
           'Rebuild the app so they ship under out/main/runtime/ (dev) or ' +
           '<resources>/runtime/ (packaged).',
       );
     }
-    const [threeCoreSource, orbitControlsSource, entrySource, assets] = await Promise.all([
+    const [threeCoreSource, threeModuleSource, orbitControlsSource, entrySource, assets] = await Promise.all([
       fs.readFile(runtime.threeCore, 'utf8'),
+      fs.readFile(runtime.threeModule, 'utf8'),
       fs.readFile(runtime.orbitControls, 'utf8'),
       fs.readFile(path.join(dir, manifest.entry), 'utf8'),
       collectTextAssets(dir),
     ]);
     const html = buildStandaloneHtml({
       threeCoreSource,
+      threeModuleSource,
       orbitControlsSource,
       entrySource,
       manifest,

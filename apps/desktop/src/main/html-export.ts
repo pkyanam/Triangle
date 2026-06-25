@@ -24,7 +24,7 @@ import type { ProjectManifest } from '@triangle/shared';
 const HTML_IGNORE = new Set(['node_modules', '.git', '.triangle', '.DS_Store']);
 
 /**
- * The two runtime files that must be inlined. Resolved from (in order):
+ * The three runtime files that must be inlined. Resolved from (in order):
  *   1. `<appPath>/out/main/runtime/` — copied at build time by the electron-vite
  *      `copyRuntime` plugin; ships inside `app.asar` via the `out` files glob in
  *      packaged builds and lives under `apps/desktop/out/main/runtime/` in dev.
@@ -33,21 +33,26 @@ const HTML_IGNORE = new Set(['node_modules', '.git', '.triangle', '.DS_Store']);
  *   3. `<repoRoot>/packages/preview-runtime/node_modules/three/...` — dev-only
  *      fallback that reads three straight from the pnpm workspace.
  *
- * Returns absolute paths to `three.module.js` (the full build — includes
- * WebGLRenderer, unlike `three.core.js`) + `OrbitControls.js`, or `null` if
- * either is missing.
+ * Returns absolute paths to `three.core.js` (the core build — self-contained,
+ * no relative imports) + `three.module.js` (the full build — adds WebGLRenderer,
+ * but imports from `./three.core.js`) + `OrbitControls.js` (imports from
+ * `'three'`), or `null` if any is missing. The HTML export inlines all three as
+ * blob-URL ESM modules, rewriting the relative/bare imports to dynamic imports
+ * from the preceding blob URL in the chain.
  */
 export function resolveRuntimeFiles(
   resourcesPath: string,
   appPath: string,
   repoRoot: string,
-): { threeCore: string; orbitControls: string } | null {
+): { threeCore: string; threeModule: string; orbitControls: string } | null {
   const rel = {
-    threeCore: path.join('build', 'three.module.js'),
+    threeCore: path.join('build', 'three.core.js'),
+    threeModule: path.join('build', 'three.module.js'),
     orbitControls: path.join('examples', 'jsm', 'controls', 'OrbitControls.js'),
   };
   const flatRel = {
-    threeCore: 'three.module.js',
+    threeCore: 'three.core.js',
+    threeModule: 'three.module.js',
     orbitControls: 'OrbitControls.js',
   };
   const bases = [
@@ -61,15 +66,21 @@ export function resolveRuntimeFiles(
   for (const base of bases) {
     // The build-time copy flattens the files; the dev fallback keeps three's
     // build/examples/jsm/controls/ layout. Try both shapes per base.
-    const flatThree = path.join(base, flatRel.threeCore);
-    const flatOc = path.join(base, flatRel.orbitControls);
-    if (existsSync(flatThree) && existsSync(flatOc)) {
-      return { threeCore: flatThree, orbitControls: flatOc };
+    const flat = {
+      threeCore: path.join(base, flatRel.threeCore),
+      threeModule: path.join(base, flatRel.threeModule),
+      orbitControls: path.join(base, flatRel.orbitControls),
+    };
+    if (existsSync(flat.threeCore) && existsSync(flat.threeModule) && existsSync(flat.orbitControls)) {
+      return flat;
     }
-    const nestedThree = path.join(base, rel.threeCore);
-    const nestedOc = path.join(base, rel.orbitControls);
-    if (existsSync(nestedThree) && existsSync(nestedOc)) {
-      return { threeCore: nestedThree, orbitControls: nestedOc };
+    const nested = {
+      threeCore: path.join(base, rel.threeCore),
+      threeModule: path.join(base, rel.threeModule),
+      orbitControls: path.join(base, rel.orbitControls),
+    };
+    if (existsSync(nested.threeCore) && existsSync(nested.threeModule) && existsSync(nested.orbitControls)) {
+      return nested;
     }
   }
   return null;
@@ -112,40 +123,84 @@ function escapeForHtml(s: string): string {
 }
 
 /**
- * Rewrite bare `import … from 'three'` statements in a module so it can be
- * loaded from a blob URL. Static `import { x } from 'three'` requires a string
- * literal specifier — a variable (`threeUrl`) is a syntax error. We convert
- * each form to its dynamic-import equivalent so the module resolves `three`
- * from the blob URL at runtime:
+ * Rewrite bare `import … from 'three'` and relative `import … from './three.core.js'`
+ * statements in a module so it can be loaded from a blob URL. Static import
+ * specifiers must be string literals — a variable is a syntax error — and
+ * relative specifiers can't resolve from a blob URL (no hierarchical base).
+ * We convert each form to its dynamic-import equivalent so the module resolves
+ * from the appropriate blob URL at runtime:
  *
- *   import { a, b as c } from 'three'   →  const { a, b: c } = await import(globalThis.__threeUrl)
- *   import * as THREE from 'three'       →  const THREE = await import(globalThis.__threeUrl)
- *   import THREE from 'three'            →  const { default: THREE } = await import(globalThis.__threeUrl)
+ *   import { a, b as c } from 'three'            →  const { a, b: c } = await import(globalThis.__threeUrl)
+ *   import * as THREE from 'three'                →  const THREE = await import(globalThis.__threeUrl)
+ *   import THREE from 'three'                     →  const { default: THREE } = await import(globalThis.__threeUrl)
+ *   import { a } from './three.core.js'           →  const { a } = await import(globalThis.__threeCoreUrl)
  *
  * The `as` → `:` rename conversion only applies inside named-import braces.
  * Multi-line imports are handled (the `s` flag makes `.` match newlines).
  */
-function rewriteThreeImports(source: string): string {
-  // Named imports: import { a, b as c, ... } from 'three'
+function rewriteImports(source: string): string {
+  // Named imports: import { a, b as c, ... } from '<specifier>'
   let out = source.replace(
-    /import\s*\{([^}]*?)\}\s*from\s*['"]three['"]/gs,
-    (_m, names: string) => {
-      // Convert ESM `as` renames to destructuring `:` syntax.
+    /import\s*\{([^}]*?)\}\s*from\s*['"]([^'"]+)['"]/gs,
+    (_m, names: string, specifier: string) => {
+      const url = importUrlFor(specifier);
+      if (!url) return _m; // unknown specifier — leave unchanged
       const destructured = names.replace(/\bas\b/g, ':');
-      return `const { ${destructured.trim()} } = await import(globalThis.__threeUrl)`;
+      return `const { ${destructured.trim()} } = await import(${url})`;
     },
   );
-  // Namespace import: import * as THREE from 'three'
+  // Namespace import: import * as THREE from '<specifier>'
   out = out.replace(
-    /import\s*\*\s*as\s+(\w+)\s*from\s*['"]three['"]/g,
-    'const $1 = await import(globalThis.__threeUrl)',
+    /import\s*\*\s*as\s+(\w+)\s+from\s*['"]([^'"]+)['"]/g,
+    (_m, name: string, specifier: string) => {
+      const url = importUrlFor(specifier);
+      return url ? `const ${name} = await import(${url})` : _m;
+    },
   );
-  // Default import: import THREE from 'three'
+  // Default import: import THREE from '<specifier>'
   out = out.replace(
-    /import\s+(\w+)\s+from\s*['"]three['"]/g,
-    'const { default: $1 } = await import(globalThis.__threeUrl)',
+    /import\s+(\w+)\s+from\s*['"]([^'"]+)['"]/g,
+    (_m, name: string, specifier: string) => {
+      const url = importUrlFor(specifier);
+      return url ? `const { default: ${name} } = await import(${url})` : _m;
+    },
+  );
+  // Re-exports: export { a, b as c, ... } from '<specifier>'
+  // Convert to: const __reExport = await import(url); const { a, b: c } = __reExport; export { a, c };
+  // The `as` in export-from means "export imported `b` as `c`", so the
+  // destructuring uses `b: c` and the export uses `c`.
+  out = out.replace(
+    /export\s*\{([^}]*?)\}\s*from\s*['"]([^'"]+)['"]/gs,
+    (_m, names: string, specifier: string) => {
+      const url = importUrlFor(specifier);
+      if (!url) return _m; // unknown specifier — leave unchanged
+      const tmpVar = `__reExport_${specifier.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const pairs: { imported: string; local: string }[] = [];
+      for (const part of names.split(',')) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+        const asMatch = /^(\w+)\s+as\s+(\w+)$/.exec(trimmed);
+        if (asMatch) {
+          pairs.push({ imported: asMatch[1], local: asMatch[2] });
+        } else {
+          pairs.push({ imported: trimmed, local: trimmed });
+        }
+      }
+      const destructured = pairs.map((p) => `${p.imported}: ${p.local}`).join(', ');
+      const exported = pairs.map((p) => p.local).join(', ');
+      return `const ${tmpVar} = await import(${url});\nconst { ${destructured} } = ${tmpVar};\nexport { ${exported} };`;
+    },
   );
   return out;
+}
+
+/** Map a module specifier to the global holding its blob URL, or null if unknown. */
+function importUrlFor(specifier: string): string | null {
+  if (specifier === 'three') return 'globalThis.__threeUrl';
+  if (specifier === './three.core.js' || specifier === './three.core.min.js') {
+    return 'globalThis.__threeCoreUrl';
+  }
+  return null;
 }
 
 /**
@@ -159,20 +214,22 @@ function rewriteThreeImports(source: string): string {
  */
 export function buildStandaloneHtml(opts: {
   threeCoreSource: string;
+  threeModuleSource: string;
   orbitControlsSource: string;
   entrySource: string;
   manifest: ProjectManifest;
   assets?: Record<string, string>;
 }): string {
-  const { threeCoreSource, orbitControlsSource, entrySource, manifest, assets = {} } = opts;
+  const { threeCoreSource, threeModuleSource, orbitControlsSource, entrySource, manifest, assets = {} } = opts;
   const title = escapeForHtml(manifest.name || 'Triangle Project');
 
-  // OrbitControls has a static `import { … } from 'three'` at the top. A
-  // static import requires a string-literal specifier, so we can't just swap
-  // 'three' for a variable (threeUrl) — that's a syntax error. Instead, rewrite
-  // it to a dynamic `const { … } = await import(threeUrl)` so the blob-URL
-  // module resolves at runtime. (three.core.js is self-contained — no imports.)
-  const orbitFixed = rewriteThreeImports(orbitControlsSource);
+  // three.module.js imports from './three.core.js'; OrbitControls imports from
+  // 'three'. Both are static imports that can't use a variable specifier, and
+  // the relative import can't resolve from a blob URL. Rewrite both to dynamic
+  // imports from the appropriate global blob URL. (three.core.js is
+  // self-contained — no imports.)
+  const threeModuleFixed = rewriteImports(threeModuleSource);
+  const orbitFixed = rewriteImports(orbitControlsSource);
 
   // Inline text assets as a virtual fs the entry can opt into via a global
   // `__triangleAssets` map (keys are POSIX project-relative paths). Entries that
@@ -190,14 +247,20 @@ export function buildStandaloneHtml(opts: {
   //   - Timer-driven update loop with delta/elapsed
   //   - ResizeObserver-style window resize handling
   const moduleScript = `
-const THREE_SRC = \`${escapeForTemplateLiteral(threeCoreSource)}\`;
+const THREE_CORE_SRC = \`${escapeForTemplateLiteral(threeCoreSource)}\`;
+const THREE_MODULE_SRC = \`${escapeForTemplateLiteral(threeModuleFixed)}\`;
 const OC_SRC = \`${escapeForTemplateLiteral(orbitFixed)}\`;
 const ENTRY_SRC = \`${escapeForTemplateLiteral(entrySource)}\`;
 const __triangleAssets = ${assetsJson};
 
-const threeBlob = new Blob([THREE_SRC], { type: 'text/javascript' });
+const threeCoreBlob = new Blob([THREE_CORE_SRC], { type: 'text/javascript' });
+const threeCoreUrl = URL.createObjectURL(threeCoreBlob);
+globalThis.__threeCoreUrl = threeCoreUrl;
+
+const threeBlob = new Blob([THREE_MODULE_SRC], { type: 'text/javascript' });
 const threeUrl = URL.createObjectURL(threeBlob);
 globalThis.__threeUrl = threeUrl;
+
 const ocBlob = new Blob([OC_SRC], { type: 'text/javascript' });
 const ocUrl = URL.createObjectURL(ocBlob);
 
@@ -290,6 +353,7 @@ window.addEventListener('beforeunload', () => {
   try { mod.dispose?.({ ...ctx, state }); } catch (e) { /* ignore */ }
   controls.dispose();
   renderer.dispose();
+  URL.revokeObjectURL(threeCoreUrl);
   URL.revokeObjectURL(threeUrl);
   URL.revokeObjectURL(ocUrl);
   URL.revokeObjectURL(entryUrl);

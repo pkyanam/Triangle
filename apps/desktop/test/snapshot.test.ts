@@ -65,12 +65,14 @@ test('replaceDirTree restores a snapshot: overwrites tree, preserves .triangle',
 
 test('buildStandaloneHtml inlines runtime + entry and is a valid self-contained doc', async () => {
   const threeCore = 'export const THREE = { Scene: class {}, REVISION: "184" };';
+  const threeModule = "import { Scene } from './three.core.js';\nexport { Scene, WebGLRenderer: class {} };";
   // OrbitControls imports from 'three' — buildStandaloneHtml rewrites that to
   // the three blob URL so the inlined module resolves at runtime.
   const orbitControls = "import { Scene } from 'three';\nexport const OrbitControls = class {};";
   const entry = 'export function setup({ THREE }) { return THREE.Scene ? "ok" : "no"; }';
   const html = buildStandaloneHtml({
     threeCoreSource: threeCore,
+    threeModuleSource: threeModule,
     orbitControlsSource: orbitControls,
     entrySource: entry,
     manifest: { name: 'My Scene', entry: 'src/main.js', version: 1 },
@@ -81,14 +83,17 @@ test('buildStandaloneHtml inlines runtime + entry and is a valid self-contained 
   assert.ok(html.includes('</html>'));
   // The title comes from the manifest.
   assert.ok(html.includes('<title>My Scene</title>'));
-  // The three runtime + entry are inlined verbatim.
+  // The three.core.js runtime + entry are inlined verbatim.
   assert.ok(html.includes(threeCore));
   assert.ok(html.includes(entry));
+  // three.module.js has its `from './three.core.js'` rewritten to a dynamic
+  // import from the threeCore blob URL.
+  assert.ok(html.includes('await import(globalThis.__threeCoreUrl)'));
   // OrbitControls is inlined with its `from 'three'` import rewritten to a
-  // dynamic import from the three blob URL (so the inlined module resolves at
-  // runtime — a static import can't use a variable specifier).
+  // dynamic import from the three blob URL.
   assert.ok(html.includes('export const OrbitControls = class {};'));
   assert.ok(!html.includes("from 'three'"));
+  assert.ok(!html.includes("from './three.core.js'"));
   assert.ok(html.includes('await import(globalThis.__threeUrl)'));
   // Text assets are inlined as the __triangleAssets map.
   assert.ok(html.includes('"shaders/frag.glsl":"void main(){}"'));
@@ -102,6 +107,7 @@ test('buildStandaloneHtml escapes backticks and ${} in inlined source safely', a
   const nasty = 'const s = `price is ${10} bucks`;\n// a `backtick` and a \\ backslash';
   const html = buildStandaloneHtml({
     threeCoreSource: 'export const THREE = {};',
+    threeModuleSource: "export { WebGLRenderer: class {} };",
     orbitControlsSource: "import {} from 'three';\nexport const OrbitControls = {};",
     entrySource: nasty,
     manifest: { name: 'Nasty', entry: 'src/main.js' },
@@ -112,11 +118,12 @@ test('buildStandaloneHtml escapes backticks and ${} in inlined source safely', a
   assert.ok(html.includes('</html>'));
 });
 
-test('rewriteThreeImports converts static imports to dynamic (named, as-rename, namespace, default)', async () => {
+test('rewriteImports converts static imports to dynamic (named, as-rename, relative)', async () => {
   // Named import with an `as` rename — the most common pattern (OrbitControls).
   const named = "import {\n  Controls,\n  MOUSE as M,\n  Vector2\n} from 'three';\nexport class OC {}";
   const htmlNamed = buildStandaloneHtml({
     threeCoreSource: 'export const THREE = {};',
+    threeModuleSource: "export { WebGLRenderer: class {} };",
     orbitControlsSource: named,
     entrySource: 'export function setup(){}',
     manifest: { name: 'T', entry: 'src/main.js' },
@@ -128,6 +135,16 @@ test('rewriteThreeImports converts static imports to dynamic (named, as-rename, 
   assert.ok(/MOUSE\s*:\s*M/.test(htmlNamed));
   assert.ok(htmlNamed.includes('await import(globalThis.__threeUrl)'));
   assert.ok(!htmlNamed.includes("from 'three'"));
+  // Relative import in three.module.js is rewritten too.
+  const htmlRel = buildStandaloneHtml({
+    threeCoreSource: 'export const Core = {};',
+    threeModuleSource: "import { Core } from './three.core.js';\nexport { Core, Extra: 1 };",
+    orbitControlsSource: "export const OC = {};",
+    entrySource: 'export function setup(){}',
+    manifest: { name: 'T2', entry: 'src/main.js' },
+  });
+  assert.ok(htmlRel.includes('await import(globalThis.__threeCoreUrl)'));
+  assert.ok(!htmlRel.includes("from './three.core.js'"));
 });
 
 test('collectTextAssets inlines glsl/json/txt and skips binaries + ignored dirs', async () => {
