@@ -6,6 +6,8 @@ import type {
   ShaderValidationResult,
   ToolCallTrace,
 } from '@triangle/shared';
+import { HuggingFaceClient } from '@triangle/integrations';
+import { generatePhysicsSnippet } from '@triangle/robotics';
 import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
 
@@ -31,6 +33,8 @@ export interface ToolContext {
   approveWrite: ApprovalGate;
   /** Bridge to the live preview runtime (Stage 3 domain tooling). */
   preview: PreviewBridge;
+  /** Hugging Face token for 3D asset generation (Stage 6). */
+  hfToken?: string;
   /** Emit a tool-call trace to the UI (running → ok/error). */
   emitTrace: (trace: ToolCallTrace) => void;
 }
@@ -75,6 +79,31 @@ function dataUrlToBuffer(dataUrl: string): Buffer {
   return Buffer.from(base64, 'base64');
 }
 
+function mimeForModel(format?: string): string {
+  switch (format?.toLowerCase()) {
+    case 'glb':
+      return 'model/gltf-binary';
+    case 'gltf':
+      return 'model/gltf+json';
+    case 'obj':
+      return 'model/obj';
+    case 'usdz':
+      return 'model/vnd.usdz+zip';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+function bufferToDataUrl(buffer: Uint8Array, format?: string): string {
+  return `data:${mimeForModel(format)};base64,${Buffer.from(buffer).toString('base64')}`;
+}
+
+function extForFormat(format?: string): string {
+  const f = format?.toLowerCase();
+  if (f === 'obj' || f === 'usdz') return f;
+  return 'glb';
+}
+
 /**
  * The raw, framework-agnostic tool functions. Each emits a trace and forwards to the
  * project layer or the preview bridge. Harnesses (Claude SDK, Codex/MCP, ACP, …) wrap
@@ -99,6 +128,12 @@ export interface TriangleToolset {
   ): Promise<string>;
   setVisibility(target: string, visible: boolean): Promise<string>;
   setLight(target: string, fields: { intensity?: number; color?: string }): Promise<string>;
+  // Strategic integrations (Stage 6) — 3D asset generation.
+  hfGenerate3dAsset(prompt: string, image?: string, provider?: string, endpoint?: string): Promise<string>;
+  download3dAsset(url: string, path: string, format?: string): Promise<string>;
+  import3dAsset(path: string, targetName?: string): Promise<string>;
+  // Robotics simulation prep (Stage 6) — scaffolded snippets.
+  roboticsSnippet(name: string, links: unknown[], joints?: unknown[]): Promise<string>;
 }
 
 /**
@@ -260,6 +295,100 @@ export function createToolset(ctx: ToolContext): TriangleToolset {
         target,
         ...(typeof fields.intensity === 'number' ? { intensity: fields.intensity } : {}),
         ...(fields.color ? { color: fields.color } : {}),
+      }),
+
+    hfGenerate3dAsset: (prompt: string, image?: string, provider?: string, endpoint?: string) =>
+      traced('hf_generate_3d_asset', { prompt, image: image ? '<image>' : undefined, provider, endpoint }, async () => {
+        const token = ctx.hfToken ?? process.env['HF_TOKEN'];
+        if (!token && !endpoint) {
+          throw new ToolError('HF token is required for 3D generation. Set HF_TOKEN or configure hfToken in settings.');
+        }
+        const client = new HuggingFaceClient({ token });
+        const result = await client.generate3dAsset({ prompt, image, provider, endpoint });
+        const text = JSON.stringify(result, null, 2);
+        return {
+          result: text,
+          summary: `Generated ${result.format} asset (${result.status}): ${result.modelUrl}`,
+        };
+      }),
+
+    download3dAsset: (url: string, assetPath: string, format?: string) =>
+      traced('download_3d_asset', { url, path: assetPath, format }, async () => {
+        const normalized = assetPath.replace(/\\/g, '/');
+        const dest = normalized.endsWith(`.${extForFormat(format)}`)
+          ? normalized
+          : `${normalized.replace(/\/$/, '')}.${extForFormat(format)}`;
+        const exists = project.exists(dest);
+        const approved = await approveWrite({
+          tool: 'download_3d_asset',
+          path: dest,
+          content: `Binary asset downloaded from ${url}`,
+          exists,
+        });
+        if (!approved) throw new ApprovalDeniedError(dest);
+        const token = ctx.hfToken ?? process.env['HF_TOKEN'];
+        const client = new HuggingFaceClient({ token });
+        const bytes = await client.downloadModel(url);
+        await project.writeBinaryFile(dest, bytes);
+        return {
+          result: JSON.stringify({ path: dest, bytes: bytes.length, format: format ?? 'glb' }, null, 2),
+          summary: `Downloaded ${bytes.length} bytes to ${dest}.`,
+        };
+      }),
+
+    import3dAsset: (assetPath: string, targetName?: string) =>
+      traced('triangle_import_3d_asset', { path: assetPath, targetName }, async () => {
+        const { bytes } = await project.readBinaryFile(assetPath);
+        const format = extForFormat(assetPath.split('.').pop());
+        const dataUrl = bufferToDataUrl(bytes, format);
+        const result = await preview.loadModel(dataUrl, targetName, format as 'glb' | 'obj' | 'usdz');
+        return {
+          result: JSON.stringify(result, null, 2),
+          summary: `Imported ${assetPath} as "${result.name}" (${result.format}).`,
+        };
+      }),
+
+    roboticsSnippet: (name: string, links: unknown[], joints?: unknown[]) =>
+      traced('triangle_robotics_snippet', { name, links: links.length, joints: joints?.length }, async () => {
+        function toVec3(v: unknown): { x: number; y: number; z: number } | undefined {
+          if (Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number')) {
+            return { x: v[0], y: v[1], z: v[2] };
+          }
+          return undefined;
+        }
+        const robot = {
+          name,
+          links: links.map((l) => {
+            const raw = l as Record<string, unknown>;
+            const geo = raw['geometry'] as Record<string, unknown> | undefined;
+            return {
+              name: String(raw['name']),
+              mass: Number(raw['mass']),
+              geometry: geo
+                ? {
+                    type: String(geo['type']) as 'box' | 'sphere' | 'cylinder' | 'mesh',
+                    size: toVec3(geo['size']),
+                    mesh: typeof geo['mesh'] === 'string' ? geo['mesh'] : undefined,
+                  }
+                : undefined,
+            };
+          }),
+          joints: (joints ?? []).map((j) => {
+            const raw = j as Record<string, unknown>;
+            return {
+              name: String(raw['name']),
+              type: String(raw['type']) as 'fixed' | 'revolute' | 'prismatic' | 'continuous',
+              parent: String(raw['parent']),
+              child: String(raw['child']),
+              axis: toVec3(raw['axis']),
+            };
+          }),
+        };
+        const snippet = generatePhysicsSnippet({ robot });
+        return {
+          result: snippet,
+          summary: `Generated Three.js + Rapier snippet for ${name} (${robot.links.length} links, ${robot.joints.length} joints).`,
+        };
       }),
   };
 

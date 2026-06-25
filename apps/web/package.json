@@ -1,0 +1,21 @@
+{
+  "name": "@triangle/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "export": "node scripts/export-project.ts",
+    "export:starter": "node scripts/export-project.ts ../../templates/starter"
+  },
+  "dependencies": {
+    "@triangle/preview-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3",
+    "vite": "7.1.12"
+  }
+}

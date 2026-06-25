@@ -68,6 +68,9 @@ const api: TriangleApi = {
     result: (result) => ipcRenderer.invoke('preview:result', result),
     saveCapture: (dataUrl) => ipcRenderer.invoke('preview:save-capture', { dataUrl }),
   },
+  tool: {
+    run: (req) => ipcRenderer.invoke('tool:run', req),
+  },
 };
 
 contextBridge.exposeInMainWorld('triangle', api);

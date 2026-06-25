@@ -1,3 +1,4 @@
+import type { ModelInfo } from '@triangle/shared';
 import { harnessTraceId, type AgentHarness, type RunContext } from './harness.js';
 
 /**
@@ -11,6 +12,10 @@ export const mockHarness: AgentHarness = {
 
   async availability() {
     return { available: true };
+  },
+
+  async models(): Promise<ModelInfo[]> {
+    return [{ id: 'mock', name: 'Mock', description: 'Canned responses' }];
   },
 
   async run(ctx: RunContext): Promise<void> {

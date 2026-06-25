@@ -27,17 +27,28 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@radix-ui/react-dialog": "^1.1.17",
+    "@radix-ui/react-popover": "^1.1.17",
+    "@radix-ui/react-select": "^2.3.1",
+    "@radix-ui/react-switch": "^1.3.1",
+    "@triangle/integrations": "workspace:*",
     "@triangle/preview-runtime": "workspace:*",
+    "@triangle/robotics": "workspace:*",
     "@triangle/shared": "workspace:*",
     "@types/node": "24.10.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.0.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "electron": "37.6.0",
     "electron-builder": "26.15.3",
     "electron-vite": "4.0.1",
+    "motion": "^12.41.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "shadcn": "^4.11.0",
+    "tailwind-merge": "^3.6.0",
     "typescript": "5.9.3",
     "vite": "7.1.12"
   },
@@ -53,20 +64,39 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "out/main/mcp.js", "to": "mcp/mcp.js" },
-      { "from": "out/main/chunks", "to": "mcp/chunks" },
-      { "from": "build/mcp/package.json", "to": "mcp/package.json" },
-      { "from": "../../templates", "to": "templates" }
+      {
+        "from": "out/main/mcp.js",
+        "to": "mcp/mcp.js"
+      },
+      {
+        "from": "out/main/chunks",
+        "to": "mcp/chunks"
+      },
+      {
+        "from": "build/mcp/package.json",
+        "to": "mcp/package.json"
+      },
+      {
+        "from": "../../templates",
+        "to": "templates"
+      }
     ],
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.developer-tools"
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Development"
     }
   }

@@ -61,6 +61,20 @@ export function HarnessConfig({ harness, onSaved }: HarnessConfigProps): React.J
 
   return (
     <div className="hconfig">
+      <label className="hconfig__field">
+        <span className="hconfig__label">Hugging Face token</span>
+        <input
+          className="hconfig__input"
+          type="password"
+          placeholder="HF_TOKEN or TRIANGLE_HF_TOKEN env var"
+          defaultValue={settings.hfToken ?? ''}
+          onBlur={(e) => persist({ hfToken: e.target.value || undefined })}
+        />
+      </label>
+      <div className="hconfig__note" style={{ marginBottom: 8 }}>
+        Used by the 3D asset generation tools. May also be set via <code>HF_TOKEN</code> in the environment.
+      </div>
+
       {(harness === 'claude' || harness === 'codex') && (
         <label className="hconfig__field">
           <span className="hconfig__label">{harness === 'claude' ? 'Claude model' : 'Codex model'}</span>

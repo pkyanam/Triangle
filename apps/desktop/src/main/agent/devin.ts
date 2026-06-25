@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
+import type { ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
-import { runAcpSession } from './acp-session.js';
+import { fetchDevinModels, runAcpSession } from './acp-session.js';
 import type { AgentHarness, RunContext } from './harness.js';
 
 /**
@@ -79,6 +80,10 @@ export const devinHarness: AgentHarness = {
     return authed
       ? { available: true }
       : { available: true, reason: `Authenticate Devin to make it the default: ${AUTH_HINT}` };
+  },
+
+  async models(config: TriangleConfig): Promise<ModelInfo[]> {
+    return fetchDevinModels(devinBin(config), ['acp'], { CHISEL_LOG_STDERR: '1' }, 10_000);
   },
 
   run(ctx: RunContext): Promise<void> {

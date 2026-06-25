@@ -22,6 +22,7 @@ import {
 } from './inspect.js';
 import { applySceneEdit as mutateScene } from './mutate.js';
 import { SelectionHighlight } from './selection.js';
+import { loadModel, type LoadModelResult, type ModelFormat } from './loaders.js';
 
 export interface PreviewRuntimeOptions {
   /** Called whenever the load/run status changes (idle/loading/running/error). */
@@ -279,6 +280,19 @@ export class PreviewRuntime {
   step(): void {
     this.paused = false;
     this.stepFrames = 1;
+  }
+
+  /**
+   * Import a 3D model (GLB/OBJ/USDZ) from a data URL or http URL into the live
+   * scene. The model is centered, normalized, and named so it appears in the
+   * Outliner. This is a transient runtime addition; a hot-reload rebuilds from
+   * the author module and discards it.
+   */
+  async importModel(dataUrl: string, options?: { targetName?: string; format?: ModelFormat }): Promise<LoadModelResult> {
+    const result = await loadModel(this, dataUrl, options);
+    this.options.onSceneChanged?.();
+    this.selection.update();
+    return result;
   }
 
   /**

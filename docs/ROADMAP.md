@@ -14,7 +14,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 5 | Polish, Rich Features & Internal Prototype | ✅ Done |
 | 5.5 | Share, Snapshot & Scope | ✅ Done |
 | 5.75 | Game-Engine Visual Overhaul (Outliner, Inspector, HUD, Console) | ✅ Done |
-| 6 | Post-Prototype Hardening & Web Path | ⬜ Future |
+| 6 | Post-Prototype Hardening & Web Path | ✅ Done |
 
 ## Stage 0 — Foundations & Architecture
 
@@ -179,6 +179,26 @@ changes.**
 See [`STAGE-5.75.md`](STAGE-5.75.md), the handoff prompt
 [`STAGE-5.75-HANDOFF.md`](STAGE-5.75-HANDOFF.md), and ADR
 [`adr/0019-engine-visual-overhaul.md`](adr/0019-engine-visual-overhaul.md).
+
+## Stage 6 — Post-Prototype Hardening & Web Path
+
+- [x] Web build path: new `apps/web` Vite package that exports a Triangle project
+      as a self-contained static site using `@triangle/preview-runtime`.
+- [x] Hugging Face 3D asset pipeline: `hf_generate_3d_asset`, `download_3d_asset`,
+      and `triangle_import_3d_asset` agent tools, backed by a new
+      `@triangle/integrations` package with a `HuggingFaceClient`.
+- [x] Shared model loader in `@triangle/preview-runtime` for GLB/OBJ/USDZ,
+      wired through the `load_model` preview request.
+- [x] Robotics simulation prep: new `@triangle/robotics` package with URDF,
+      joint-control, and sensor-visualization types, plus a
+      `triangle_robotics_snippet` tool that emits a Three.js + Rapier entry
+      module template.
+- [x] Hardening: binary file read/write in `ProjectManager`, React error
+      boundaries around the new engine panels, richer JSON schema for nested
+      tool parameters, and tests for the new packages and tool dispatch.
+
+See [`STAGE-6.md`](STAGE-6.md) and ADR
+[`adr/0020-web-robotics-and-asset-pipeline.md`](adr/0020-web-robotics-and-asset-pipeline.md).
 
 ## Stages 4–6
 

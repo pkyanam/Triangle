@@ -11,6 +11,7 @@ import { Preview } from '../components/Preview.js';
 import { AgentPanel } from '../components/AgentPanel.js';
 import { Outliner } from '../components/Outliner.js';
 import { Inspector } from '../components/Inspector.js';
+import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
 /**
@@ -61,9 +62,11 @@ function ExplorerPanel(_props: IDockviewPanelProps): React.JSX.Element {
   const ws = useWorkspace();
   return (
     <div className="tpanel">
-      <div className="tpanel__body">
-        <FileTree root={ws.project?.tree ?? null} selectedPath={ws.selectedPath} onSelect={ws.openFile} />
-      </div>
+      <ErrorBoundary title="Explorer failed">
+        <div className="tpanel__body">
+          <FileTree root={ws.project?.tree ?? null} selectedPath={ws.selectedPath} onSelect={ws.openFile} />
+        </div>
+      </ErrorBoundary>
     </div>
   );
 }
@@ -72,7 +75,9 @@ function EditorPanel(_props: IDockviewPanelProps): React.JSX.Element {
   const ws = useWorkspace();
   return (
     <div className="tpanel">
-      <Editor path={ws.selectedPath} content={ws.selectedContent} onSave={ws.saveFile} />
+      <ErrorBoundary title="Editor failed">
+        <Editor path={ws.selectedPath} content={ws.selectedContent} onSave={ws.saveFile} />
+      </ErrorBoundary>
     </div>
   );
 }
@@ -81,7 +86,9 @@ function PreviewPanel(_props: IDockviewPanelProps): React.JSX.Element {
   const ws = useWorkspace();
   return (
     <div className="tpanel">
-      <Preview source={ws.entrySource} onStatus={ws.onStatus} onStats={ws.onStats} />
+      <ErrorBoundary title="Preview failed">
+        <Preview source={ws.entrySource} onStatus={ws.onStatus} onStats={ws.onStats} />
+      </ErrorBoundary>
     </div>
   );
 }
@@ -90,7 +97,9 @@ function AgentDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
   const ws = useWorkspace();
   return (
     <div className="tpanel">
-      <AgentPanel projectName={ws.projectName} projectId={ws.project?.id ?? ''} />
+      <ErrorBoundary title="Agent panel failed">
+        <AgentPanel projectName={ws.projectName} projectId={ws.project?.id ?? ''} />
+      </ErrorBoundary>
     </div>
   );
 }
@@ -99,7 +108,9 @@ function OutlinerPanel(_props: IDockviewPanelProps): React.JSX.Element {
   const ws = useWorkspace();
   return (
     <div className="tpanel">
-      <Outliner selectedUuid={ws.selectedObject} onSelect={ws.setSelectedObject} />
+      <ErrorBoundary title="Outliner failed">
+        <Outliner selectedUuid={ws.selectedObject} onSelect={ws.setSelectedObject} />
+      </ErrorBoundary>
     </div>
   );
 }
@@ -108,7 +119,9 @@ function InspectorPanel(_props: IDockviewPanelProps): React.JSX.Element {
   const ws = useWorkspace();
   return (
     <div className="tpanel">
-      <Inspector selectedUuid={ws.selectedObject} />
+      <ErrorBoundary title="Inspector failed">
+        <Inspector selectedUuid={ws.selectedObject} />
+      </ErrorBoundary>
     </div>
   );
 }

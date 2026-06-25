@@ -205,6 +205,14 @@ export interface IpcInvokeChannels {
     request: { dataUrl: string };
     response: { path: string };
   };
+  /**
+   * Run a Triangle agent tool manually from the UI (Stage 6 integration
+   * testing). Bypasses the agent harness; approvals are auto-granted.
+   */
+  'tool:run': {
+    request: { tool: string; args: Record<string, unknown> };
+    response: { ok: boolean; result?: string; error?: string };
+  };
 }
 
 /** Events pushed from main to renderer. */
@@ -258,6 +266,7 @@ export const INVOKE_CHANNELS = [
   'snapshot:restore',
   'preview:result',
   'preview:save-capture',
+  'tool:run',
 ] as const satisfies readonly IpcInvokeChannel[];
 
 export const EVENT_CHANNELS = [

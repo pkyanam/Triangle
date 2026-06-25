@@ -4,6 +4,8 @@
  * brand marks for the agent harnesses Triangle can drive; ACP (Agent Client
  * Protocol) is the forward path for multiple agents/models (Stage 4).
  */
+import { cn } from '../../lib/utils.js';
+import devinLogo from '../../assets/DevinLogoSquare.png';
 
 interface ProviderIconProps {
   size?: number | string;
@@ -28,28 +30,19 @@ export function OpenAIIcon({ size = 16, className }: ProviderIconProps): React.J
 }
 
 /**
- * Devin / Windsurf — a stylized sail/wind mark in `currentColor`. Devin CLI is
- * driven over ACP (`devin acp`); see ADR 0014.
+ * Devin / Windsurf — uses the official Devin logo asset from Trifecta Desktop.
+ * Devin CLI is driven over ACP (`devin acp`); see ADR 0014.
  */
 export function DevinIcon({ size = 16, className }: ProviderIconProps): React.JSX.Element {
   return (
-    <svg
+    <img
+      src={devinLogo}
+      alt="Devin"
       width={size}
       height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
+      className={cn('overflow-hidden rounded-sm', className)}
       aria-hidden
-    >
-      {/* A sail running before the wind: mast + filled sail + a wake line. */}
-      <path d="M12 2.5v15" />
-      <path d="M12 4.5c4.2.7 7 3.2 7.5 7.2-2.6-1.4-5-1.6-7.5-1.2z" fill="currentColor" stroke="none" />
-      <path d="M4.5 21h15" />
-    </svg>
+    />
   );
 }
 

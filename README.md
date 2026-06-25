@@ -12,7 +12,7 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
 
 <br />
 
-[![Stage](https://img.shields.io/badge/stage-5.75%20%C2%B7%20engine%20visual%20overhaul%20complete-6366f1)](docs/ROADMAP.md)
+[![Stage](https://img.shields.io/badge/stage-6%20%C2%B7%20post--prototype%20hardening%20%26%20web%20path%20complete-6366f1)](docs/ROADMAP.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
 [![Built with Electron](https://img.shields.io/badge/Electron-37-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Three.js](https://img.shields.io/badge/three.js-0.184-000000?logo=three.js&logoColor=white)](https://threejs.org/)
@@ -93,6 +93,7 @@ Other useful scripts:
 
 ```bash
 pnpm build            # build all packages + the desktop app
+pnpm build:web        # export the starter project and build a static web site
 pnpm typecheck        # typecheck every workspace package
 pnpm package          # produce a distributable build (electron-builder, Stage 5)
 ```
@@ -126,14 +127,14 @@ key list.
 | 5 | Polish, rich features & internal prototype | ✅ |
 | 5.5 | Share, snapshot & scope (standalone HTML, snapshots, per-project layout) | ✅ |
 | 5.75 | Game-engine visual overhaul (Outliner, Inspector, viewport HUD, Console) | ✅ Done |
-| 6 | Post-prototype hardening & web path | ⬜ |
+| 6 | Post-prototype hardening & web path | ✅ |
 
 The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Stage write-ups:
 [Stage 1](docs/STAGE-1.md) · [Stage 2](docs/STAGE-2.md) ·
 [Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md) ·
 [Stage 4](docs/STAGE-4.md) · [Stage 4.5](docs/STAGE-4.5-devin-acp.md) ·
 [Stage 5](docs/STAGE-5.md) · [Stage 5.5](docs/STAGE-5.5.md) ·
-[Stage 5.75](docs/STAGE-5.75.md) (complete).
+[Stage 5.75](docs/STAGE-5.75.md) · [Stage 6](docs/STAGE-6.md) (complete).
 For effective prompting, see [`docs/PROMPTING.md`](docs/PROMPTING.md).
 
 ## Architecture
@@ -143,10 +144,13 @@ This is a [pnpm](https://pnpm.io) workspace monorepo.
 ```
 triangle/
 ├── apps/
-│   └── desktop/            # Electron app (main + preload + React renderer)
+│   ├── desktop/            # Electron app (main + preload + React renderer)
+│   └── web/                # Vite static build: runs a Triangle project in the browser
 ├── packages/
 │   ├── shared/             # Shared TS types: IPC contract + agent tool schemas
-│   └── preview-runtime/    # Framework-agnostic Three.js preview engine
+│   ├── preview-runtime/    # Framework-agnostic Three.js preview engine
+│   ├── integrations/       # Third-party API clients (Hugging Face, …)
+│   └── robotics/           # URDF/joint/sensor types + Rapier snippet generator
 ├── templates/              # Project template gallery (new-project sources)
 │   ├── starter/            # Fresnel torus-knot + instanced particles
 │   └── raymarch/           # Full-screen ray-marched SDF (shader-focused)

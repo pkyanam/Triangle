@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "pnpm --filter @triangle/desktop dev",
     "build": "pnpm --filter @triangle/desktop build",
+    "build:web": "pnpm --filter @triangle/web export:starter && pnpm --filter @triangle/web build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "package": "pnpm --filter @triangle/desktop package"

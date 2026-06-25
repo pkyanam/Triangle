@@ -110,4 +110,8 @@ export interface TriangleApi {
     /** Persist a captured PNG (data URL) to the project, returning its path. */
     saveCapture: (dataUrl: string) => Promise<IpcResponse<'preview:save-capture'>>;
   };
+  /** Stage 6 manual tool runner — integration testing UI for agent tools. */
+  tool: {
+    run: (req: IpcRequest<'tool:run'>) => Promise<IpcResponse<'tool:run'>>;
+  };
 }

@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import path from 'node:path';
 import readline from 'node:readline';
 import { harnessTraceId, type RunContext } from './harness.js';
+import type { ModelInfo } from '@triangle/shared';
 
 /**
  * Shared ACP (Agent Client Protocol) session runner — Triangle as an ACP **client**
@@ -95,6 +96,103 @@ class AcpPeer {
     for (const p of this.pending.values()) p.reject(err);
     this.pending.clear();
   }
+}
+
+function parseDevinSessionModels(session: JsonValue): ModelInfo[] {
+  const s = session as Record<string, JsonValue> | undefined;
+  if (!s) return [];
+
+  const models = (s['models'] as { availableModels?: Array<{ modelId?: string; name?: string }> } | undefined)?.availableModels;
+  if (models?.length) {
+    return models
+      .map((m) => ({
+        id: String(m.modelId ?? ''),
+        name: m.name && m.name.trim().length > 0 ? m.name : String(m.modelId ?? ''),
+        description: 'Devin ACP model',
+      }))
+      .filter((m) => m.id);
+  }
+
+  const configOptions = s['configOptions'] as Array<Record<string, JsonValue>> | undefined;
+  const out: ModelInfo[] = [];
+  for (const opt of configOptions ?? []) {
+    if (String(opt['id'] ?? '') !== 'model' && String(opt['category'] ?? '') !== 'model') continue;
+    const options = opt['options'] as Array<Record<string, JsonValue>> | undefined;
+    for (const item of options ?? []) {
+      const value = String(item['value'] ?? '');
+      if (!value) continue;
+      const name = typeof item['name'] === 'string' && item['name'].trim().length > 0 ? item['name'] : value;
+      out.push({ id: value, name, description: 'Devin ACP model' });
+    }
+    break;
+  }
+  return out;
+}
+
+/**
+ * Probe an ACP agent (e.g. `devin acp`) for the model list it currently exposes.
+ * This is a best-effort, short-lived probe: if the agent requires authentication
+ * or the probe times out, it resolves to an empty list so the UI can fall back to
+ * a static model list.
+ */
+export function fetchDevinModels(
+  command: string,
+  args: string[],
+  env?: Record<string, string>,
+  timeoutMs = 10_000,
+): Promise<ModelInfo[]> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (models: ModelInfo[]): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+      resolve(models);
+    };
+
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawn(command, args, {
+        cwd: process.cwd(),
+        env: { ...process.env, ...(env ?? {}) },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }) as ChildProcessWithoutNullStreams;
+    } catch {
+      resolve([]);
+      return;
+    }
+
+    const timer = setTimeout(() => finish([]), timeoutMs);
+    child.on('error', () => finish([]));
+    child.on('exit', () => finish([]));
+
+    const peer = new AcpPeer(
+      child,
+      () => {},
+      (msg) => {
+        peer.respondError(msg.id, -32601, `Unsupported during model probe: ${msg.method ?? ''}`);
+      },
+    );
+
+    void (async () => {
+      try {
+        await peer.request('initialize', {
+          protocolVersion: ACP_PROTOCOL_VERSION,
+          clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+          clientInfo: { name: 'triangle', version: '0.3.0' },
+        });
+        const session = await peer.request('session/new', { cwd: process.cwd(), mcpServers: [] });
+        finish(parseDevinSessionModels(session));
+      } catch {
+        finish([]);
+      }
+    })();
+  });
 }
 
 const ACP_PROTOCOL_VERSION = 1;

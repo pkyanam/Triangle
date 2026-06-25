@@ -37,6 +37,83 @@ function numberArray(value: unknown): number[] | undefined {
   return undefined;
 }
 
+/**
+ * Dispatch a named tool call against a concrete TriangleToolset. Exported so the
+ * main process can run tools manually for the Stage 6 integration-testing UI.
+ */
+export function dispatchTool(
+  toolset: TriangleToolset,
+  tool: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  switch (tool) {
+    case 'triangle_capture_screenshot':
+      return toolset.captureScreenshot({
+        width: typeof args['width'] === 'number' ? args['width'] : undefined,
+        height: typeof args['height'] === 'number' ? args['height'] : undefined,
+      });
+    case 'triangle_describe_scene':
+      return toolset.describeScene();
+    case 'triangle_validate_shader':
+      return toolset.validateShader(args['stage'] as ShaderStage, String(args['source'] ?? ''));
+    case 'triangle_performance_snapshot':
+      return toolset.performanceSnapshot();
+    // Live scene manipulation (Stage 4).
+    case 'triangle_set_uniform':
+      return toolset.setUniform(
+        String(args['target'] ?? ''),
+        String(args['uniform'] ?? ''),
+        String(args['value'] ?? ''),
+      );
+    case 'triangle_set_material_color':
+      return toolset.setMaterialColor(
+        String(args['target'] ?? ''),
+        String(args['color'] ?? ''),
+        typeof args['property'] === 'string' ? args['property'] : undefined,
+      );
+    case 'triangle_set_transform':
+      return toolset.setTransform(String(args['target'] ?? ''), {
+        position: numberArray(args['position']),
+        rotationDeg: numberArray(args['rotationDeg']),
+        scale: numberArray(args['scale']),
+      });
+    case 'triangle_set_visibility':
+      return toolset.setVisibility(String(args['target'] ?? ''), Boolean(args['visible']));
+    case 'triangle_set_light':
+      return toolset.setLight(String(args['target'] ?? ''), {
+        intensity: typeof args['intensity'] === 'number' ? args['intensity'] : undefined,
+        color: typeof args['color'] === 'string' ? args['color'] : undefined,
+      });
+    // Stage 6: 3D asset generation.
+    case 'hf_generate_3d_asset':
+      return toolset.hfGenerate3dAsset(
+        String(args['prompt'] ?? ''),
+        typeof args['image'] === 'string' ? args['image'] : undefined,
+        typeof args['provider'] === 'string' ? args['provider'] : undefined,
+        typeof args['endpoint'] === 'string' ? args['endpoint'] : undefined,
+      );
+    case 'download_3d_asset':
+      return toolset.download3dAsset(
+        String(args['url'] ?? ''),
+        String(args['path'] ?? ''),
+        typeof args['format'] === 'string' ? args['format'] : undefined,
+      );
+    case 'triangle_import_3d_asset':
+      return toolset.import3dAsset(
+        String(args['path'] ?? ''),
+        typeof args['targetName'] === 'string' ? args['targetName'] : undefined,
+      );
+    case 'triangle_robotics_snippet':
+      return toolset.roboticsSnippet(
+        String(args['name'] ?? ''),
+        Array.isArray(args['links']) ? args['links'] : [],
+        Array.isArray(args['joints']) ? args['joints'] : undefined,
+      );
+    default:
+      return Promise.reject(new Error(`Unknown tool: ${tool}`));
+  }
+}
+
 export class ToolBridgeServer {
   private server: net.Server | null = null;
   private port = 0;
@@ -113,52 +190,8 @@ export class ToolBridgeServer {
     }
   }
 
-  private dispatch(
-    toolset: TriangleToolset,
-    tool: string,
-    args: Record<string, unknown>,
-  ): Promise<string> {
-    switch (tool) {
-      case 'triangle_capture_screenshot':
-        return toolset.captureScreenshot({
-          width: typeof args['width'] === 'number' ? args['width'] : undefined,
-          height: typeof args['height'] === 'number' ? args['height'] : undefined,
-        });
-      case 'triangle_describe_scene':
-        return toolset.describeScene();
-      case 'triangle_validate_shader':
-        return toolset.validateShader(args['stage'] as ShaderStage, String(args['source'] ?? ''));
-      case 'triangle_performance_snapshot':
-        return toolset.performanceSnapshot();
-      // Live scene manipulation (Stage 4).
-      case 'triangle_set_uniform':
-        return toolset.setUniform(
-          String(args['target'] ?? ''),
-          String(args['uniform'] ?? ''),
-          String(args['value'] ?? ''),
-        );
-      case 'triangle_set_material_color':
-        return toolset.setMaterialColor(
-          String(args['target'] ?? ''),
-          String(args['color'] ?? ''),
-          typeof args['property'] === 'string' ? args['property'] : undefined,
-        );
-      case 'triangle_set_transform':
-        return toolset.setTransform(String(args['target'] ?? ''), {
-          position: numberArray(args['position']),
-          rotationDeg: numberArray(args['rotationDeg']),
-          scale: numberArray(args['scale']),
-        });
-      case 'triangle_set_visibility':
-        return toolset.setVisibility(String(args['target'] ?? ''), Boolean(args['visible']));
-      case 'triangle_set_light':
-        return toolset.setLight(String(args['target'] ?? ''), {
-          intensity: typeof args['intensity'] === 'number' ? args['intensity'] : undefined,
-          color: typeof args['color'] === 'string' ? args['color'] : undefined,
-        });
-      default:
-        return Promise.reject(new Error(`Unknown tool: ${tool}`));
-    }
+  private dispatch(toolset: TriangleToolset, tool: string, args: Record<string, unknown>): Promise<string> {
+    return dispatchTool(toolset, tool, args);
   }
 
   stop(): void {

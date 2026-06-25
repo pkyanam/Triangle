@@ -87,6 +87,10 @@ export class PreviewBridge {
     return this.request((requestId) => ({ requestId, kind: 'apply_scene_edit', edit }));
   }
 
+  loadModel(dataUrl: string, targetName?: string, format?: 'glb' | 'gltf' | 'obj' | 'usdz'): Promise<{ name: string; uuid: string; format: string; summary: string }> {
+    return this.request((requestId) => ({ requestId, kind: 'load_model', dataUrl, targetName, format }));
+  }
+
   /** Reject all in-flight requests (called on quit). */
   disposeAll(): void {
     for (const pending of this.pending.values()) {

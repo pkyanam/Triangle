@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
 import type { AgentHarness, RunContext } from './harness.js';
 
@@ -77,6 +78,14 @@ export const claudeHarness: AgentHarness = {
       };
     }
     return { available: true };
+  },
+
+  async models(): Promise<ModelInfo[]> {
+    return [
+      { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', description: 'Balanced quality and speed' },
+      { id: 'claude-opus-4-7', name: 'Claude Opus 4.7', description: 'Highest capability' },
+      { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', description: 'Fastest, lightweight' },
+    ];
   },
 
   async run(ctx: RunContext): Promise<void> {
@@ -221,6 +230,58 @@ export const claudeHarness: AgentHarness = {
           return { content: [{ type: 'text' as const, text }] };
         },
       ),
+      tool(
+        'hf_generate_3d_asset',
+        'Generate a 3D asset on Hugging Face from a text prompt or image and return a downloadable model URL.',
+        {
+          prompt: z.string().describe('Text prompt describing the desired 3D asset.'),
+          image: z.string().optional().describe('Optional image as a data URL for image-to-3D.'),
+          provider: z.string().optional().describe('HF Space provider keyword (trellis, hunyuan3d, triposr) or user/space.'),
+          endpoint: z.string().optional().describe('Direct HF Space or Inference Endpoint URL.'),
+        },
+        async ({ prompt, image, provider, endpoint }) => {
+          const text = await toolset.hfGenerate3dAsset(prompt, image, provider, endpoint);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'download_3d_asset',
+        'Download a generated 3D model and save it into the active project as a binary asset.',
+        {
+          url: z.string().describe('Downloadable model URL (GLB/OBJ/USDZ).'),
+          path: z.string().describe('Project-relative destination path (e.g. assets/model.glb).'),
+          format: z.enum(['glb', 'obj', 'usdz']).optional().describe('Format hint.'),
+        },
+        async ({ url, path, format }) => {
+          const text = await toolset.download3dAsset(url, path, format);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_import_3d_asset',
+        'Import a 3D model file from the active project into the live preview scene. Auto-centers and scales it.',
+        {
+          path: z.string().describe('Project-relative path to the model file.'),
+          targetName: z.string().optional().describe('Name for the imported root object.'),
+        },
+        async ({ path, targetName }) => {
+          const text = await toolset.import3dAsset(path, targetName);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
+        'triangle_robotics_snippet',
+        'Generate a Three.js + Rapier physics simulation snippet for a robot. Returns code to paste into the entry module.',
+        {
+          name: z.string().describe('Robot name.'),
+          links: z.array(z.object({ name: z.string(), mass: z.number(), geometry: z.any().optional() })).describe('Robot links.'),
+          joints: z.array(z.object({ name: z.string(), type: z.enum(['fixed', 'revolute', 'prismatic', 'continuous']), parent: z.string(), child: z.string(), axis: z.array(z.number()).length(3).optional() })).optional().describe('Robot joints.'),
+        },
+        async ({ name, links, joints }) => {
+          const text = await toolset.roboticsSnippet(name, links, joints);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
     ];
 
     const triangleServer = createSdkMcpServer({ name: 'triangle', version: '0.2.0', tools });
@@ -235,7 +296,16 @@ export const claudeHarness: AgentHarness = {
       model: config.claudeModel,
       systemPrompt: SYSTEM_PROMPT,
       mcpServers: { triangle: triangleServer },
-      allowedTools: [...TRIANGLE_TOOL_NAMES, 'Read', 'Grep', 'Glob'],
+      allowedTools: [
+        ...TRIANGLE_TOOL_NAMES,
+        'Read',
+        'Grep',
+        'Glob',
+        'mcp__triangle__hf_generate_3d_asset',
+        'mcp__triangle__download_3d_asset',
+        'mcp__triangle__triangle_import_3d_asset',
+        'mcp__triangle__triangle_robotics_snippet',
+      ],
       // Keep writes confined to ProjectManager: block the SDK's own disk-mutating tools.
       disallowedTools: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch'],
       permissionMode: 'default',

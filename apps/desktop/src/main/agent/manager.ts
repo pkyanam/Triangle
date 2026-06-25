@@ -8,8 +8,9 @@ import type {
   ApprovalRequest,
   HarnessAvailability,
   HarnessId,
+  ProviderInstance,
 } from '@triangle/shared';
-import { loadConfig, type TriangleConfig } from '../config.js';
+import { loadAgentSettings, loadConfig, type TriangleConfig } from '../config.js';
 import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
 import type { ToolBridgeServer } from '../tool-bridge.js';
@@ -48,6 +49,42 @@ function clipChange(change: ApprovalFileChange): ApprovalFileChange {
   }
   out.truncated = truncated;
   return out;
+}
+
+/**
+ * Build a per-run config that merges the effective base config with the selected
+ * provider instance (binary path, model, etc.). This lets Codex/Devin/Claude runs
+ * honor the instance + model chosen in the UI without mutating the persisted config.
+ */
+function buildRunConfig(base: TriangleConfig, instance: ProviderInstance, model: string): TriangleConfig {
+  const runConfig: TriangleConfig = { ...base };
+  switch (instance.kind) {
+    case 'devin': {
+      runConfig.devinModel = model;
+      if (instance.config.path) runConfig.devinPath = instance.config.path;
+      break;
+    }
+    case 'codex': {
+      runConfig.codexModel = model;
+      if (instance.config.path) runConfig.codexPath = instance.config.path;
+      break;
+    }
+    case 'claude': {
+      runConfig.claudeModel = model;
+      if (instance.config.path) runConfig.claudeExecutablePath = instance.config.path;
+      break;
+    }
+    case 'acp': {
+      if (instance.config.command) {
+        runConfig.acpAgentCommand = instance.config.command;
+        runConfig.acpAgentArgs = instance.config.args?.split(' ').filter(Boolean) ?? [];
+      }
+      break;
+    }
+    case 'mock':
+      break;
+  }
+  return runConfig;
 }
 
 interface ActiveRun {
@@ -110,7 +147,10 @@ export class AgentManager {
         }
         try {
           const { available, reason } = await harness.availability(config);
-          return { id, label: harness.label, available, reason };
+          const models = available
+            ? await harness.models?.(config).catch(() => undefined)
+            : undefined;
+          return { id, label: harness.label, available, reason, models };
         } catch (err) {
           return { id, label: harness.label, available: false, reason: (err as Error).message };
         }
@@ -124,11 +164,21 @@ export class AgentManager {
     if (!harness) {
       return { runId: req.runId, accepted: false, reason: `Harness '${req.harness}' is unavailable.` };
     }
-    const config = loadConfig();
-    const { available, reason } = await harness.availability(config);
+    const baseConfig = loadConfig();
+    const { available, reason } = await harness.availability(baseConfig);
     if (!available) {
       return { runId: req.runId, accepted: false, reason: reason ?? 'Harness unavailable.' };
     }
+
+    const settings = loadAgentSettings();
+    const instance = req.instanceId
+      ? settings.providerInstances.find((i) => i.id === req.instanceId)
+      : settings.providerInstances.find((i) => i.kind === req.harness && i.enabled);
+    const model = req.model ?? instance?.model;
+    if (!instance || !model) {
+      return { runId: req.runId, accepted: false, reason: 'No provider instance or model selected.' };
+    }
+    const runConfig = buildRunConfig(baseConfig, instance, model);
 
     const controller = new AbortController();
     const run: ActiveRun = {
@@ -138,14 +188,14 @@ export class AgentManager {
     };
     this.runs.set(req.runId, run);
 
-    void this.execute(req, harness, config, run);
+    void this.execute(req, harness, runConfig, run);
     return { runId: req.runId, accepted: true };
   }
 
   private async execute(
     req: AgentStartRequest,
     harness: AgentHarness,
-    config: TriangleConfig,
+    runConfig: TriangleConfig,
     run: ActiveRun,
   ): Promise<void> {
     const { runId } = req;
@@ -209,6 +259,7 @@ export class AgentManager {
       project: this.project,
       preview: this.preview,
       approveWrite,
+      hfToken: runConfig.hfToken,
       emitTrace: (trace) => forward({ type: 'tool', runId, trace }),
     });
 
@@ -220,7 +271,7 @@ export class AgentManager {
       await harness.run({
         prompt: req.prompt,
         projectRoot: this.project.getRoot(),
-        config,
+        config: runConfig,
         toolset,
         toolBridge: {
           port: this.toolBridge.getPort(),

@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { app } from 'electron';
+import { DEFAULT_MODELS, type ProviderInstance, type ProviderKind } from '@triangle/shared';
 import type { AgentSettings } from '@triangle/shared';
 
 /**
@@ -42,6 +44,14 @@ export interface TriangleConfig {
   acpAgentLabel?: string;
   /** Default state of the human-approval gate for file writes. */
   autoApproveWrites?: boolean;
+  /** Hugging Face API token for 3D asset generation. */
+  hfToken?: string;
+  /** Provider instances (new provider-instance UI). */
+  providerInstances?: ProviderInstance[];
+  /** Id of the currently selected provider instance. */
+  selectedInstanceId?: string;
+  /** Starred model/instance pairs. */
+  favorites?: Array<{ instanceId: string; model: string }>;
 }
 
 interface RawConfigFile extends Partial<TriangleConfig> {
@@ -56,6 +66,10 @@ interface RawConfigFile extends Partial<TriangleConfig> {
   acp_agent_args?: string[];
   acp_agent_label?: string;
   auto_approve_writes?: boolean;
+  hf_token?: string;
+  provider_instances?: ProviderInstance[];
+  selected_instance_id?: string;
+  favorites?: Array<{ instanceId: string; model: string }>;
 }
 
 function readJson(file: string): RawConfigFile | null {
@@ -82,6 +96,10 @@ function fromFile(raw: RawConfigFile | null): Partial<TriangleConfig> {
     acpAgentArgs: raw.acpAgentArgs ?? raw.acp_agent_args,
     acpAgentLabel: raw.acpAgentLabel ?? raw.acp_agent_label,
     autoApproveWrites: raw.autoApproveWrites ?? raw.auto_approve_writes,
+    hfToken: raw.hfToken ?? raw.hf_token,
+    providerInstances: raw.providerInstances ?? raw.provider_instances,
+    selectedInstanceId: raw.selectedInstanceId ?? raw.selected_instance_id,
+    favorites: raw.favorites,
   };
 }
 
@@ -109,6 +127,8 @@ function fromEnv(): Partial<TriangleConfig> {
   if (env['TRIANGLE_ACP_AGENT_LABEL']) out.acpAgentLabel = env['TRIANGLE_ACP_AGENT_LABEL'];
   if (env['TRIANGLE_AUTO_APPROVE_WRITES'])
     out.autoApproveWrites = env['TRIANGLE_AUTO_APPROVE_WRITES'] === 'true';
+  const hfToken = env['HF_TOKEN'] ?? env['TRIANGLE_HF_TOKEN'];
+  if (hfToken) out.hfToken = hfToken;
   return out;
 }
 
@@ -116,6 +136,55 @@ function compact<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== undefined),
   ) as Partial<T>;
+}
+
+/** Build a fresh provider instance for the UI. */
+export function newProviderInstance(kind: ProviderKind, name: string): ProviderInstance {
+  return {
+    id: randomUUID(),
+    kind,
+    name,
+    enabled: true,
+    model: DEFAULT_MODELS[kind][0] ?? 'default',
+    config: {},
+  };
+}
+
+/**
+ * Seed provider instances on first load:
+ *  - migrate legacy per-provider model/path settings into default instances, then
+ *  - ensure at least Devin + Codex defaults exist, plus the always-available Mock.
+ */
+function ensureProviderInstances(c: TriangleConfig): ProviderInstance[] {
+  if (c.providerInstances && c.providerInstances.length > 0) return c.providerInstances;
+  const instances: ProviderInstance[] = [];
+  const add = (kind: ProviderKind, name: string, model: string, config: Record<string, string>): void => {
+    instances.push({ id: kind, kind, name, enabled: true, model, config });
+  };
+
+  if (c.devinModel || c.devinPath) {
+    add('devin', 'Devin CLI', c.devinModel ?? DEFAULT_MODELS.devin[0], { path: c.devinPath ?? 'devin' });
+  }
+  if (c.codexModel || c.codexPath) {
+    add('codex', 'Codex CLI', c.codexModel ?? DEFAULT_MODELS.codex[0], { path: c.codexPath ?? 'codex' });
+  }
+  if (c.claudeModel || c.claudeExecutablePath) {
+    add('claude', 'Claude Agent SDK', c.claudeModel ?? DEFAULT_MODELS.claude[0], {
+      path: c.claudeExecutablePath ?? '',
+    });
+  }
+  if (c.acpAgentCommand) {
+    add('acp', c.acpAgentLabel ?? 'ACP Agent', DEFAULT_MODELS.acp[0], {
+      command: c.acpAgentCommand,
+      args: (c.acpAgentArgs ?? []).join(' '),
+    });
+  }
+  if (instances.length === 0) {
+    add('devin', 'Devin CLI', DEFAULT_MODELS.devin[0], { path: c.devinPath ?? 'devin' });
+    add('codex', 'Codex CLI', DEFAULT_MODELS.codex[0], { path: c.codexPath ?? 'codex' });
+  }
+  add('mock', 'Mock Agent', DEFAULT_MODELS.mock[0], {});
+  return instances;
 }
 
 /** Load and merge the effective config. Cheap enough to call per run. */
@@ -140,7 +209,16 @@ function userConfigPath(): string {
 /** The user-editable subset of the effective config (for the harness-config UI). */
 export function loadAgentSettings(): AgentSettings {
   const c = loadConfig();
+  const instances = ensureProviderInstances(c);
+  const selected =
+    c.selectedInstanceId ??
+    instances.find((i) => i.kind === 'devin' && i.enabled)?.id ??
+    instances.find((i) => i.enabled)?.id ??
+    null;
   return {
+    providerInstances: instances,
+    selectedInstanceId: selected,
+    favorites: c.favorites ?? [],
     claudeModel: c.claudeModel,
     codexModel: c.codexModel,
     devinPath: c.devinPath,
@@ -149,6 +227,7 @@ export function loadAgentSettings(): AgentSettings {
     acpAgentArgs: c.acpAgentArgs,
     acpAgentLabel: c.acpAgentLabel,
     autoApproveWrites: c.autoApproveWrites,
+    hfToken: c.hfToken,
   };
 }
 

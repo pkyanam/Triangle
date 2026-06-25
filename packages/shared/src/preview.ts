@@ -222,7 +222,8 @@ export type PreviewRequestKind =
   | 'performance_snapshot'
   | 'capture_screenshot'
   | 'validate_shader'
-  | 'apply_scene_edit';
+  | 'apply_scene_edit'
+  | 'load_model';
 
 /** A request issued by main and serviced by the renderer's active runtime. */
 export type PreviewRequest =
@@ -230,7 +231,17 @@ export type PreviewRequest =
   | { requestId: string; kind: 'performance_snapshot' }
   | { requestId: string; kind: 'capture_screenshot'; width?: number; height?: number }
   | { requestId: string; kind: 'validate_shader'; stage: ShaderStage; source: string }
-  | { requestId: string; kind: 'apply_scene_edit'; edit: SceneEdit };
+  | { requestId: string; kind: 'apply_scene_edit'; edit: SceneEdit }
+  | {
+      requestId: string;
+      kind: 'load_model';
+      /** data:application/octet-stream;base64,… or a reachable http(s) URL. */
+      dataUrl: string;
+      /** Target name for the imported root object. */
+      targetName?: string;
+      /** Optional format override; otherwise detected from the URL. */
+      format?: 'glb' | 'gltf' | 'obj' | 'usdz';
+    };
 
 /** Maps each request kind to the payload the renderer returns on success. */
 export interface PreviewResultData {
@@ -239,6 +250,7 @@ export interface PreviewResultData {
   capture_screenshot: CaptureResult;
   validate_shader: ShaderValidationResult;
   apply_scene_edit: SceneEditResult;
+  load_model: { name: string; uuid: string; format: string; summary: string };
 }
 
 /** The renderer's reply, correlated by `requestId`. */

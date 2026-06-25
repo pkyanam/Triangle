@@ -22,6 +22,10 @@ export interface JsonSchemaNode {
   description?: string;
   items?: JsonSchemaNode;
   enum?: string[];
+  /** For object-typed nodes: nested property schemas. */
+  properties?: Record<string, JsonSchemaNode>;
+  /** For object/array nodes: required child keys. */
+  required?: string[];
 }
 
 export interface ToolDefinition {
@@ -41,7 +45,7 @@ export interface ToolDefinition {
  * to real implementations; later-stage tools remain forward declarations. Keeping a
  * single constant means `available` flags below stay in sync with reality.
  */
-export const CURRENT_STAGE = 4;
+export const CURRENT_STAGE = 6;
 
 /**
  * The canonical Triangle tool catalog. Grouped by domain; expanded each stage.
@@ -218,6 +222,142 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
     },
     available: true,
     stage: 4,
+  },
+
+  // --- Strategic integrations (Stage 6) — 3D asset generation -----------------
+  {
+    name: 'hf_generate_3d_asset',
+    description:
+      'Generate a 3D asset on Hugging Face from a text prompt or image and return a downloadable model URL.',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Text prompt describing the desired 3D asset.' },
+        image: {
+          type: 'string',
+          description: 'Optional image as a data URL (data:image/...;base64,...) for image-to-3D.',
+        },
+        provider: {
+          type: 'string',
+          description: 'HF Space provider keyword (trellis, hunyuan3d, triposr) or a user/space name.',
+        },
+        endpoint: {
+          type: 'string',
+          description: 'Optional direct HF Space or Inference Endpoint URL.',
+        },
+      },
+      required: ['prompt'],
+    },
+    available: true,
+    stage: 6,
+  },
+  {
+    name: 'download_3d_asset',
+    description:
+      'Download a generated 3D model URL and save it into the active project as a binary asset.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Downloadable model URL (GLB/OBJ/USDZ).' },
+        path: {
+          type: 'string',
+          description: 'Project-relative destination path (e.g. assets/model.glb).',
+        },
+        format: {
+          type: 'string',
+          description: 'File format hint (glb, obj, usdz).',
+          enum: ['glb', 'obj', 'usdz'],
+        },
+      },
+      required: ['url', 'path'],
+    },
+    available: true,
+    stage: 6,
+  },
+  {
+    name: 'triangle_import_3d_asset',
+    description:
+      'Import a 3D model file from the active project into the live preview scene. Auto-centers and scales the result.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Project-relative path to the model file.' },
+        targetName: {
+          type: 'string',
+          description: 'Optional name for the imported root object in the scene.',
+        },
+      },
+      required: ['path'],
+    },
+    available: true,
+    stage: 6,
+  },
+
+  // --- Robotics simulation prep (Stage 6) — scaffolded types + snippets -----
+  {
+    name: 'triangle_robotics_snippet',
+    description:
+      'Generate a Three.js + Rapier physics simulation snippet for a robot description. Returns code the agent can paste into the project entry module.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Robot name.' },
+        links: {
+          type: 'array',
+          description: 'Robot links with name, mass, and geometry.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              mass: { type: 'number' },
+              geometry: {
+                type: 'object',
+                properties: {
+                  type: { type: 'string', enum: ['box', 'sphere', 'cylinder', 'mesh'] },
+                  size: { type: 'array', items: { type: 'number' }, description: '[x, y, z]' },
+                  mesh: { type: 'string', description: 'Optional mesh path.' },
+                },
+              },
+            },
+            required: ['name', 'mass'],
+          },
+        },
+        joints: {
+          type: 'array',
+          description: 'Robot joints between parent and child links.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              type: { type: 'string', enum: ['fixed', 'revolute', 'prismatic', 'continuous'] },
+              parent: { type: 'string' },
+              child: { type: 'string' },
+              axis: { type: 'array', items: { type: 'number' }, description: '[x, y, z]' },
+            },
+            required: ['name', 'type', 'parent', 'child'],
+          },
+        },
+      },
+      required: ['name', 'links'],
+    },
+    available: true,
+    stage: 6,
+  },
+
+  // --- World Labs Marble (Stage 6, optional stub) — reserved for future API ----
+  {
+    name: 'triangle_marble_world',
+    description:
+      '[Reserved] Generate a 3D world with World Labs Marble. Currently a stub; the API integration will be enabled once Marble is available.',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Text prompt describing the world.' },
+        image: { type: 'string', description: 'Optional image data URL.' },
+      },
+    },
+    available: false,
+    stage: 7,
   },
 ];
 

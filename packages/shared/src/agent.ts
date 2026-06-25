@@ -7,6 +7,32 @@
 /** Supported agent harnesses. Only `mock` is wired in Stage 1. */
 export type HarnessId = 'mock' | 'claude' | 'codex' | 'devin' | 'acp';
 
+/** Alias for the new provider-instance vocabulary; same closed union as {@link HarnessId}. */
+export type ProviderKind = HarnessId;
+
+/** A configured provider instance (e.g. "Codex work" or "Devin personal"). */
+export interface ProviderInstance {
+  /** Stable id used for selection and persistence. */
+  id: string;
+  /** Which harness/driver implements this instance. */
+  kind: ProviderKind;
+  /** Human-readable label shown in the picker. */
+  name: string;
+  /** Whether the instance is selectable in the UI. */
+  enabled: boolean;
+  /** Selected model for this instance. */
+  model: string;
+  /** Driver-specific config (binary path, API key, env vars, etc.). */
+  config: Record<string, string>;
+}
+
+/** Human-readable model metadata for picker rows. */
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 export interface HarnessDescriptor {
   id: HarnessId;
   label: string;
@@ -35,6 +61,12 @@ export const HARNESSES: HarnessDescriptor[] = [
  * intentionally excluded from this round-trip and stay in env / the config file.
  */
 export interface AgentSettings {
+  /** Provider instances (e.g. multiple named Codex/Devin configs). */
+  providerInstances: ProviderInstance[];
+  /** Id of the currently selected instance. */
+  selectedInstanceId: string | null;
+  /** Starred model/instance pairs surfaced at the top of the picker. */
+  favorites?: Array<{ instanceId: string; model: string }>;
   /** Model override for the Claude Agent SDK harness. */
   claudeModel?: string;
   /** Model override for the Codex harness. */
@@ -51,7 +83,18 @@ export interface AgentSettings {
   acpAgentLabel?: string;
   /** Default state of the human-approval gate for file writes. */
   autoApproveWrites?: boolean;
+  /** Hugging Face API token for 3D asset generation (env HF_TOKEN is preferred). */
+  hfToken?: string;
 }
+
+/** Default model lists for each provider kind. */
+export const DEFAULT_MODELS: Record<ProviderKind, string[]> = {
+  mock: ['mock'],
+  devin: ['swe-1-6-slow', 'swe-1-6-fast'],
+  claude: ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5'],
+  codex: ['gpt-5.4', 'gpt-5.3-codex', 'gpt-5.3-codex-spark'],
+  acp: ['auto'],
+};
 
 export type ChatRole = 'user' | 'assistant' | 'system';
 
@@ -84,6 +127,8 @@ export interface HarnessAvailability {
   available: boolean;
   /** Why it's unavailable (missing key, CLI not found, …), shown in the UI. */
   reason?: string;
+  /** Models exposed by this provider, if known. */
+  models?: ModelInfo[];
 }
 
 /** A request from the renderer to start an agent run. */
@@ -97,6 +142,10 @@ export interface AgentStartRequest {
    * raises an {@link ApprovalRequest} the user must accept before it lands on disk.
    */
   autoApproveWrites: boolean;
+  /** Selected provider instance id (lookup in {@link AgentSettings.providerInstances}). */
+  instanceId?: string;
+  /** Resolved model id to use for this run. */
+  model?: string;
 }
 
 export interface AgentStartResult {

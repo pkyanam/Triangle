@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import readline from 'node:readline';
-import type { ApprovalFileChange, FileChangeKind } from '@triangle/shared';
+import type { ApprovalFileChange, FileChangeKind, ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
 import { harnessTraceId, type AgentHarness, type ApprovalOutcome, type RunContext } from './harness.js';
 
@@ -107,6 +107,106 @@ class AppServerClient {
   }
 }
 
+function codexDisplayName(raw: string): string {
+  return raw.replace(/^gpt/i, 'GPT').replace(/-([a-z])/g, (_, c) => `-${c.toUpperCase()}`);
+}
+
+function codexModelDescription(model: {
+  supportedReasoningEfforts?: readonly string[];
+  additionalSpeedTiers?: readonly string[];
+  defaultReasoningEffort?: string;
+}): string {
+  const parts: string[] = [];
+  if (model.supportedReasoningEfforts?.length) {
+    parts.push(`Reasoning: ${model.supportedReasoningEfforts.join(', ')}`);
+  }
+  if (model.additionalSpeedTiers?.includes('fast')) {
+    parts.push('Fast mode');
+  }
+  return parts.join(' · ') || 'OpenAI Codex model';
+}
+
+function fetchCodexModels(config: TriangleConfig): Promise<ModelInfo[]> {
+  const bin = codexBin(config);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (models: ModelInfo[]): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+      resolve(models);
+    };
+
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawn(bin, ['app-server'], {
+        cwd: process.cwd(),
+        env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }) as ChildProcessWithoutNullStreams;
+    } catch {
+      resolve([]);
+      return;
+    }
+
+    const timer = setTimeout(() => finish([]), 10_000);
+    child.on('error', () => finish([]));
+    child.on('exit', () => finish([]));
+
+    const client = new AppServerClient(
+      child,
+      () => {},
+      (msg) => {
+        // Decline any server-initiated requests so the probe never hangs.
+        client.respondError(msg.id, -32601, `Unsupported during model probe: ${msg.method ?? ''}`);
+      },
+    );
+
+    void (async () => {
+      try {
+        await client.request('initialize', {
+          clientInfo: { name: 'triangle', title: 'Triangle', version: '0.3.0' },
+          capabilities: { experimentalApi: true },
+        });
+        client.notify('initialized', {});
+
+        const models: ModelInfo[] = [];
+        let cursor: string | undefined;
+        do {
+          const response = (await client.request('model/list', cursor ? { cursor } : {})) as {
+            data?: Array<{
+              model?: string;
+              displayName?: string;
+              supportedReasoningEfforts?: readonly string[];
+              additionalSpeedTiers?: readonly string[];
+              defaultReasoningEffort?: string;
+            }>;
+            nextCursor?: string;
+          };
+          for (const m of response.data ?? []) {
+            const id = String(m.model ?? '');
+            if (!id) continue;
+            models.push({
+              id,
+              name: codexDisplayName(String(m.displayName ?? id)),
+              description: codexModelDescription(m),
+            });
+          }
+          cursor = response.nextCursor;
+        } while (cursor);
+        finish(models);
+      } catch {
+        finish([]);
+      }
+    })();
+  });
+}
+
 /** Extract joined text from an MCP tool-call result's content blocks. */
 function mcpResultText(result: unknown): string | undefined {
   const content = (result as { content?: unknown[] } | null)?.content;
@@ -193,6 +293,10 @@ export const codexHarness: AgentHarness = {
         done(false, `Codex CLI ('${bin}') not found on PATH.`);
       }
     });
+  },
+
+  async models(config: TriangleConfig): Promise<ModelInfo[]> {
+    return fetchCodexModels(config);
   },
 
   run(ctx: RunContext): Promise<void> {

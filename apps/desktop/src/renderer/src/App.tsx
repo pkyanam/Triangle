@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PreviewStatus, ProjectInfo } from '@triangle/shared';
 import { TopBar } from './components/TopBar.js';
 import { Console } from './components/Console.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { Workspace, type PanelsOpen, type WorkspaceHandle } from './workspace/Workspace.js';
 import type { WorkspaceState } from './workspace/context.js';
 import { installPreviewBridge } from './preview/bridge.js';
@@ -156,7 +157,9 @@ export function App(): React.JSX.Element {
         <Workspace ref={workspaceRef} state={workspaceState} onPanelsChange={setPanelsOpen} />
       </div>
 
-      <Console status={status} entry={entry} />
+      <ErrorBoundary title="Console failed" onError={(err) => console.error('Console crashed', err)}>
+        <Console status={status} entry={entry} />
+      </ErrorBoundary>
     </div>
   );
 }

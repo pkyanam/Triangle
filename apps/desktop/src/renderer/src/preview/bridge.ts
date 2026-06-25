@@ -33,7 +33,7 @@ class NoPreviewError extends Error {
   }
 }
 
-function service(req: PreviewRequest): PreviewResult['data'] {
+async function service(req: PreviewRequest): Promise<PreviewResult['data']> {
   const rt = activeRuntime;
   if (!rt) throw new NoPreviewError();
   switch (req.kind) {
@@ -47,6 +47,8 @@ function service(req: PreviewRequest): PreviewResult['data'] {
       return rt.validateShader(req.stage, req.source);
     case 'apply_scene_edit':
       return rt.applySceneEdit(req.edit);
+    case 'load_model':
+      return rt.importModel(req.dataUrl, { targetName: req.targetName, format: req.format });
   }
 }
 
@@ -56,10 +58,10 @@ let installed = false;
 export function installPreviewBridge(): void {
   if (installed) return;
   installed = true;
-  window.triangle.preview.onRequest((req) => {
+  window.triangle.preview.onRequest(async (req) => {
     let result: PreviewResult;
     try {
-      result = { requestId: req.requestId, ok: true, data: service(req) };
+      result = { requestId: req.requestId, ok: true, data: await service(req) };
     } catch (err) {
       result = { requestId: req.requestId, ok: false, error: (err as Error).message };
     }

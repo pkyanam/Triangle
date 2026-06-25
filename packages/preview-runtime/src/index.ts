@@ -9,3 +9,5 @@ export {
 export type { SceneObjectDetail, MaterialDetail, GeometryDetail, UniformDetail } from './inspect.js';
 export { applySceneEdit } from './mutate.js';
 export { SelectionHighlight } from './selection.js';
+export { loadModel } from './loaders.js';
+export type { LoadModelResult, ModelFormat } from './loaders.js';

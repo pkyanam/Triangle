@@ -1,0 +1,6 @@
+{
+  "name": "Triangle Starter",
+  "version": 1,
+  "description": "A starter Three.js scene: an animated fresnel shader knot orbited by instanced particles. Edit src/main.js and save to hot-reload the preview.",
+  "entry": "src/main.js"
+}

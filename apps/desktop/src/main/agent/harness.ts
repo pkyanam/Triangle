@@ -1,4 +1,4 @@
-import type { ApprovalFileChange, ApprovalScope, AgentEvent, HarnessId } from '@triangle/shared';
+import type { ApprovalFileChange, ApprovalScope, AgentEvent, HarnessId, ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
 import type { TriangleToolset } from './tools.js';
 
@@ -76,6 +76,12 @@ export interface AgentHarness {
   readonly label: string;
   /** Whether the harness can run given the current config/environment. */
   availability(config: TriangleConfig): Promise<{ available: boolean; reason?: string }>;
+  /**
+   * Optional: enumerate the models this provider currently exposes. Used to
+   * populate the model picker with the real, up-to-date list (e.g. from Codex
+   * App Server `model/list` or Devin ACP `session/new`).
+   */
+  models?(config: TriangleConfig): Promise<ModelInfo[]>;
   /** Run a single prompt to completion, streaming events. Throws on failure. */
   run(ctx: RunContext): Promise<void>;
 }

@@ -14,9 +14,10 @@ import { loadAgentSettings, saveAgentSettings } from './config.js';
 import { ProjectManager } from './project.js';
 import { AgentManager } from './agent/manager.js';
 import { PreviewBridge } from './preview-bridge.js';
-import { ToolBridgeServer } from './tool-bridge.js';
+import { ToolBridgeServer, dispatchTool } from './tool-bridge.js';
 import { McpEndpoint } from './mcp-endpoint.js';
 import { SessionStore } from './session-store.js';
+import { createToolset } from './agent/tools.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
@@ -180,6 +181,22 @@ function registerIpc(): void {
   // and persists quick-action screenshots via the same ProjectManager capture path.
   handle('preview:result', (req) => preview.resolve(req));
   handle('preview:save-capture', (req) => project.saveCapture(dataUrlToBuffer(req.dataUrl)));
+
+  // Stage 6: manual tool runner for integration testing from the UI.
+  handle('tool:run', async (req) => {
+    try {
+      const toolset = createToolset({
+        project,
+        preview,
+        approveWrite: async () => true,
+        emitTrace: () => {},
+      });
+      const result = await dispatchTool(toolset, req.tool, req.args ?? {});
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
 }
 
 function createWindow(): void {

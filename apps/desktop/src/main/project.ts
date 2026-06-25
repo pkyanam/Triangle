@@ -588,6 +588,12 @@ export class ProjectManager {
     return { path: relPath, content };
   }
 
+  /** Read a binary file by project-relative path. */
+  async readBinaryFile(relPath: string): Promise<{ path: string; bytes: Uint8Array }> {
+    const bytes = new Uint8Array(await fs.readFile(this.resolveSafe(relPath)));
+    return { path: relPath, bytes };
+  }
+
   /** Whether a project-relative path exists (and resolves safely within the root). */
   exists(relPath: string): boolean {
     try {
@@ -617,6 +623,14 @@ export class ProjectManager {
     }
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, content, 'utf8');
+    return { path: relPath, ok: true };
+  }
+
+  /** Write binary data to a project-relative path, creating parent dirs as needed. */
+  async writeBinaryFile(relPath: string, bytes: Uint8Array): Promise<{ path: string; ok: boolean }> {
+    const abs = this.resolveSafe(relPath);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, bytes);
     return { path: relPath, ok: true };
   }
 

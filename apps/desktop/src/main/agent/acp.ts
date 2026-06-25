@@ -1,3 +1,4 @@
+import type { ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
 import { runAcpSession } from './acp-session.js';
 import type { AgentHarness, RunContext } from './harness.js';
@@ -29,6 +30,10 @@ export const acpHarness: AgentHarness = {
       };
     }
     return { available: true };
+  },
+
+  async models(): Promise<ModelInfo[]> {
+    return [{ id: 'auto', name: 'Auto', description: 'Adaptive model selection' }];
   },
 
   run(ctx: RunContext): Promise<void> {
