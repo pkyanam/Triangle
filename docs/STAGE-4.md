@@ -1,9 +1,11 @@
-# Stage 4 — Rich Agent Capabilities & Protocol Support (in progress)
+# Stage 4 — Rich Agent Capabilities & Protocol Support (complete)
 
-**Status: live scene manipulation landed; protocol generalization + diff/approval
-unification + harness-config UI remain.** This stage turns Triangle from "agents can
-*inspect* the scene and edit files" into "agents can *drive* the live scene with
-immediate visual reflection," on top of a runtime that now survives the dock.
+**Status: complete.** Live scene manipulation, the unified diff/approval gate, a
+standalone MCP endpoint + ACP client harness, and a per-harness configuration UI
+all landed. This stage turns Triangle from "agents can *inspect* the scene and edit
+files" into "agents from ≥2 harnesses can *drive* the live scene with immediate
+visual reflection and flow edits through a diff/approval workflow," on top of a
+runtime that survives the dock.
 
 ## Deliverable checklist (from the roadmap / PRD §5–6)
 
@@ -24,13 +26,26 @@ immediate visual reflection," on top of a runtime that now survives the dock.
       server over the loopback bridge), and any future MCP/ACP client. The MCP
       server now advertises domain tools by `stage >= 3`, so it auto-includes these.
 - [x] **Catalog hygiene.** `CURRENT_STAGE = 4`; the Stage 4 tools are `available`.
-- [ ] **Diff view + approval-workflow unification.** Real diff view for writes;
-      route Codex's `item/fileChange/requestApproval` through Triangle's gate; batch
-      apply. *(Next.)*
-- [ ] **General MCP/ACP endpoint.** Promote the Codex-only MCP server into a
-      standalone endpoint and add ACP compatibility. *(Next.)*
-- [ ] **Harness configuration UI.** Per-harness model selection + multi-agent
-      session hooks. *(Next.)*
+- [x] **Diff view + approval-workflow unification (ADR 0012).** A generalized
+      `ApprovalRequest` (a list of `ApprovalFileChange` + optional command/reason +
+      source harness) feeds one dependency-free diff view (LCS for tool writes, a
+      unified-diff parser for Codex's `fileChange` diffs). Codex now runs *gated*
+      (read-only sandbox + `on-request`) so its file-change/command approvals route
+      through Triangle's gate; "Approve all" maps to the per-run session scope
+      (`acceptForSession`). Auto-approve keeps the fast workspace-write path.
+- [x] **General MCP/ACP endpoint (ADR 0013).** `McpEndpoint` registers a persistent,
+      preview-only toolset on the loopback bridge and publishes a launcher descriptor
+      (IPC + `userData/mcp/triangle-mcp.json`) any MCP client can use. A real ACP
+      *client* harness (`acp`, gated on `acpAgentCommand`) spawns a configured ACP
+      agent, advertises the Triangle MCP endpoint to it, streams `session/update`
+      events, and routes its `fs/write_text_file` + `session/request_permission`
+      through the unified gate.
+- [x] **Harness configuration UI.** A gear-toggled config panel: per-harness model
+      selection (Claude/Codex), the ACP agent command/args/label, and the MCP
+      endpoint (tool count + copy-ready client config). Persists via `config:get` /
+      `config:set` to the user config file and applies on the next run. *(Multi-agent
+      orchestration beyond per-harness config is a future hook — see Known
+      limitations.)*
 
 ## Architecture
 
@@ -62,20 +77,29 @@ Stage 2 path). Targets resolve by `name` then `uuid` (both from
 
 ## Verification
 
-- `pnpm typecheck` + `pnpm build` clean; `out/main/mcp.js` emitted (now ~9 kB with
-  the new tools).
-- **MCP protocol probe** (built `mcp.js` + stub bridge): `initialize`, `tools/list`
-  advertises all **9** domain tools (4 Stage 3 + 5 Stage 4), `tools/call` forwards
-  `triangle_set_uniform` and `triangle_set_transform` (array arg) to the bridge with
-  correct args; unknown tool → `-32601`.
-- **three.js mutation API check** (headless): verified the exact APIs `mutate.ts`
-  relies on — name lookup, `Color.isColor`/`.set`, `Vector3.fromArray`,
-  `Color.fromArray`, standard-material `color`, `position/rotation/scale`,
-  `Light.isLight`/`intensity`/`color`, and array-material handling.
-- **Operator-run (needs credentials + a display):** an end-to-end turn (Claude and
-  Codex) that describes the scene, sets a uniform/color/transform, and confirms the
-  change via screenshot; plus dock drag/float/close keeping the live edit. Set
-  `ANTHROPIC_API_KEY` for Claude; sign in to `codex` for Codex.
+- `pnpm typecheck` + `pnpm build` clean; `out/main/mcp.js` emitted (now imports the
+  shared tool catalog from `out/main/chunks/`, so its sibling chunk ships too).
+- **MCP protocol probe** (built `mcp.js` + a stub bridge, run *standalone* with an
+  arbitrary token): `initialize`, `tools/list` advertises all **9** domain tools
+  (4 Stage 3 + 5 Stage 4), `tools/call` forwards `triangle_set_transform` (array arg)
+  to the bridge with the correct token + args; unknown tool → `-32601`. This also
+  exercises the ADR 0013 standalone path (token not tied to a run).
+- **Diff algorithm check** (headless): the LCS line diff (context/add/del ordering +
+  line numbers) and the unified-diff parser (hunk-based numbering) verified on
+  sample inputs.
+- **three.js mutation API check** (headless): the exact APIs `mutate.ts` relies on.
+- **Operator-run (needs credentials / external binaries / a display):**
+  - A Claude or Codex turn that drives a live edit and confirms it via screenshot,
+    plus dock drag/float/close keeping the edit (carried from before).
+  - **Codex gated approvals (ADR 0012):** with auto-approve off, a Codex edit
+    surfaces a diff in the gate; Approve / Approve-all / Reject behave; assumes
+    `read-only` + `on-request` makes Codex escalate writes as
+    `item/fileChange/requestApproval` with a populated `changes[].diff`.
+  - **ACP (ADR 0013):** point `acpAgentCommand` at a real ACP agent; confirm a turn
+    streams text/tool traces, the agent reaches Triangle's domain tools via the
+    advertised MCP endpoint, and its `fs/write_text_file` flows through the gate.
+  - **Standalone MCP endpoint:** configure an external MCP client with the copied
+    descriptor and confirm it lists/calls the domain tools against the live preview.
 
 ## Known limitations (carried + new)
 
@@ -83,6 +107,14 @@ Stage 2 path). Targets resolve by `name` then `uuid` (both from
 - Object add/remove is intentionally routed through source edits, not a live tool.
 - Manipulation tools still require the Preview to have been opened at least once
   (then they work even while it's closed; before that, the graceful timeout applies).
-- Diff/approval unification, the standalone MCP/ACP endpoint, and the harness-config
-  UI are not yet done (next tasks of this stage).
-- MCP-server entry packaging for distributable builds is finalized in Stage 5.
+- The standalone MCP endpoint is preview-only (no disk writes); file edits stay
+  behind a gated harness run / ACP fs methods (ADR 0013).
+- The ACP harness follows the v1 schema but is operator-verified (no agent binary in
+  CI); it parses agent payloads defensively. Codex gated-approval field shapes are
+  likewise operator-verified (ADR 0012).
+- Harness config covers per-harness model selection + ACP/endpoint setup; richer
+  multi-agent orchestration (hybrid delegation) is a Stage 5+ hook on this foundation.
+- API keys are intentionally **not** round-tripped through the config UI (set via
+  env or the config file); only non-secret settings are editable in-app.
+- MCP-server entry packaging for distributable builds is finalized in Stage 5
+  (now includes copying `mcp.js`'s shared chunk).

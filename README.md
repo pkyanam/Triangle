@@ -39,15 +39,20 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
   pause/grid toggles, screenshots, and an FPS / draw-call / triangle-count HUD.
 - ✍️ **Monaco editor** — JS / TS / GLSL with syntax highlighting, a dirty/save model,
   and a `suppressWatch` save path that hot-reloads without churn.
-- 🤖 **Harness-agnostic agents** — Claude Agent SDK + Codex (via the Codex App Server)
-  and a zero-setup Mock agent, reading and editing the project behind a **human-approval
-  gate**.
+- 🤖 **Harness-agnostic agents** — Claude Agent SDK, Codex (via the Codex App Server),
+  an external **ACP agent**, and a zero-setup Mock agent, all reading and editing the
+  project behind one **human-approval gate**.
 - 🧠 **Three.js domain tools** — agents capture screenshots, summarize the live scene
   graph, validate GLSL shaders, and read performance counters for real **visual feedback**
-  — reachable by Claude in-process and by Codex via a bundled MCP server.
+  — reachable by Claude in-process, by Codex via a bundled MCP server, and by any MCP
+  client via the **standalone MCP endpoint**.
 - 🎛️ **Live scene manipulation** — agents set uniforms, material colors, transforms,
   visibility, and lights on the running scene with **immediate visual reflection**
   (transient, persisted via a source write); the preview runtime survives dock moves.
+- 🔍 **Unified diff & approval** — every harness's writes (and Codex/ACP file-change
+  and command approvals) flow through one **diff view** with Approve / Approve-all /
+  Reject; a gear-toggled **harness config** sets per-harness models, the ACP agent,
+  and the MCP endpoint.
 - 🧱 **Dockable workspace** — resizable, movable, dockable, floatable, collapsible
   panes (powered by [dockview](https://dockview.dev)) with a persisted layout.
 - 🎨 **Centralized theming** — a single CSS-variable design system; the Monaco theme
@@ -94,7 +99,10 @@ pnpm package          # produce a distributable build (electron-builder, Stage 5
 Credentials are read from the environment or a gitignored config — **never committed**.
 The Claude harness needs `ANTHROPIC_API_KEY`; the Codex harness needs the `codex` CLI on
 `PATH` (and a signed-in account, since it now drives the [Codex App
-Server](docs/adr/0008-codex-app-server-and-mcp-bridge.md)). See
+Server](docs/adr/0008-codex-app-server-and-mcp-bridge.md)); the ACP harness needs an
+external ACP agent configured via `acpAgentCommand` (in-app harness config or the config
+file). Non-secret settings (per-harness models, ACP agent) are editable in-app and persist
+to the user config. See
 [`docs/STAGE-2.md`](docs/STAGE-2.md#configuration-credentials) for the full precedence and
 key list.
 
@@ -107,7 +115,7 @@ key list.
 | 2 | Editor + basic agent orchestration | ✅ |
 | 2.5 | Visual & layout overhaul (design system + dockview) | ✅ |
 | 3 | Three.js domain tooling & visual feedback loop | ✅ |
-| 4 | Rich agent capabilities & protocol support (ACP / MCP) | 🟡 In progress |
+| 4 | Rich agent capabilities & protocol support (ACP / MCP) | ✅ |
 | 5 | Polish, rich features & internal prototype | ⬜ |
 | 6 | Post-prototype hardening & web path | ⬜ |
 
@@ -139,8 +147,10 @@ Key decisions are recorded as Architecture Decision Records in
 the [design system & dock layout](docs/adr/0006-visual-design-and-dock-layout.md), the
 [preview bridge & domain tooling](docs/adr/0007-preview-bridge-and-domain-tooling.md), the
 [Codex App Server & MCP bridge](docs/adr/0008-codex-app-server-and-mcp-bridge.md),
-[live scene manipulation](docs/adr/0010-live-scene-manipulation.md), and the
-[persistent preview canvas](docs/adr/0011-persistent-preview-canvas.md).
+[live scene manipulation](docs/adr/0010-live-scene-manipulation.md), the
+[persistent preview canvas](docs/adr/0011-persistent-preview-canvas.md), the
+[unified approval gate & diff view](docs/adr/0012-unified-approval-and-diff.md), and the
+[standalone MCP endpoint & ACP client](docs/adr/0013-standalone-mcp-and-acp.md).
 
 ## Contributing
 

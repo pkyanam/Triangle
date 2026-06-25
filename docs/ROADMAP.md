@@ -9,7 +9,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 2 | Editor + Basic Agent Orchestration | ✅ Done |
 | 2.5 | Visual & Layout Overhaul (Trifecta design + dockview) | ✅ Done |
 | 3 | Three.js Domain Tooling & Visual Feedback Loop | ✅ Done |
-| 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | 🟡 In progress |
+| 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | ✅ Done |
 | 5 | Polish, Rich Features & Internal Prototype | ⬜ |
 | 6 | Post-Prototype Hardening & Web Path | ⬜ Future |
 
@@ -71,13 +71,19 @@ See [`STAGE-3.md`](STAGE-3.md) and [ADR 0007](adr/0007-preview-bridge-and-domain
       `triangle_set_material_color`, `triangle_set_transform`,
       `triangle_set_visibility`, `triangle_set_light` — transient edits with
       immediate visual reflection, available to every harness.
-- [ ] Diff view + unified approval workflow (route Codex file-change approvals
-      through Triangle's gate; batch apply).
-- [ ] Standalone MCP server endpoint + ACP compatibility.
-- [ ] Harness configuration UI (per-harness model selection, multi-agent hooks).
+- [x] Diff view + unified approval workflow (ADR 0012): one `ApprovalRequest` with
+      diffs for Claude/MCP writes and Codex file-change/command approvals; gated
+      Codex (read-only + on-request); Approve / Approve-all (session) / Reject.
+- [x] Standalone MCP endpoint + ACP compatibility (ADR 0013): `McpEndpoint`
+      publishes a launcher descriptor any MCP client can use; a real ACP *client*
+      harness drives external ACP agents and gates their fs/permission requests.
+- [x] Harness configuration UI: per-harness model selection, ACP agent setup, and
+      the MCP endpoint surface; persisted via `config:get` / `config:set`.
 
 See [`STAGE-4.md`](STAGE-4.md) and [ADR 0010](adr/0010-live-scene-manipulation.md),
-[ADR 0011](adr/0011-persistent-preview-canvas.md).
+[ADR 0011](adr/0011-persistent-preview-canvas.md),
+[ADR 0012](adr/0012-unified-approval-and-diff.md),
+[ADR 0013](adr/0013-standalone-mcp-and-acp.md).
 
 ## Stages 4–6
 
