@@ -42,7 +42,8 @@ const GREETING: ChatMessage = {
     'Triangle agent ready. Pick a harness: Devin CLI (the preferred default when installed + ' +
     'authenticated, driven over ACP) leads; the Mock agent works with no setup; Claude Agent ' +
     'SDK needs ANTHROPIC_API_KEY; Codex CLI needs the `codex` binary. The agent edits project ' +
-    'files (gated by approval unless auto-approve is on) and the preview hot-reloads on save.',
+    'files (gated by approval unless auto-approve is on) and the preview hot-reloads on save. ' +
+    'Switch or create projects from the title bar; every run is saved to History and survives restarts.',
   timestamp: Date.now(),
 };
 

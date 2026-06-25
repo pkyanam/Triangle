@@ -43,6 +43,13 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
     refresh();
   }, [open, refresh]);
 
+  // Auto-dismiss the transient "Exported." confirmation.
+  useEffect(() => {
+    if (!notice) return undefined;
+    const t = window.setTimeout(() => setNotice(null), 2500);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
   // Dismiss on outside-click / Escape.
   useEffect(() => {
     if (!open) return undefined;
@@ -196,6 +203,12 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') createProject();
+                    // Escape backs out to the project list rather than closing the menu.
+                    if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setView('list');
+                      setError(null);
+                    }
                   }}
                 />
               </label>
