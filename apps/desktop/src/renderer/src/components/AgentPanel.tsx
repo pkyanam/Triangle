@@ -306,7 +306,7 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
   const selectedUnavailable = selectedLive ? !selectedLive.available : false;
 
   return (
-    <div className="agent">
+    <div className="agent agent--engine">
       <div className="agent__bar">
         <HarnessPicker
           value={harness}
@@ -430,25 +430,25 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
       <div className="agent__composer">
         <div className="agent__quick-actions">
           <button
-            className="btn btn--ghost btn--xs"
+            className="toolbar-btn"
             onClick={attachScreenshot}
             title="Capture the preview and attach its path for the agent"
           >
-            <Camera size={12} /> Screenshot
+            <Camera size={14} />
           </button>
           <button
-            className="btn btn--ghost btn--xs"
+            className="toolbar-btn"
             onClick={attachSceneSummary}
             title="Attach a summary of the live scene graph"
           >
-            <ListTree size={12} /> Scene
+            <ListTree size={14} />
           </button>
           <button
-            className="btn btn--ghost btn--xs"
+            className="toolbar-btn"
             onClick={attachPerformance}
             title="Attach a performance snapshot"
           >
-            <Gauge size={12} /> Perf
+            <Gauge size={14} />
           </button>
         </div>
         <div className="composer">
