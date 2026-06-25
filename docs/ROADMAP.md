@@ -10,6 +10,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 2.5 | Visual & Layout Overhaul (Trifecta design + dockview) | ✅ Done |
 | 3 | Three.js Domain Tooling & Visual Feedback Loop | ✅ Done |
 | 4 | Rich Agent Capabilities & Protocol Support (ACP/MCP) | ✅ Done |
+| 4.5 | Devin CLI (ACP) as the preferred harness | ✅ Done |
 | 5 | Polish, Rich Features & Internal Prototype | ⬜ |
 | 6 | Post-Prototype Hardening & Web Path | ⬜ Future |
 
@@ -84,6 +85,20 @@ See [`STAGE-4.md`](STAGE-4.md) and [ADR 0010](adr/0010-live-scene-manipulation.m
 [ADR 0011](adr/0011-persistent-preview-canvas.md),
 [ADR 0012](adr/0012-unified-approval-and-diff.md),
 [ADR 0013](adr/0013-standalone-mcp-and-acp.md).
+
+## Stage 4.5 — Devin CLI (ACP) as the preferred harness
+
+- [x] Shared ACP session runner (`agent/acp-session.ts`); `acp` + `devin` are thin
+      wrappers over it.
+- [x] First-class `devin` harness: `devin acp` over stdio, default-when-available,
+      with `devinPath` / `devinModel` config and a picker entry/icon.
+- [x] ACP `authenticate` flow (WINDSURF_API_KEY / runtime sign-in) with a timeout so
+      a turn never hangs.
+- [x] Reuses the unified gate (ADR 0012) + standalone MCP endpoint (ADR 0013); the
+      generic ACP harness still works.
+
+See [`STAGE-4.5-devin-acp.md`](STAGE-4.5-devin-acp.md) and
+[ADR 0014](adr/0014-devin-acp-harness.md).
 
 ## Stages 4–6
 

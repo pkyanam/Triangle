@@ -97,12 +97,15 @@ pnpm package          # produce a distributable build (electron-builder, Stage 5
 ### Agent credentials
 
 Credentials are read from the environment or a gitignored config — **never committed**.
-The Claude harness needs `ANTHROPIC_API_KEY`; the Codex harness needs the `codex` CLI on
-`PATH` (and a signed-in account, since it now drives the [Codex App
-Server](docs/adr/0008-codex-app-server-and-mcp-bridge.md)); the ACP harness needs an
-external ACP agent configured via `acpAgentCommand` (in-app harness config or the config
-file). Non-secret settings (per-harness models, ACP agent) are editable in-app and persist
-to the user config. See
+The **Devin CLI** harness is the preferred default when `devin` is on `PATH` and
+authenticated — driven over ACP (`devin acp`); authenticate with `WINDSURF_API_KEY` or
+`devin auth login` (see [Stage 4.5](docs/STAGE-4.5-devin-acp.md) / [ADR
+0014](docs/adr/0014-devin-acp-harness.md)). The Claude harness needs `ANTHROPIC_API_KEY`;
+the Codex harness needs the `codex` CLI on `PATH` (and a signed-in account, since it now
+drives the [Codex App Server](docs/adr/0008-codex-app-server-and-mcp-bridge.md)); the
+generic ACP harness needs an external ACP agent configured via `acpAgentCommand` (in-app
+harness config or the config file). Non-secret settings (per-harness models, Devin/ACP
+paths) are editable in-app and persist to the user config. See
 [`docs/STAGE-2.md`](docs/STAGE-2.md#configuration-credentials) for the full precedence and
 key list.
 
@@ -116,13 +119,14 @@ key list.
 | 2.5 | Visual & layout overhaul (design system + dockview) | ✅ |
 | 3 | Three.js domain tooling & visual feedback loop | ✅ |
 | 4 | Rich agent capabilities & protocol support (ACP / MCP) | ✅ |
+| 4.5 | Devin CLI (ACP) as the preferred harness | ✅ |
 | 5 | Polish, rich features & internal prototype | ⬜ |
 | 6 | Post-prototype hardening & web path | ⬜ |
 
 The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Stage write-ups:
 [Stage 1](docs/STAGE-1.md) · [Stage 2](docs/STAGE-2.md) ·
 [Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md) ·
-[Stage 4](docs/STAGE-4.md).
+[Stage 4](docs/STAGE-4.md) · [Stage 4.5](docs/STAGE-4.5-devin-acp.md).
 
 ## Architecture
 
