@@ -192,9 +192,16 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('[main] tool bridge failed to start:', err);
   }
-  // out/main/mcp.js sits next to this bundle; Codex (and external MCP clients
-  // via the standalone endpoint) launch it as a subprocess.
-  const mcpServerScriptPath = path.join(__dirname, 'mcp.js');
+  // The Triangle MCP server entry that Codex (and external MCP clients via the
+  // standalone endpoint) launch as a node subprocess. In dev it sits next to this
+  // bundle (out/main/mcp.js) with its shared chunk at out/main/chunks/. In a
+  // packaged build it can't run from inside app.asar (ESM + asar is brittle for a
+  // spawned process), so electron-builder ships mcp.js + its chunks/ sibling +
+  // an ESM `package.json` marker to <resources>/mcp via extraResources, and we
+  // resolve it from process.resourcesPath. See ADR 0017 (and ADR 0008/0013).
+  const mcpServerScriptPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'mcp', 'mcp.js')
+    : path.join(__dirname, 'mcp.js');
   mcpEndpoint = new McpEndpoint(project, preview, toolBridge, mcpServerScriptPath);
   try {
     await mcpEndpoint.start();
