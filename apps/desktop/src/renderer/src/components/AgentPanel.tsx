@@ -37,7 +37,8 @@ const GREETING: ChatMessage = {
   id: nextId(),
   role: 'system',
   content:
-    'Triangle agent ready. Pick a harness: the Mock agent works with no setup; Claude Agent ' +
+    'Triangle agent ready. Pick a harness: Devin CLI (the preferred default when installed + ' +
+    'authenticated, driven over ACP) leads; the Mock agent works with no setup; Claude Agent ' +
     'SDK needs ANTHROPIC_API_KEY; Codex CLI needs the `codex` binary. The agent edits project ' +
     'files (gated by approval unless auto-approve is on) and the preview hot-reloads on save.',
   timestamp: Date.now(),
@@ -58,6 +59,8 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
   const [showConfig, setShowConfig] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<string | null>(null);
+  // Once the user explicitly picks a harness, stop auto-selecting a default.
+  const userPickedRef = useRef(false);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -74,6 +77,20 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
       if (typeof s.autoApproveWrites === 'boolean') setAutoApprove(s.autoApproveWrites);
     });
   }, [refreshHarnesses]);
+
+  // Prefer Devin as the default harness when it's fully ready (binary present +
+  // authenticated → available with no setup reason). Falls back gracefully to the
+  // initial `mock` selection otherwise, and never overrides an explicit user pick.
+  useEffect(() => {
+    if (userPickedRef.current || availability.length === 0) return;
+    const devin = availability.find((a) => a.id === 'devin');
+    if (devin?.available && !devin.reason) setHarness('devin');
+  }, [availability]);
+
+  const pickHarness = useCallback((id: HarnessId) => {
+    userPickedRef.current = true;
+    setHarness(id);
+  }, []);
 
   /** Insert or update a message by id. */
   const upsert = useCallback((msg: ChatMessage) => {
@@ -278,7 +295,7 @@ export function AgentPanel({ projectName }: AgentPanelProps): React.JSX.Element 
         <HarnessPicker
           value={harness}
           availability={availability}
-          onChange={setHarness}
+          onChange={pickHarness}
           disabled={busy}
         />
         <button

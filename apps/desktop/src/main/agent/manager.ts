@@ -18,6 +18,7 @@ import type { AgentHarness, ApprovalAsk, ApprovalOutcome } from './harness.js';
 import { mockHarness } from './mock.js';
 import { claudeHarness } from './claude.js';
 import { codexHarness } from './codex.js';
+import { devinHarness } from './devin.js';
 import { acpHarness } from './acp.js';
 
 /** Connection details for an MCP server Triangle can advertise to external agents. */
@@ -84,6 +85,7 @@ export class AgentManager {
       mock: mockHarness,
       claude: claudeHarness,
       codex: codexHarness,
+      devin: devinHarness,
       acp: acpHarness,
     };
   }
@@ -91,7 +93,7 @@ export class AgentManager {
   /** Compute runtime availability for every known harness. */
   async listHarnesses(): Promise<HarnessAvailability[]> {
     const config = loadConfig();
-    const ids: HarnessId[] = ['mock', 'claude', 'codex', 'acp'];
+    const ids: HarnessId[] = ['mock', 'claude', 'codex', 'devin', 'acp'];
     return Promise.all(
       ids.map(async (id) => {
         const harness = this.harnesses[id];
@@ -298,6 +300,8 @@ export class AgentManager {
 
 function labelFor(id: HarnessId): string {
   switch (id) {
+    case 'devin':
+      return 'Devin CLI';
     case 'acp':
       return 'ACP / MCP';
     default:

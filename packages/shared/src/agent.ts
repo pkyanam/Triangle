@@ -5,7 +5,7 @@
  */
 
 /** Supported agent harnesses. Only `mock` is wired in Stage 1. */
-export type HarnessId = 'mock' | 'claude' | 'codex' | 'acp';
+export type HarnessId = 'mock' | 'claude' | 'codex' | 'devin' | 'acp';
 
 export interface HarnessDescriptor {
   id: HarnessId;
@@ -20,6 +20,12 @@ export const HARNESSES: HarnessDescriptor[] = [
   { id: 'mock', label: 'Mock Agent', available: true, note: 'Canned responses, no backend.' },
   { id: 'claude', label: 'Claude Agent SDK', available: true, note: 'Needs ANTHROPIC_API_KEY.' },
   { id: 'codex', label: 'Codex CLI', available: true, note: 'Needs the `codex` CLI installed.' },
+  {
+    id: 'devin',
+    label: 'Devin CLI',
+    available: true,
+    note: 'Needs the `devin` CLI installed + authenticated (ACP).',
+  },
   { id: 'acp', label: 'ACP Agent', available: true, note: 'Needs acpAgentCommand configured.' },
 ];
 
@@ -33,6 +39,10 @@ export interface AgentSettings {
   claudeModel?: string;
   /** Model override for the Codex harness. */
   codexModel?: string;
+  /** Path to the `devin` CLI binary (default `devin`, resolved on PATH). */
+  devinPath?: string;
+  /** Model override for the Devin (ACP) harness, e.g. an adaptive/model id. */
+  devinModel?: string;
   /** External ACP agent command (enables the `acp` harness). */
   acpAgentCommand?: string;
   /** Arguments for the ACP agent command. */

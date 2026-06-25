@@ -10,7 +10,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, CircleDashed, Network, Search } from 'lucide-react';
 import { HARNESSES, type HarnessAvailability, type HarnessId } from '@triangle/shared';
-import { ClaudeIcon, OpenAIIcon } from './icons/providers.js';
+import { ClaudeIcon, DevinIcon, OpenAIIcon } from './icons/providers.js';
 
 interface HarnessPickerProps {
   value: HarnessId;
@@ -29,6 +29,7 @@ const META: Record<HarnessId, HarnessMeta> = {
   mock: { icon: CircleDashed, subtitle: 'Local · canned responses' },
   claude: { icon: ClaudeIcon, subtitle: 'Anthropic · Claude Agent SDK' },
   codex: { icon: OpenAIIcon, subtitle: 'OpenAI · Codex CLI' },
+  devin: { icon: DevinIcon, subtitle: 'Cognition · Devin CLI (ACP)' },
   acp: { icon: Network, subtitle: 'Protocol · ACP / MCP (Stage 4)' },
 };
 

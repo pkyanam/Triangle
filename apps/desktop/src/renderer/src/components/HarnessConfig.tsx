@@ -75,6 +75,33 @@ export function HarnessConfig({ harness, onSaved }: HarnessConfigProps): React.J
         </label>
       )}
 
+      {harness === 'devin' && (
+        <>
+          <label className="hconfig__field">
+            <span className="hconfig__label">Devin model</span>
+            <input
+              className="hconfig__input"
+              placeholder="adaptive (default)"
+              defaultValue={settings.devinModel ?? ''}
+              onBlur={(e) => persist({ devinModel: e.target.value })}
+            />
+          </label>
+          <label className="hconfig__field">
+            <span className="hconfig__label">Devin CLI path</span>
+            <input
+              className="hconfig__input"
+              placeholder="devin"
+              defaultValue={settings.devinPath ?? ''}
+              onBlur={(e) => persist({ devinPath: e.target.value })}
+            />
+          </label>
+          <div className="hconfig__note">
+            Auth: set <code>WINDSURF_API_KEY</code> or run <code>devin auth login</code>. Driven over
+            ACP (<code>devin acp</code>).
+          </div>
+        </>
+      )}
+
       {harness === 'acp' && (
         <>
           <label className="hconfig__field">

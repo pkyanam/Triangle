@@ -27,6 +27,32 @@ export function OpenAIIcon({ size = 16, className }: ProviderIconProps): React.J
   );
 }
 
+/**
+ * Devin / Windsurf — a stylized sail/wind mark in `currentColor`. Devin CLI is
+ * driven over ACP (`devin acp`); see ADR 0014.
+ */
+export function DevinIcon({ size = 16, className }: ProviderIconProps): React.JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      {/* A sail running before the wind: mast + filled sail + a wake line. */}
+      <path d="M12 2.5v15" />
+      <path d="M12 4.5c4.2.7 7 3.2 7.5 7.2-2.6-1.4-5-1.6-7.5-1.2z" fill="currentColor" stroke="none" />
+      <path d="M4.5 21h15" />
+    </svg>
+  );
+}
+
 /** Anthropic / Claude — uses Anthropic's brand coral. */
 export function ClaudeIcon({ size = 16, className }: ProviderIconProps): React.JSX.Element {
   return (

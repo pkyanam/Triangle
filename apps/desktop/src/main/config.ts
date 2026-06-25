@@ -24,6 +24,13 @@ export interface TriangleConfig {
   /** Override the Codex model. */
   codexModel?: string;
   /**
+   * The Devin CLI binary (default `devin`, resolved on PATH). Triangle drives it as
+   * an ACP agent via `devin acp` — the preferred harness when available. See ADR 0014.
+   */
+  devinPath?: string;
+  /** Override the Devin model (else Devin's adaptive default). */
+  devinModel?: string;
+  /**
    * Command for an external ACP (Agent Client Protocol) agent that Triangle drives
    * as an ACP *client* (e.g. `gemini` with its experimental ACP flag). When set,
    * the `acp` harness becomes available. See ADR 0013.
@@ -43,6 +50,8 @@ interface RawConfigFile extends Partial<TriangleConfig> {
   claude_model?: string;
   codex_path?: string;
   codex_model?: string;
+  devin_path?: string;
+  devin_model?: string;
   acp_agent_command?: string;
   acp_agent_args?: string[];
   acp_agent_label?: string;
@@ -67,6 +76,8 @@ function fromFile(raw: RawConfigFile | null): Partial<TriangleConfig> {
     claudeExecutablePath: raw.claudeExecutablePath,
     codexPath: raw.codexPath ?? raw.codex_path,
     codexModel: raw.codexModel ?? raw.codex_model,
+    devinPath: raw.devinPath ?? raw.devin_path,
+    devinModel: raw.devinModel ?? raw.devin_model,
     acpAgentCommand: raw.acpAgentCommand ?? raw.acp_agent_command,
     acpAgentArgs: raw.acpAgentArgs ?? raw.acp_agent_args,
     acpAgentLabel: raw.acpAgentLabel ?? raw.acp_agent_label,
@@ -89,6 +100,8 @@ function fromEnv(): Partial<TriangleConfig> {
   if (env['TRIANGLE_CLAUDE_EXECUTABLE']) out.claudeExecutablePath = env['TRIANGLE_CLAUDE_EXECUTABLE'];
   if (env['TRIANGLE_CODEX_PATH']) out.codexPath = env['TRIANGLE_CODEX_PATH'];
   if (env['TRIANGLE_CODEX_MODEL']) out.codexModel = env['TRIANGLE_CODEX_MODEL'];
+  if (env['TRIANGLE_DEVIN_PATH']) out.devinPath = env['TRIANGLE_DEVIN_PATH'];
+  if (env['TRIANGLE_DEVIN_MODEL']) out.devinModel = env['TRIANGLE_DEVIN_MODEL'];
   if (env['TRIANGLE_ACP_AGENT_COMMAND']) out.acpAgentCommand = env['TRIANGLE_ACP_AGENT_COMMAND'];
   if (env['TRIANGLE_ACP_AGENT_ARGS']) {
     out.acpAgentArgs = env['TRIANGLE_ACP_AGENT_ARGS'].split(' ').filter(Boolean);
@@ -112,6 +125,7 @@ export function loadConfig(): TriangleConfig {
   const env = fromEnv();
   return {
     codexPath: 'codex',
+    devinPath: 'devin',
     autoApproveWrites: false,
     ...compact(devFile),
     ...compact(userFile),
@@ -129,6 +143,8 @@ export function loadAgentSettings(): AgentSettings {
   return {
     claudeModel: c.claudeModel,
     codexModel: c.codexModel,
+    devinPath: c.devinPath,
+    devinModel: c.devinModel,
     acpAgentCommand: c.acpAgentCommand,
     acpAgentArgs: c.acpAgentArgs,
     acpAgentLabel: c.acpAgentLabel,
