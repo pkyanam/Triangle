@@ -212,7 +212,8 @@ export type SceneEdit =
       scale?: [number, number, number];
     }
   | { op: 'set_visibility'; target: string; visible: boolean }
-  | { op: 'set_light'; target: string; intensity?: number; color?: string };
+  | { op: 'set_light'; target: string; intensity?: number; color?: string }
+  | { op: 'reparent'; target: string; newParent: string | null };
 
 /** Result of applying a {@link SceneEdit}. */
 export interface SceneEditResult {

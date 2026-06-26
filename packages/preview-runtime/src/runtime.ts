@@ -212,6 +212,7 @@ export class PreviewRuntime {
       const ctx = this.setupContext();
       this.moduleState = (await next.setup?.(ctx)) ?? undefined;
       this.applyViewMode(this.viewMode);
+      this.applyModuleOverrides(next);
       this.restoreSelection();
       this.emitStatus({ phase: 'running' });
       this.options.onSceneChanged?.();
@@ -541,6 +542,23 @@ export class PreviewRuntime {
     this.selection.setTarget(obj);
     if (!obj) this.selectedUuid = null;
     this.syncTransformAttachment(obj);
+  }
+
+  /**
+   * Re-apply the Inspector's persisted edits (an exported `__triangleOverrides`
+   * array of SceneEdits) after the author module's setup runs. This is how
+   * "Apply to source" survives hot-reload (ADR 0024).
+   */
+  private applyModuleOverrides(mod: PreviewModule): void {
+    const overrides = (mod as unknown as { __triangleOverrides?: unknown }).__triangleOverrides;
+    if (!Array.isArray(overrides)) return;
+    for (const ov of overrides) {
+      try {
+        mutateScene(this.scene, ov as SceneEdit);
+      } catch {
+        /* ignore malformed override */
+      }
+    }
   }
 
   /** Iterate author meshes (skipping runtime-owned/persistent objects). */

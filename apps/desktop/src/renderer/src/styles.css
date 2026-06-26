@@ -2183,6 +2183,79 @@ button {
 .outliner__visibility:hover {
   color: var(--foreground);
 }
+.outliner__act {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  flex: 0 0 16px;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+.outliner__row:hover .outliner__act,
+.outliner__act--on {
+  opacity: 1;
+}
+.outliner__act:hover,
+.outliner__act--on {
+  color: var(--signal-fg);
+}
+.outliner__row--locked {
+  opacity: 0.55;
+}
+.outliner__row--locked .outliner__name {
+  font-style: italic;
+}
+.outliner__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+.outliner__search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--foreground);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+/* Inspector drag-to-scrub fields */
+.inspector__scrub {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.inspector__scrub-label {
+  font-family: var(--font-num);
+  font-size: 10px;
+  color: var(--muted-foreground);
+  cursor: ew-resize;
+  user-select: none;
+  padding: 0 2px;
+}
+.inspector__scrub-label:hover {
+  color: var(--signal-fg);
+}
+.inspector__unit {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.inspector__apply {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
 
 /* ---------- Inspector (Stage 5.75) ---------- */
 .inspector {

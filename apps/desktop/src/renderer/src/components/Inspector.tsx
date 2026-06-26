@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
-import { MousePointer2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MousePointer2, Save } from 'lucide-react';
 import type { SceneObjectDetail, UniformDetail } from '@triangle/preview-runtime';
 import type { SceneEdit } from '@triangle/shared';
 import { applyActiveSceneEdit, describeActiveObject } from '../preview/bridge.js';
+import { upsertOverridesBlock } from '../lib/overrides.js';
+import { Button } from './ui/button.js';
+import { toast } from './ui/toast.js';
 
 interface InspectorProps {
   selectedUuid: string | null;
@@ -10,8 +13,15 @@ interface InspectorProps {
 
 export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
   const [detail, setDetail] = useState<SceneObjectDetail | null>(null);
+  // Pending edits since selection, keyed by op, so Apply persists exactly what
+  // changed. Targeted by name (uuids change across hot-reload).
+  const pending = useRef<Map<string, SceneEdit>>(new Map());
+  const [pendingCount, setPendingCount] = useState(0);
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
+    pending.current = new Map();
+    setPendingCount(0);
     if (!selectedUuid) {
       setDetail(null);
       return;
@@ -21,10 +31,34 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
 
   const applyEdit = (edit: SceneEdit) => {
     applyActiveSceneEdit(edit);
-    if (selectedUuid) {
-      setDetail(describeActiveObject(selectedUuid));
+    const d = selectedUuid ? describeActiveObject(selectedUuid) : null;
+    if (selectedUuid) setDetail(d);
+    // Record for persistence, retargeted by name (stable across reloads).
+    const name = d?.name ?? detail?.name;
+    if (name) {
+      pending.current.set(edit.op, { ...edit, target: name });
+      setPendingCount(pending.current.size);
     }
   };
+
+  const applyToSource = useCallback(async () => {
+    if (pending.current.size === 0) return;
+    setApplying(true);
+    try {
+      const info = await window.triangle.project.get();
+      const entry = info.manifest.entry;
+      const { content } = await window.triangle.file.read(entry);
+      const next = upsertOverridesBlock(content, [...pending.current.values()]);
+      await window.triangle.file.write({ path: entry, content: next });
+      pending.current = new Map();
+      setPendingCount(0);
+      toast('Applied edits to source.', { variant: 'success' });
+    } catch (e) {
+      toast(`Apply failed: ${String((e as Error).message ?? e)}`, { variant: 'error' });
+    } finally {
+      setApplying(false);
+    }
+  }, []);
 
   if (!selectedUuid) {
     return (
@@ -53,16 +87,21 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
           <Vec3Field
             label="Position"
             value={detail.position}
+            step={0.01}
             onChange={(v) => applyEdit({ op: 'set_transform', target: detail.uuid, position: v })}
           />
           <Vec3Field
             label="Rotation"
             value={detail.rotationDeg}
+            step={1}
+            unit="°"
             onChange={(v) => applyEdit({ op: 'set_transform', target: detail.uuid, rotationDeg: v })}
           />
           <Vec3Field
             label="Scale"
             value={detail.scale}
+            step={0.01}
+            min={0}
             onChange={(v) => applyEdit({ op: 'set_transform', target: detail.uuid, scale: v })}
           />
         </Section>
@@ -173,8 +212,13 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
           </div>
         </Section>
 
-        <div className="inspector__footnote">
-          Transient — hot-reload reverts these edits. Use the agent to persist changes in source.
+        <div className="inspector__apply">
+          <Button variant="primary" size="xs" onClick={() => void applyToSource()} disabled={applying || pendingCount === 0}>
+            <Save size={12} /> Apply to source{pendingCount > 0 ? ` (${pendingCount})` : ''}
+          </Button>
+          <span className="inspector__footnote">
+            Live edit — click Apply to write these changes to the entry source.
+          </span>
         </div>
       </div>
     </div>
@@ -204,24 +248,107 @@ function ReadOnlyField({ label, value }: { label: string; value: string }): Reac
   );
 }
 
-function Vec3Field({
-  label,
+/**
+ * A numeric input with a drag-to-scrub handle (the axis label). Supports
+ * step/min/max snapping and an optional unit suffix — standard engine behavior.
+ */
+function ScrubInput({
+  axis,
   value,
+  step = 0.01,
+  min,
+  max,
+  unit,
   onChange,
 }: {
-  label: string;
-  value: [number, number, number];
-  onChange: (v: [number, number, number]) => void;
+  axis: string;
+  value: number;
+  step?: number;
+  min?: number;
+  max?: number;
+  unit?: string;
+  onChange: (v: number) => void;
 }): React.JSX.Element {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
 
-  const update = (i: number, raw: string) => {
-    const num = Number(raw);
-    if (Number.isNaN(num)) return;
-    const next: [number, number, number] = [...local] as [number, number, number];
-    next[i] = num;
+  const clamp = (n: number): number => {
+    let r = n;
+    if (min !== undefined) r = Math.max(min, r);
+    if (max !== undefined) r = Math.min(max, r);
+    return r;
+  };
+
+  const snap = (n: number): number => {
+    const snapped = Math.round(n / step) * step;
+    // Round to the step's precision to avoid float dust (e.g. 0.30000000004).
+    const decimals = Math.max(0, (String(step).split('.')[1] ?? '').length);
+    return Number(snapped.toFixed(decimals));
+  };
+
+  const drag = useRef<{ startX: number; startVal: number } | null>(null);
+  const onPointerDown = (e: React.PointerEvent): void => {
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { startX: e.clientX, startVal: local };
+  };
+  const onPointerMove = (e: React.PointerEvent): void => {
+    if (!drag.current) return;
+    const fine = e.shiftKey ? 0.25 : 1;
+    const next = clamp(snap(drag.current.startVal + (e.clientX - drag.current.startX) * step * fine));
     setLocal(next);
+    onChange(next);
+  };
+  const onPointerUp = (e: React.PointerEvent): void => {
+    drag.current = null;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  };
+
+  return (
+    <div className="inspector__scrub">
+      <span
+        className="inspector__scrub-label"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        title={`Drag to scrub ${axis}`}
+      >
+        {axis}
+      </span>
+      <input
+        className="inspector__num"
+        value={local}
+        onChange={(e) => {
+          const num = Number(e.target.value);
+          if (Number.isNaN(num)) return;
+          setLocal(num);
+          onChange(clamp(num));
+        }}
+      />
+      {unit && <span className="inspector__unit">{unit}</span>}
+    </div>
+  );
+}
+
+function Vec3Field({
+  label,
+  value,
+  step,
+  min,
+  max,
+  unit,
+  onChange,
+}: {
+  label: string;
+  value: [number, number, number];
+  step?: number;
+  min?: number;
+  max?: number;
+  unit?: string;
+  onChange: (v: [number, number, number]) => void;
+}): React.JSX.Element {
+  const update = (i: number, num: number) => {
+    const next: [number, number, number] = [...value] as [number, number, number];
+    next[i] = num;
     onChange(next);
   };
 
@@ -230,12 +357,15 @@ function Vec3Field({
       <span className="inspector__field-label">{label}</span>
       <div className="inspector__field-inputs">
         {(['X', 'Y', 'Z'] as const).map((axis, i) => (
-          <input
+          <ScrubInput
             key={axis}
-            className="inspector__num"
-            value={local[i]}
-            onChange={(e) => update(i, e.target.value)}
-            title={axis}
+            axis={axis}
+            value={value[i]}
+            step={step}
+            min={min}
+            max={max}
+            unit={unit}
+            onChange={(v) => update(i, v)}
           />
         ))}
       </div>
@@ -246,29 +376,25 @@ function Vec3Field({
 function NumField({
   label,
   value,
+  step,
+  min,
+  max,
+  unit,
   onChange,
 }: {
   label: string;
   value: number;
+  step?: number;
+  min?: number;
+  max?: number;
+  unit?: string;
   onChange: (v: number) => void;
 }): React.JSX.Element {
-  const [local, setLocal] = useState(value);
-  useEffect(() => setLocal(value), [value]);
-
   return (
     <div className="inspector__field">
       <span className="inspector__field-label">{label}</span>
       <div className="inspector__field-inputs">
-        <input
-          className="inspector__num"
-          value={local}
-          onChange={(e) => {
-            const num = Number(e.target.value);
-            if (Number.isNaN(num)) return;
-            setLocal(num);
-            onChange(num);
-          }}
-        />
+        <ScrubInput axis="•" value={value} step={step} min={min} max={max} unit={unit} onChange={onChange} />
       </div>
     </div>
   );

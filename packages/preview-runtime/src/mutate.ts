@@ -145,6 +145,26 @@ function setLight(
   return { ok: true, summary: `Updated light ${ref?.name}: ${parts.join(', ')}.`, target: ref };
 }
 
+function reparent(
+  scene: THREE.Scene,
+  obj: THREE.Object3D,
+  newParent: string | null,
+  ref: SceneEditResult['target'],
+): SceneEditResult {
+  const parent = newParent ? findTarget(scene, newParent) : scene;
+  if (!parent) return fail(`No reparent target named or with uuid "${newParent}".`, ref);
+  if (parent === obj) return fail(`Cannot reparent ${ref?.name} onto itself.`, ref);
+  // Guard against creating a cycle (new parent is a descendant of obj).
+  let cursor: THREE.Object3D | null = parent;
+  while (cursor) {
+    if (cursor === obj) return fail(`Cannot reparent ${ref?.name} into its own descendant.`, ref);
+    cursor = cursor.parent;
+  }
+  parent.attach(obj); // preserves world transform
+  const parentName = parent === scene ? 'scene' : (parent as THREE.Object3D).name || '(unnamed)';
+  return { ok: true, summary: `Reparented ${ref?.name} → ${parentName}.`, target: ref };
+}
+
 /** Apply a single live edit to the scene, returning a structured result. */
 export function applySceneEdit(scene: THREE.Scene, edit: SceneEdit): SceneEditResult {
   const obj = findTarget(scene, edit.target);
@@ -163,5 +183,7 @@ export function applySceneEdit(scene: THREE.Scene, edit: SceneEdit): SceneEditRe
       return { ok: true, summary: `Set ${ref.name} visible = ${edit.visible}.`, target: ref };
     case 'set_light':
       return setLight(obj, edit, ref);
+    case 'reparent':
+      return reparent(scene, obj, edit.newParent, ref);
   }
 }
