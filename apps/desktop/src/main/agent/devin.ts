@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
-import { fetchDevinModels, listAcpSessions, logoutAcpAgent, runAcpSession } from './acp-session.js';
+import { ACP_SYSTEM_PROMPT, fetchDevinModels, listAcpSessions, logoutAcpAgent, runAcpSession } from './acp-session.js';
 import type { AgentHarness, RunContext } from './harness.js';
 
 /**
@@ -129,6 +129,7 @@ export const devinHarness: AgentHarness = {
       ...(configOptions?.mode ? { mode: configOptions.mode } : {}),
       ...(configOptions && Object.keys(configOptions).length > 0 ? { configOptions } : {}),
       ...(ctx.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
+      systemPrompt: ACP_SYSTEM_PROMPT,
       mcpServers: [
         {
           name: 'triangle',

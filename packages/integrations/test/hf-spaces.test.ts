@@ -2,6 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { HuggingFaceSpacesClient } from '../src/hf-spaces.ts';
 
+function fakeClient(
+  expectedSpace?: string,
+  expectedRoute?: string,
+  response: unknown = [],
+): (space: string, options?: { token?: string }) => Promise<{ predict: (route: string, payload: unknown[]) => Promise<{ data: unknown }> }> {
+  return async (space, options) => {
+    if (expectedSpace) assert.equal(space, expectedSpace);
+    return {
+      predict: async (route, _payload) => {
+        if (expectedRoute) assert.equal(route, expectedRoute);
+        if (expectedSpace) assert.equal(options?.token, 'hf_token');
+        return { data: response };
+      },
+    };
+  };
+}
+
 function fakeFetch(response: unknown | (() => unknown)): typeof fetch {
   return async () =>
     ({
@@ -14,32 +31,38 @@ function fakeFetch(response: unknown | (() => unknown)): typeof fetch {
 }
 
 test('call requires a qualified space name', async () => {
-  const client = new HuggingFaceSpacesClient({ fetch: fakeFetch({ data: [] }) });
+  const client = new HuggingFaceSpacesClient({
+    clientFactory: fakeClient(undefined, undefined, []),
+  });
   await assert.rejects(() => client.call({ space: 'unqualified' }), /user\/space/);
 });
 
 test('call returns data and status', async () => {
   const client = new HuggingFaceSpacesClient({
     token: 'hf_token',
-    fetch: fakeFetch({ data: ['hello'], status: 'complete' }),
+    clientFactory: fakeClient('tencent/Hunyuan3D-2', '/predict', ['hello']),
   });
-  const result = await client.call({ space: 'tencent/Hunyuan3D-2-mini', payload: { prompt: 'a cube' } });
+  const result = await client.call({
+    space: 'tencent/Hunyuan3D-2',
+    route: '/predict',
+    payload: ['a cube'],
+  });
   assert.deepEqual(result.data, ['hello']);
   assert.equal(result.status, 'complete');
-  assert.ok(result.url.includes('tencent/Hunyuan3D-2-mini'));
+  assert.ok(result.url.includes('tencent/Hunyuan3D-2'));
 });
 
-test('call sends auth header', async () => {
-  let auth: string | undefined;
+test('call passes the auth token to the client factory', async () => {
+  let token: string | undefined;
   const client = new HuggingFaceSpacesClient({
     token: 'hf_oauth_abc',
-    fetch: async (_url, init) => {
-      auth = (init as { headers?: Record<string, string> }).headers?.['Authorization'];
-      return { ok: true, status: 200, statusText: 'OK', json: async () => ({ data: [], status: 'complete' }) } as Response;
+    clientFactory: async (_space, options) => {
+      token = options?.token;
+      return { predict: async () => ({ data: [] }) };
     },
   });
   await client.call({ space: 'foo/bar' });
-  assert.equal(auth, 'Bearer hf_oauth_abc');
+  assert.equal(token, 'hf_oauth_abc');
 });
 
 test('listSpaces maps api response', async () => {

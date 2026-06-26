@@ -329,7 +329,7 @@ export function createToolset(ctx: ToolContext): TriangleToolset {
     hfGenerate3dAsset: (prompt: string, image?: string, provider?: string, endpoint?: string) =>
       traced('hf_generate_3d_asset', { prompt, image: image ? '<image>' : undefined, provider, endpoint }, async () => {
         const token = resolveHfToken(ctx);
-        const effectiveProvider = provider || (endpoint ? undefined : 'hunyuan3d');
+        const effectiveProvider = provider || (endpoint ? undefined : image ? 'hunyuan3d' : 'shape-e');
         if (!token && !endpoint) {
           throw new ToolError('HF token is required for 3D generation. Set HF_TOKEN, configure hfToken in settings, or connect via Hugging Face OAuth.');
         }

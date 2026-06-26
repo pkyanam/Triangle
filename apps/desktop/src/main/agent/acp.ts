@@ -1,6 +1,6 @@
 import type { ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
-import { runAcpSession } from './acp-session.js';
+import { ACP_SYSTEM_PROMPT, runAcpSession } from './acp-session.js';
 import type { AgentHarness, RunContext } from './harness.js';
 
 /**
@@ -45,6 +45,7 @@ export const acpHarness: AgentHarness = {
       label: ctx.config.acpAgentLabel || 'ACP agent',
       capabilities: { fs: { readTextFile: true, writeTextFile: true }, image: true },
       ...(ctx.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
+      systemPrompt: ACP_SYSTEM_PROMPT,
       mcpServers: [
         {
           name: 'triangle',

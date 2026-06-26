@@ -132,10 +132,17 @@ importers:
         version: 7.1.12(@types/node@24.10.1)(jiti@2.7.0)(tsx@4.22.4)
 
   packages/integrations:
+    dependencies:
+      '@gradio/client':
+        specifier: 2.2.2
+        version: 2.2.2
     devDependencies:
       '@types/node':
         specifier: 24.10.1
         version: 24.10.1
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -761,6 +768,10 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+
+  '@gradio/client@2.2.2':
+    resolution: {integrity: sha512-aF4xz2E913zhZZnmapRGOlHPrxU/S2Syy+OGDV4FMTRiJxbgGWbdO2DLxsQqVrPbWUoqb2O760rqcbArnjispw==}
+    engines: {node: '>=18.0.0'}
 
   '@hono/node-server@1.19.14':
     resolution: {integrity: sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw==}
@@ -2031,6 +2042,9 @@ packages:
   fetch-blob@3.2.0:
     resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
     engines: {node: ^12.20 || >= 14.13}
+
+  fetch-event-stream@0.1.6:
+    resolution: {integrity: sha512-GREtJ5HNikdU2AXtZ6E/5bk+aslMU6ie5mPG6H9nvsdDkkHQ6m5lHwmmmDTOBexok9hApQ7EprsXCdmz9ZC68w==}
 
   fflate@0.8.3:
     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
@@ -3989,6 +4003,10 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
+  '@gradio/client@2.2.2':
+    dependencies:
+      fetch-event-stream: 0.1.6
+
   '@hono/node-server@1.19.14(hono@4.12.27)':
     dependencies:
       hono: 4.12.27
@@ -5365,6 +5383,8 @@ snapshots:
     dependencies:
       node-domexception: 1.0.0
       web-streams-polyfill: 3.3.3
+
+  fetch-event-stream@0.1.6: {}
 
   fflate@0.8.3: {}
 

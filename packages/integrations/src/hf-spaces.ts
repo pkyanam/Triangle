@@ -1,32 +1,37 @@
 /**
  * Hugging Face Spaces integration.
  *
- * Lets Triangle call public or private HF Spaces on behalf of an authenticated user.
- * Spaces expose a Gradio `/api/predict` endpoint and newer `/api/run` endpoints. This
- * client supports both, plus listing Spaces the caller has access to.
+ * Calls public or private HF Spaces through the official Gradio JavaScript client,
+ * which handles the modern queue-based Gradio API (`/gradio_api/call/*`) and file
+ * inputs/outputs. Falls back to a raw HTTP call when `endpoint` is supplied
+ * directly.
  *
- * @see https://huggingface.co/docs/hub/spaces-overview
+ * @see https://huggingface.co/docs/hub/spaces-api-endpoints
  * @see https://huggingface.co/docs/hub/spaces-oauth
  */
+import { client } from '@gradio/client';
 
 export interface HFSpacesConfig {
   /** HF API token or OAuth access token. */
   token?: string;
   /** Override global fetch (used for testing). */
   fetch?: typeof fetch;
+  /**
+   * Override the Gradio client factory for testing. Receives the space name and
+   * options, and must return a connected Gradio app with a `predict` method.
+   */
+  clientFactory?: (space: string, options?: { token?: string }) => Promise<{ predict: (route: string, payload: unknown[]) => Promise<{ data: unknown }> }>;
 }
 
 export interface HFSpaceCallOptions {
   /** Space name in `user/space` or `org/space` form. */
   space: string;
-  /** Route/method name for the Space API call (e.g. `predict`). */
+  /** Route/method name for the Space API call (e.g. `/predict` or `/shape_generation`). */
   route?: string;
-  /** Payload sent to the Space. */
-  payload?: Record<string, unknown>;
+  /** Payload sent to the Space; either an array of positional args or a named-params object. */
+  payload?: unknown[] | Record<string, unknown>;
   /** Maximum time to wait for a result, in milliseconds. */
   timeoutMs?: number;
-  /** Interval between async status polls, in milliseconds. */
-  pollIntervalMs?: number;
 }
 
 export interface HFSpaceCallResult {
@@ -48,72 +53,41 @@ export interface HFSpaceSummary {
   url: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-const DEFAULT_POLL_INTERVAL_MS = 2000;
 const HF_API_URL = 'https://huggingface.co/api';
 
 export class HuggingFaceSpacesClient {
   private readonly token: string | undefined;
   private readonly fetch: typeof fetch;
+  private readonly clientFactory: HFSpacesConfig['clientFactory'];
 
   constructor(config: HFSpacesConfig = {}) {
     this.token = config.token;
     this.fetch = config.fetch ?? globalThis.fetch;
+    this.clientFactory = config.clientFactory;
   }
 
   /**
-   * Call a Hugging Face Space Gradio API endpoint. Defaults to `/api/predict` but
-   * can be overridden for newer Spaces that expose `/api/run/{route}` endpoints.
-   *
-   * If the response contains a `status` of `pending`, the client polls the Space
-   * until the job completes or the timeout is reached.
+   * Call a Hugging Face Space Gradio API endpoint through the official Gradio JS
+   * client. This handles the modern queue-based Gradio API (`/gradio_api/call/*`),
+   * file uploads, and async polling.
    */
   async call(options: HFSpaceCallOptions): Promise<HFSpaceCallResult> {
-    const {
-      space,
-      route = 'predict',
-      payload = {},
-      timeoutMs = DEFAULT_TIMEOUT_MS,
-      pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-    } = options;
+    const { space, route = '/predict', payload = [] } = options;
 
     if (!space.includes('/')) {
       throw new Error('Space name must be in "user/space" or "org/space" form.');
     }
 
-    const url = this.spaceApiUrl(space, route);
-    const headers = this.authHeaders();
-    const deadline = Date.now() + timeoutMs;
-
-    const initial = await this.fetch(url, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!initial.ok) {
-      throw new Error(`HF Space call failed: ${initial.status} ${initial.statusText}`);
-    }
-
-    const first = (await initial.json()) as Record<string, unknown>;
-    let status = String(first['status'] ?? first['job_status'] ?? 'complete');
-    let data: unknown = first['data'] ?? first;
-
-    while (status === 'pending' && Date.now() < deadline) {
-      await sleep(pollIntervalMs);
-      const poll = await this.fetch(url, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!poll.ok) {
-        throw new Error(`HF Space poll failed: ${poll.status} ${poll.statusText}`);
-      }
-      const body = (await poll.json()) as Record<string, unknown>;
-      status = String(body['status'] ?? body['job_status'] ?? 'complete');
-      data = body['data'] ?? body;
-    }
-
-    return { data, status, url };
+    const token = this.token as `hf_${string}` | undefined;
+    const app = this.clientFactory
+      ? await this.clientFactory(space, { ...(token ? { token } : {}) })
+      : await client(space, { ...(token ? { token } : {}) });
+    const result = await app.predict(route, payload as unknown[]);
+    return {
+      data: result.data,
+      status: 'complete',
+      url: `https://huggingface.co/spaces/${space}`,
+    };
   }
 
   /**
@@ -142,17 +116,9 @@ export class HuggingFaceSpacesClient {
     }));
   }
 
-  private spaceApiUrl(space: string, route: string): string {
-    return `https://huggingface.co/spaces/${space}/api/${route}`;
-  }
-
   private authHeaders(): Record<string, string> {
     const headers: Record<string, string> = {};
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
     return headers;
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

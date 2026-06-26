@@ -118,8 +118,11 @@ Face). Each user creates their own HF OAuth app at https://huggingface.co/settin
 pastes the client id, and clicks Connect; the app displays the 8-character HF user code and
 polls for the token. Users can also paste an HF OAuth access token or a personal `HF_TOKEN`
 directly. HF supports public apps with no client secret, so only the client id is safe in a
-desktop binary. When an agent calls `hf_generate_3d_asset` without a provider, it defaults
-to the `tencent/Hunyuan3D-2-mini` Space.
+desktop binary. The `hf_generate_3d_asset` tool routes through the official Gradio JS client
+(`@gradio/client`) so it speaks the modern queue-based HF Spaces API. Text-to-3D defaults to
+provider `shape-e` (a Shap-E text-to-3D Space); image-to-3D providers are `hunyuan3d`
+(`tencent/Hunyuan3D-2`), `trellis`, and `triposr`. Note that free HF Spaces may sleep, error,
+or disable text-to-3D — if generation fails, switch providers or supply an image.
 
 The Devin CLI harness uses `devin acp` (ACP) and tries `session/new` before prompting for
 auth, so an already-logged-in user (`devin auth login` or `WINDSURF_API_KEY`) is not

@@ -57,6 +57,10 @@ the configured agent over stdio and speaks ACP v1 JSON-RPC:
     under `mcpServers.triangle`, so Devin sees the tools from its own config.
     The standalone endpoint allows the HF `download_3d_asset` write so the full
     generate → download → import pipeline can complete over MCP.
+- `session/prompt` is sent with the user prompt and a leading system instruction block
+  (`ACP_SYSTEM_PROMPT`) that explicitly tells the agent about the "triangle" MCP server
+  and when to use its tools, because some ACP agents do not reliably introspect MCP
+  tool descriptions.
 - `session/update` notifications map onto Triangle events (assistant/thought text
   chunks accumulate; `tool_call` / `tool_call_update` become tool traces).
 - Agent→client requests are served from the same `TriangleToolset`:

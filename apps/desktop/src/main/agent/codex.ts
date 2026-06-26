@@ -31,9 +31,10 @@ const DEVELOPER_INSTRUCTIONS =
   'triangle_set_visibility, and triangle_set_light each take a target (an object name or uuid ' +
   'from triangle_describe_scene) and reflect immediately. Those live edits are transient — a ' +
   'hot-reload resets them — so once a look is right, persist it by editing the source file. ' +
-  'For 3D assets, use hf_generate_3d_asset (defaults to the Hunyuan3D-2-mini Space), then ' +
-  'download_3d_asset to save the model, and triangle_import_3d_asset to load it into the ' +
-  'preview. You can also call arbitrary HF Spaces with hf_call_space. ' +
+  'For 3D assets, use hf_generate_3d_asset. For text-to-3D use provider "shape-e"; for ' +
+  'image-to-3D use provider "hunyuan3d" (tencent/Hunyuan3D-2), "trellis", or "triposr". ' +
+  'After generation, call download_3d_asset to save the model, then triangle_import_3d_asset ' +
+  'to load it into the preview. You can also call arbitrary HF Spaces with hf_call_space. ' +
   'Prefer validating shaders and capturing a screenshot to confirm visual changes. Make ' +
   'minimal, targeted edits.';
 

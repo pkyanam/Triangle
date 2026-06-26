@@ -35,6 +35,24 @@ import type { ImageAttachment, ModelInfo, ToolCallKind, ToolCallTrace } from '@t
  * payloads defensively.
  */
 
+/**
+ * System prompt prepended to every ACP/Claude harness turn. It explicitly tells
+ * the agent that the Triangle MCP server is available and what tools it can use,
+ * because some ACP agents do not introspect MCP tool descriptions reliably.
+ */
+export const ACP_SYSTEM_PROMPT = `You are a coding assistant running inside the Triangle desktop app.
+
+You have access to an MCP server named "triangle" that exposes project tools. Always prefer calling these tools over guessing. When the user asks for 3D assets, modeling, code generation, file operations, or live preview changes, use the relevant triangle MCP tools:
+
+- hf_generate_3d_asset — generate a 3D model. For text-to-3D use provider "shape-e". For image-to-3D use provider "hunyuan3d" (or trellis/triposr).
+- download_3d_asset — download the generated model file into the project.
+- triangle_import_3d_asset — import the downloaded model into the Triangle scene.
+- hf_call_space — call any other Hugging Face Space by slug and route.
+- triangle_live_* and triangle_scene_* tools — inspect and manipulate the live preview.
+- fs/read_text_file and fs/write_text_file — read and write project files (writes are gated).
+
+Before claiming a tool is unavailable, list the tools available under the "triangle" MCP server by calling the list tools method. If you see triangle tools, use them. If triangle tools are missing, tell the user that the MCP server is not configured.`;
+
 type JsonValue = unknown;
 interface RpcMessage {
   jsonrpc?: string;
@@ -310,6 +328,11 @@ export interface AcpSessionOptions {
    * `ctx.mcpEndpoint`.
    */
   mcpServers?: JsonValue[];
+  /**
+   * Optional system instructions prepended to the user prompt. ACP has no formal
+   * system role, so this is sent as a leading text block.
+   */
+  systemPrompt?: string;
 }
 
 /** Build ACP `mcpServers` from Triangle's standalone endpoint (env as ACP name/value pairs). */
@@ -327,8 +350,12 @@ function mcpServersFor(ctx: RunContext): JsonValue[] {
 }
 
 /** Convert the user prompt + image attachments into ACP content blocks. */
-function buildPromptBlocks(prompt: string, attachments?: ImageAttachment[]): AcpPromptBlock[] {
-  const blocks: AcpPromptBlock[] = [{ type: 'text', text: prompt }];
+function buildPromptBlocks(prompt: string, attachments?: ImageAttachment[], system?: string): AcpPromptBlock[] {
+  const blocks: AcpPromptBlock[] = [];
+  if (system) {
+    blocks.push({ type: 'text', text: system });
+  }
+  blocks.push({ type: 'text', text: prompt });
   for (const image of attachments ?? []) {
     const data = imageDataFromUrl(image.dataUrl);
     if (data) {
@@ -820,7 +847,7 @@ export function runAcpSession(ctx: RunContext, options: AcpSessionOptions): Prom
 
         await peer.request('session/prompt', {
           sessionId,
-          prompt: buildPromptBlocks(prompt, attachments),
+          prompt: buildPromptBlocks(prompt, attachments, options.systemPrompt),
         });
         // The prompt response resolving means the turn is complete.
         finishAndClose();

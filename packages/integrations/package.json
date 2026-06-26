@@ -11,10 +11,14 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
+    "tsx": "4.22.4",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@gradio/client": "2.2.2"
   }
 }
