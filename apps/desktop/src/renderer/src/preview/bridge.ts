@@ -8,6 +8,7 @@ import type {
   ViewMode,
 } from '@triangle/shared';
 import type { PreviewRuntime } from '@triangle/preview-runtime';
+import type { Robot } from '@triangle/robotics';
 
 /**
  * Renderer side of the Stage 3 preview bridge (ADR 0007).
@@ -158,6 +159,24 @@ export function getActiveTransformMode(): TransformMode {
 export function applyActiveSceneEdit(edit: SceneEdit): ReturnType<PreviewRuntime['applySceneEdit']> {
   if (!activeRuntime) throw new NoPreviewError();
   return activeRuntime.applySceneEdit(edit);
+}
+
+/** Build a robot from a parsed URDF into the live scene (ADR 0025). */
+export function loadActiveRobot(robot: Robot): ReturnType<PreviewRuntime['loadRobot']> {
+  if (!activeRuntime) throw new NoPreviewError();
+  return activeRuntime.loadRobot(robot);
+}
+
+/** Drive a named joint of the live robot. */
+export function setActiveJointState(name: string, value: number): boolean {
+  if (!activeRuntime) return false;
+  return activeRuntime.setJointState(name, value);
+}
+
+/** Read the live robot's root uuid + joints, if a robot is loaded. */
+export function getActiveRobotInfo(): ReturnType<PreviewRuntime['getRobotInfo']> {
+  if (!activeRuntime) return null;
+  return activeRuntime.getRobotInfo();
 }
 
 let sceneChangeListener: (() => void) | null = null;

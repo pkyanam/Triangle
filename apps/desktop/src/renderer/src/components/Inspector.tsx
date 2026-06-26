@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MousePointer2, Save } from 'lucide-react';
 import type { SceneObjectDetail, UniformDetail } from '@triangle/preview-runtime';
 import type { SceneEdit } from '@triangle/shared';
-import { applyActiveSceneEdit, describeActiveObject } from '../preview/bridge.js';
+import { applyActiveSceneEdit, describeActiveObject, getActiveRobotInfo } from '../preview/bridge.js';
 import { upsertOverridesBlock } from '../lib/overrides.js';
+import { JointInspector } from './JointInspector.js';
 import { Button } from './ui/button.js';
 import { toast } from './ui/toast.js';
 
@@ -74,6 +75,8 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
     return <div className="inspector__empty">Loading details…</div>;
   }
 
+  const isRobotRoot = getActiveRobotInfo()?.rootUuid === detail.uuid;
+
   return (
     <div className="inspector">
       <div className="engine-section">
@@ -83,6 +86,11 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
         </div>
       </div>
       <div className="inspector__body">
+        {isRobotRoot && (
+          <Section label="Joints">
+            <JointInspector />
+          </Section>
+        )}
         <Section label="Transform">
           <Vec3Field
             label="Position"

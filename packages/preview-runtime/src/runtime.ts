@@ -26,6 +26,8 @@ import {
 import { applySceneEdit as mutateScene } from './mutate.js';
 import { SelectionHighlight } from './selection.js';
 import { loadModel, type LoadModelResult, type ModelFormat } from './loaders.js';
+import { applyJoint, buildRobot, type BuiltRobot, type RobotJointInfo } from './robot.js';
+import type { Robot } from '@triangle/robotics';
 
 export interface PreviewRuntimeOptions {
   /** Called whenever the load/run status changes (idle/loading/running/error). */
@@ -92,6 +94,9 @@ export class PreviewRuntime {
 
   // On-canvas transform gizmo state (ADR 0021).
   private transformMode: TransformMode = 'select';
+
+  // Live robot model (ADR 0025), transient like imported models.
+  private builtRobot: BuiltRobot | null = null;
 
   constructor(canvas: HTMLCanvasElement, options: PreviewRuntimeOptions = {}) {
     this.canvas = canvas;
@@ -372,6 +377,42 @@ export class PreviewRuntime {
     return result;
   }
 
+  /**
+   * Build a robot from a parsed URDF into the live scene and return its joint
+   * metadata. Transient (a hot-reload clears it, like an imported model).
+   */
+  loadRobot(robot: Robot): { rootUuid: string; joints: RobotJointInfo[] } {
+    if (this.builtRobot) {
+      this.scene.remove(this.builtRobot.root);
+      this.builtRobot = null;
+    }
+    const built = buildRobot(robot);
+    this.scene.add(built.root);
+    this.builtRobot = built;
+    this.options.onSceneChanged?.();
+    return {
+      rootUuid: built.root.uuid,
+      joints: built.joints.map((j) => ({ name: j.name, type: j.type, lower: j.lower, upper: j.upper })),
+    };
+  }
+
+  /** Drive a named joint of the live robot to `value`. */
+  setJointState(name: string, value: number): boolean {
+    const handle = this.builtRobot?.joints.find((j) => j.name === name);
+    if (!handle) return false;
+    applyJoint(handle, value);
+    return true;
+  }
+
+  /** Current live robot info (root uuid + joints), or null when none is loaded. */
+  getRobotInfo(): { rootUuid: string; joints: RobotJointInfo[] } | null {
+    if (!this.builtRobot) return null;
+    return {
+      rootUuid: this.builtRobot.root.uuid,
+      joints: this.builtRobot.joints.map((j) => ({ name: j.name, type: j.type, lower: j.lower, upper: j.upper })),
+    };
+  }
+
   /** Tear everything down and release GPU resources. Idempotent. */
   dispose(): void {
     if (this.disposed) return;
@@ -428,6 +469,7 @@ export class PreviewRuntime {
     this.overlays.clear();
     this.materialBackup.clear();
     this.wireframeSnapshot.clear();
+    this.builtRobot = null;
     this.clearAuthorObjects();
     if (this.moduleUrl) {
       URL.revokeObjectURL(this.moduleUrl);

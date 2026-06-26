@@ -4,6 +4,7 @@ import { TopBar, PANEL_MENU } from './components/TopBar.js';
 import { Console } from './components/Console.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { IntegrationsHub } from './components/IntegrationsHub.js';
+import { RobotImporter } from './components/RobotImporter.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { Workspace, type PanelsOpen, type WorkspaceHandle } from './workspace/Workspace.js';
 import type { WorkspaceState } from './workspace/context.js';
@@ -24,6 +25,7 @@ export function App(): React.JSX.Element {
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
+  const [robotImporterOpen, setRobotImporterOpen] = useState(false);
 
   // Tab orientation preference (persisted globally). New and reset layouts respect this.
   const [tabOrientation, setTabOrientation] = useState<'horizontal' | 'vertical'>(() => {
@@ -134,11 +136,17 @@ export function App(): React.JSX.Element {
     // Re-subscribe only when the project root changes.
   }, [project?.root]);
 
-  // The Preferences menu / command palette opens the Settings & Integrations hub.
+  // The Preferences menu / command palette opens the Settings & Integrations hub;
+  // the Robotics card opens the URDF importer.
   useEffect(() => {
-    const onOpen = (): void => setHubOpen(true);
-    window.addEventListener('triangle:open-settings', onOpen);
-    return () => window.removeEventListener('triangle:open-settings', onOpen);
+    const onSettings = (): void => setHubOpen(true);
+    const onRobot = (): void => setRobotImporterOpen(true);
+    window.addEventListener('triangle:open-settings', onSettings);
+    window.addEventListener('triangle:open-robot-importer', onRobot);
+    return () => {
+      window.removeEventListener('triangle:open-settings', onSettings);
+      window.removeEventListener('triangle:open-robot-importer', onRobot);
+    };
   }, []);
 
   // Global keyboard shortcuts (command palette + rail toggles).
@@ -232,6 +240,7 @@ export function App(): React.JSX.Element {
       />
 
       <IntegrationsHub open={hubOpen} onClose={() => setHubOpen(false)} />
+      <RobotImporter open={robotImporterOpen} onClose={() => setRobotImporterOpen(false)} />
 
       <Toaster />
     </div>

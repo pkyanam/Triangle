@@ -11,3 +11,5 @@ export { applySceneEdit } from './mutate.js';
 export { SelectionHighlight } from './selection.js';
 export { loadModel } from './loaders.js';
 export type { LoadModelResult, ModelFormat } from './loaders.js';
+export { buildRobot, applyJoint } from './robot.js';
+export type { BuiltRobot, RobotJointHandle, RobotJointInfo } from './robot.js';

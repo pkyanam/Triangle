@@ -291,9 +291,18 @@ function RoboticsCard(): React.JSX.Element {
           style={{ flex: 1 }}
         />
       </Field>
-      <a className="hub__link" href="https://github.com/RobotWebTools/rosbridge_suite" target="_blank" rel="noreferrer">
-        <ExternalLink size={12} /> rosbridge setup
-      </a>
+      <div className="hub__row">
+        <Button
+          variant="primary"
+          size="xs"
+          onClick={() => window.dispatchEvent(new CustomEvent('triangle:open-robot-importer'))}
+        >
+          <Cpu size={12} /> Import URDF robot
+        </Button>
+        <a className="hub__link" href="https://github.com/RobotWebTools/rosbridge_suite" target="_blank" rel="noreferrer">
+          <ExternalLink size={12} /> rosbridge setup
+        </a>
+      </div>
     </div>
   );
 }
