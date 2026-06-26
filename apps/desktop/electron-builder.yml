@@ -27,7 +27,11 @@ extraResources:
 # release notes, and asset grouping.
 publish: null
 # Ad-hoc sign the .app after packing so Apple Silicon doesn't reject it
-# with "damaged and can't be opened". See build/after-pack.cjs.
+# with "damaged and can't be opened" — but ONLY when no real signing
+# certificate is configured (CSC_LINK absent). When CSC_LINK is provided
+# (CI release builds), electron-builder signs with the real Developer ID
+# certificate and after-pack.cjs skips the ad-hoc step so it doesn't
+# overwrite the real signature. See build/after-pack.cjs.
 afterPack: build/after-pack.cjs
 mac:
   category: public.app-category.developer-tools
@@ -42,12 +46,21 @@ mac:
     - target: zip
       arch:
         - arm64
-  # Code signing + notarization can be enabled later by setting these secrets
-  # in the repo: APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID, and
-  # CSC_LINK / CSC_KEY_PASSWORD for the signing certificate. When those are
-  # present, flip hardenedRuntime to true and add entitlements files.
-  hardenedRuntime: false
+  # Hardened Runtime is required for notarized apps distributed outside the
+  # Mac App Store. It's safe to leave on even for ad-hoc builds — the
+  # after-pack.cjs ad-hoc signature simply won't enforce it, but the flag
+  # doesn't break anything when no real cert is present.
+  hardenedRuntime: true
   gatekeeperAssess: false
+  # Entitlements required for Hardened Runtime + Electron. See
+  # build/entitlements.mac.plist and build/entitlements.mac.inherit.plist.
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # Built-in notarization via @electron/notarize. Activates only when the
+  # APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID env vars are
+  # set (CI release builds). When they're absent, notarization is skipped
+  # automatically — no error. See the Release workflow for secret wiring.
+  notarize: true
   artifactName: Triangle-${version}-${arch}-mac.zip
 dmg:
   artifactName: Triangle-${version}-${arch}.dmg

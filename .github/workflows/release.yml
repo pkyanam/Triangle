@@ -85,10 +85,20 @@ jobs:
       - name: Build & package
         shell: bash
         env:
-          # Prevent electron-builder from auto-discovering signing identities
-          # on macOS CI runners (would fail without certs). Signing can be
-          # enabled by providing CSC_LINK / CSC_KEY_PASSWORD secrets.
+          # Don't auto-discover signing identities from the runner keychain;
+          # we explicitly provide a cert via CSC_LINK when signing is desired.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          # macOS code-signing + notarization credentials. When these secrets
+          # are absent (empty), electron-builder skips signing/notarizing and
+          # the after-pack.cjs hook falls back to an ad-hoc signature so the
+          # app still launches on Apple Silicon. Set all five together in the
+          # repo's Actions secrets to enable real Developer ID signing +
+          # notarization on tag releases. See docs/ci-cd-signing.md.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           cd apps/desktop
           pnpm exec electron-vite build

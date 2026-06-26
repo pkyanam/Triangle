@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Required for Electron to load unsigned executable code (e.g. the
+       renderer GPU process, native node modules, ffmpeg). Without this
+       the Hardened Runtime kills the process on launch. -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Allow loading of third-party libraries unsigned by the same Team ID
+       (Electron ships some helper libs). -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+
+  <!-- JIT support for the V8 engine (Electron renderer). -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+
+  <!-- Disable library validation so Electron can load its bundled
+       frameworks that aren't signed by the same team. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>
