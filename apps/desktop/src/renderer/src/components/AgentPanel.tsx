@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box,
   Camera,
   FolderGit2,
   Gauge,
@@ -10,10 +9,10 @@ import {
   ListTree,
   Send,
   Settings2,
+  Sparkles,
   Square,
   Terminal,
   TriangleAlert,
-  Wrench,
   X,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
@@ -31,6 +30,7 @@ import {
 } from '@triangle/shared';
 import { ProviderModelPicker } from './ProviderModelPicker.js';
 import { ProviderInstancesSettings } from './ProviderInstancesSettings.js';
+import { AssetGeneratorDialog } from './AssetGeneratorDialog.js';
 import { SessionHistory } from './SessionHistory.js';
 import { DiffView } from './DiffView.js';
 import { Card } from './ui/card.js';
@@ -88,10 +88,7 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showToolRunner, setShowToolRunner] = useState(false);
-  const [toolName, setToolName] = useState('hf_generate_3d_asset');
-  const [toolArgs, setToolArgs] = useState('{}');
-  const [toolBusy, setToolBusy] = useState(false);
+  const [showAssetGen, setShowAssetGen] = useState(false);
   const [runStartTime, setRunStartTime] = useState<number | null>(null);
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -479,33 +476,6 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
     }
   };
 
-  const runTool = (): void => {
-    let args: Record<string, unknown>;
-    try {
-      args = JSON.parse(toolArgs);
-    } catch (e) {
-      noticeFor(e);
-      return;
-    }
-    setToolBusy(true);
-    void window.triangle.tool
-      .run({ tool: toolName, args })
-      .then((res) => {
-        if (res.ok) {
-          upsert({
-            id: `tool-run:${Date.now()}`,
-            role: 'system',
-            content: `\`\`\`json\n${res.result}\n\`\`\``,
-            timestamp: Date.now(),
-          });
-        } else {
-          noticeFor(new Error(res.error ?? 'Tool run failed.'));
-        }
-      })
-      .catch(noticeFor)
-      .finally(() => setToolBusy(false));
-  };
-
   const grouped = useMemo(() => groupMessages(messages), [messages]);
 
   const loadDevinSessions = useCallback(() => {
@@ -763,11 +733,11 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
                 <ImagePlus size={14} />
               </button>
               <button
-                className={`toolbar-btn${showToolRunner ? ' toolbar-btn--active' : ''}`}
-                onClick={() => setShowToolRunner((s) => !s)}
-                title="Run an integration tool manually"
+                className="toolbar-btn"
+                onClick={() => setShowAssetGen(true)}
+                title="Generate a 3D asset"
               >
-                <Wrench size={14} />
+                <Sparkles size={14} />
               </button>
               <input
                 ref={fileInputRef}
@@ -781,32 +751,6 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
                 }}
               />
             </div>
-            {showToolRunner && (
-              <div className="agent__tool-runner">
-                <div className="agent__tool-runner-row">
-                  <select
-                    className="agent__tool-runner-select"
-                    value={toolName}
-                    onChange={(e) => setToolName(e.target.value)}
-                  >
-                    <option value="hf_generate_3d_asset">HF generate 3D asset</option>
-                    <option value="download_3d_asset">Download 3D asset</option>
-                    <option value="triangle_import_3d_asset">Import 3D asset</option>
-                    <option value="triangle_robotics_snippet">Robotics snippet</option>
-                  </select>
-                  <Button variant="primary" size="xs" onClick={runTool} disabled={toolBusy}>
-                    {toolBusy ? <span className="spin" /> : <Box size={12} />} Run
-                  </Button>
-                </div>
-                <textarea
-                  className="agent__tool-runner-args"
-                  rows={3}
-                  value={toolArgs}
-                  onChange={(e) => setToolArgs(e.target.value)}
-                  spellCheck={false}
-                />
-              </div>
-            )}
             <div className="composer">
               {attachments.length > 0 && (
                 <div className="agent__attachment-strip">
@@ -864,6 +808,7 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
           </div>
         </>
       )}
+      <AssetGeneratorDialog open={showAssetGen} onClose={() => setShowAssetGen(false)} />
     </div>
   );
 }

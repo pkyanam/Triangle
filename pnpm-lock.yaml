@@ -35,6 +35,9 @@ importers:
       monaco-editor:
         specifier: 0.54.0
         version: 0.54.0
+      three:
+        specifier: 0.184.0
+        version: 0.184.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -72,6 +75,9 @@ importers:
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.17)
+      '@types/three':
+        specifier: 0.184.1
+        version: 0.184.1
       '@vitejs/plugin-react':
         specifier: 5.0.4
         version: 5.0.4(vite@7.1.12(@types/node@24.10.1)(jiti@2.7.0)(tsx@4.22.4))
