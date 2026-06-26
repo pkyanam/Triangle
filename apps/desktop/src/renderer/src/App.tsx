@@ -19,6 +19,17 @@ export function App(): React.JSX.Element {
   const [playing, setPlaying] = useState(false);
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
 
+  // Tab orientation preference (persisted globally). New and reset layouts respect this.
+  const [tabOrientation, setTabOrientation] = useState<'horizontal' | 'vertical'>(() => {
+    const saved = localStorage.getItem('triangle.tabOrientation');
+    return saved === 'horizontal' || saved === 'vertical' ? saved : 'horizontal';
+  });
+
+  const handleTabOrientationChange = useCallback((orientation: 'horizontal' | 'vertical') => {
+    setTabOrientation(orientation);
+    localStorage.setItem('triangle.tabOrientation', orientation);
+  }, []);
+
   // Which dock panels are currently mounted (reflected in the TopBar panels menu).
   const [panelsOpen, setPanelsOpen] = useState<PanelsOpen>({
     explorer: true,
@@ -148,13 +159,20 @@ export function App(): React.JSX.Element {
         projectName={projectName}
         panelsOpen={panelsOpen}
         playing={playing}
+        tabOrientation={tabOrientation}
         onTogglePlay={() => setPlaying((p) => !p)}
         onTogglePanel={(id) => workspaceRef.current?.togglePanel(id)}
         onResetLayout={() => workspaceRef.current?.resetLayout()}
+        onTabOrientationChange={handleTabOrientationChange}
       />
 
       <div className="workspace">
-        <Workspace ref={workspaceRef} state={workspaceState} onPanelsChange={setPanelsOpen} />
+        <Workspace
+          ref={workspaceRef}
+          state={workspaceState}
+          onPanelsChange={setPanelsOpen}
+          tabOrientation={tabOrientation}
+        />
       </div>
 
       <ErrorBoundary title="Console failed" onError={(err) => console.error('Console crashed', err)}>

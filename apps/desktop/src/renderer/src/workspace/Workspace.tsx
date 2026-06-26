@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import {
   DockviewReact,
   type DockviewApi,
+  type DockviewGroupPanel,
   type DockviewReadyEvent,
   type IDockviewPanelProps,
 } from 'dockview-react';
@@ -36,6 +37,8 @@ interface WorkspaceProps {
   state: WorkspaceState;
   /** Reports which panels are currently mounted (for the TopBar panels menu). */
   onPanelsChange: (open: PanelsOpen) => void;
+  /** Current tab orientation: horizontal tabs at top, vertical tabs at left. */
+  tabOrientation: 'horizontal' | 'vertical';
 }
 
 const WIDTHS: Record<PanelId, number> = {
@@ -199,10 +202,11 @@ function buildDefaultLayout(api: DockviewApi): void {
 }
 
 export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Workspace(
-  { state, onPanelsChange },
+  { state, onPanelsChange, tabOrientation },
   ref,
 ): React.JSX.Element {
   const apiRef = useRef<DockviewApi | null>(null);
+  const headerPosition: 'top' | 'left' = tabOrientation === 'horizontal' ? 'top' : 'left';
   const saveTimer = useRef<number | undefined>(undefined);
   /** The project id whose layout is currently applied (drives the storage key). */
   const activeProjectRef = useRef<string | null>(null);
@@ -213,6 +217,15 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
     const open = {} as PanelsOpen;
     for (const id of PANEL_IDS) open[id] = !!api.getPanel(id);
     onPanelsChange(open);
+  };
+
+  /** Apply the current tab orientation to every existing group. */
+  const applyHeaderPositionToAll = (): void => {
+    const api = apiRef.current;
+    if (!api) return;
+    api.groups.forEach((group: DockviewGroupPanel) => {
+      group.api.setHeaderPosition(headerPosition);
+    });
   };
 
   /** Re-add a panel next to its nearest existing neighbour, preserving order. */
@@ -277,6 +290,7 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
       api.clear();
       buildDefaultLayout(api);
     }
+    applyHeaderPositionToAll();
   };
 
   const onReady = (event: DockviewReadyEvent): void => {
@@ -285,7 +299,10 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
     const pid = state.project?.id ?? null;
     activeProjectRef.current = pid;
     if (pid) applyLayout(api, pid);
-    else buildDefaultLayout(api);
+    else {
+      buildDefaultLayout(api);
+      applyHeaderPositionToAll();
+    }
 
     api.onDidLayoutChange(() => {
       persist();
@@ -320,6 +337,12 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
     if (inspector) inspector.api.setActive();
   }, [state.selectedObject]);
 
+  // Apply the tab orientation preference whenever it changes.
+  useEffect(() => {
+    applyHeaderPositionToAll();
+    persist();
+  }, [tabOrientation]);
+
   const togglePanel = (id: PanelId): void => {
     const api = apiRef.current;
     if (!api) return;
@@ -341,6 +364,7 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
       if (!api) return;
       api.clear();
       buildDefaultLayout(api);
+      applyHeaderPositionToAll();
       reportPanels();
       persist();
     },
@@ -353,6 +377,7 @@ export const Workspace = forwardRef<WorkspaceHandle, WorkspaceProps>(function Wo
         components={COMPONENTS}
         onReady={onReady}
         disableFloatingGroups={false}
+        defaultHeaderPosition={headerPosition}
       />
     </WorkspaceContext.Provider>
   );

@@ -43,6 +43,8 @@ export const acpHarness: AgentHarness = {
       command,
       args: ctx.config.acpAgentArgs ?? [],
       label: ctx.config.acpAgentLabel || 'ACP agent',
+      capabilities: { fs: { readTextFile: true, writeTextFile: true }, image: true },
+      ...(ctx.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
     });
   },
 };

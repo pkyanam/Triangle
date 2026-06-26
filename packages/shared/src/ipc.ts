@@ -153,6 +153,16 @@ export interface IpcInvokeChannels {
     request: ApprovalDecision;
     response: { ok: boolean };
   };
+  /** List Devin ACP sessions advertised by the agent. */
+  'devin:sessions': {
+    request: void;
+    response: Array<{ sessionId: string; name?: string; createdAt?: string }>;
+  };
+  /** Log out of the Devin ACP agent. */
+  'devin:logout': {
+    request: void;
+    response: { ok: boolean; error?: string };
+  };
   /** List recorded agent sessions for the active project (newest first). */
   'session:list': {
     request: void;
@@ -258,6 +268,8 @@ export const INVOKE_CHANNELS = [
   'agent:start',
   'agent:cancel',
   'agent:approval',
+  'devin:sessions',
+  'devin:logout',
   'session:list',
   'session:get',
   'session:clear',

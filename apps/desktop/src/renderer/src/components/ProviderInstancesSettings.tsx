@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Plus, Server, Trash2 } from 'lucide-react';
+import { Check, Copy, LogOut, Plus, Server, Trash2 } from 'lucide-react';
 import {
   DEFAULT_MODELS,
   type AgentSettings,
@@ -37,6 +37,8 @@ const KIND_LABELS: Record<ProviderKind, string> = {
 };
 
 const KIND_ORDER: ProviderKind[] = ['devin', 'codex', 'claude', 'acp', 'mock'];
+
+const DEVIN_MODES = ['normal', 'accept-edits', 'plan', 'bypass'] as const;
 
 function newInstance(kind: ProviderKind, name: string): ProviderInstance {
   return {
@@ -238,6 +240,40 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
                     </SelectContent>
                   </Select>
                 </div>
+
+                {inst.kind === 'devin' && (
+                  <>
+                    <div className="provider-card__row">
+                      <label>Mode</label>
+                      <Select
+                        value={inst.config.mode ?? ''}
+                        onValueChange={(value) => updateInstanceConfig(inst.id, 'mode', value)}
+                      >
+                        <SelectTrigger style={{ flex: 1 }}>
+                          <SelectValue placeholder="Default" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Default</SelectItem>
+                          {DEVIN_MODES.map((m) => (
+                            <SelectItem key={m} value={m}>
+                              {m}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="provider-card__row">
+                      <div className="composer__spacer" />
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => void window.triangle.devin.logout().then((r) => alert(r.ok ? 'Logged out.' : `Logout failed: ${r.error ?? ''}`))}
+                      >
+                        <LogOut size={12} /> Log out
+                      </Button>
+                    </div>
+                  </>
+                )}
 
                 {inst.kind !== 'mock' && inst.kind !== 'acp' && (
                   <div className="provider-card__row">

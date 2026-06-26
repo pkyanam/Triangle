@@ -4,6 +4,8 @@ import {
   Check,
   Code2,
   FolderTree,
+  LayoutPanelLeft,
+  LayoutPanelTop,
   LayoutTemplate,
   ListTree,
   Monitor,
@@ -23,9 +25,11 @@ interface TopBarProps {
   projectName: string;
   panelsOpen: PanelsOpen;
   playing: boolean;
+  tabOrientation: 'horizontal' | 'vertical';
   onTogglePlay: () => void;
   onTogglePanel: (id: PanelId) => void;
   onResetLayout: () => void;
+  onTabOrientationChange: (orientation: 'horizontal' | 'vertical') => void;
 }
 
 const PANEL_MENU: { id: PanelId; label: string; icon: ComponentType<{ size?: number }> }[] = [
@@ -37,17 +41,26 @@ const PANEL_MENU: { id: PanelId; label: string; icon: ComponentType<{ size?: num
   { id: 'agent', label: 'Agent', icon: Bot },
 ];
 
+const TABS_MENU: { value: 'horizontal' | 'vertical'; label: string; icon: ComponentType<{ size?: number }> }[] = [
+  { value: 'horizontal', label: 'Horizontal tabs', icon: LayoutPanelTop },
+  { value: 'vertical', label: 'Vertical tabs', icon: LayoutPanelLeft },
+];
+
 export function TopBar({
   projectName,
   panelsOpen,
   playing,
+  tabOrientation,
   onTogglePlay,
   onTogglePanel,
   onResetLayout,
+  onTabOrientationChange,
 }: TopBarProps): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tabsMenuOpen, setTabsMenuOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'lit' | 'wireframe'>(() => getActiveViewMode());
   const menuRef = useRef<HTMLDivElement>(null);
+  const tabsMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -64,6 +77,22 @@ export function TopBar({
       window.removeEventListener('keydown', onKey);
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!tabsMenuOpen) return undefined;
+    const onDown = (e: MouseEvent): void => {
+      if (tabsMenuRef.current && !tabsMenuRef.current.contains(e.target as Node)) setTabsMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setTabsMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [tabsMenuOpen]);
 
   return (
     <div className="topbar">
@@ -118,6 +147,39 @@ export function TopBar({
                     onClick={() => onTogglePanel(id)}
                   >
                     <span className="menu__item-check">{open && <Check size={13} />}</span>
+                    <Icon size={14} />
+                    <span className="menu__item-label">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="menu" ref={tabsMenuRef}>
+          <button
+            className={`btn btn--ghost${tabsMenuOpen ? ' btn--active' : ''}`}
+            onClick={() => setTabsMenuOpen((o) => !o)}
+            title={`Tab orientation: ${tabOrientation === 'horizontal' ? 'Horizontal' : 'Vertical'}`}
+          >
+            {tabOrientation === 'horizontal' ? <LayoutPanelTop size={15} /> : <LayoutPanelLeft size={15} />}
+            Tabs
+          </button>
+          {tabsMenuOpen && (
+            <div className="menu__popup" role="menu">
+              {TABS_MENU.map(({ value, label, icon: Icon }) => {
+                const active = tabOrientation === value;
+                return (
+                  <button
+                    key={value}
+                    role="menuitemradio"
+                    aria-checked={active}
+                    className="menu__item"
+                    onClick={() => {
+                      onTabOrientationChange(value);
+                      setTabsMenuOpen(false);
+                    }}
+                  >
+                    <span className="menu__item-check">{active && <Check size={13} />}</span>
                     <Icon size={14} />
                     <span className="menu__item-label">{label}</span>
                   </button>

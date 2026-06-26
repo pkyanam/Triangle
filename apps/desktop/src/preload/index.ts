@@ -46,6 +46,10 @@ const api: TriangleApi = {
     onEvent: (cb) => subscribe<AgentEvent>('agent:event', cb),
     onApprovalRequest: (cb) => subscribe<ApprovalRequest>('agent:approval-request', cb),
   },
+  devin: {
+    sessions: () => ipcRenderer.invoke('devin:sessions'),
+    logout: () => ipcRenderer.invoke('devin:logout'),
+  },
   session: {
     list: () => ipcRenderer.invoke('session:list'),
     get: (id) => ipcRenderer.invoke('session:get', { id }),

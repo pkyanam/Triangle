@@ -44,7 +44,7 @@ export interface HarnessDescriptor {
 
 export const HARNESSES: HarnessDescriptor[] = [
   { id: 'mock', label: 'Mock Agent', available: true, note: 'Canned responses, no backend.' },
-  { id: 'claude', label: 'Claude Agent SDK', available: true, note: 'Needs ANTHROPIC_API_KEY.' },
+  { id: 'claude', label: 'Claude Agent SDK', available: true, note: 'Needs ANTHROPIC_API_KEY or Claude Code OAuth.' },
   { id: 'codex', label: 'Codex CLI', available: true, note: 'Needs the `codex` CLI installed.' },
   {
     id: 'devin',
@@ -75,6 +75,8 @@ export interface AgentSettings {
   devinPath?: string;
   /** Model override for the Devin (ACP) harness, e.g. an adaptive/model id. */
   devinModel?: string;
+  /** Mode override for the Devin (ACP) harness (`normal`, `accept-edits`, `plan`, `bypass`). */
+  devinMode?: string;
   /** External ACP agent command (enables the `acp` harness). */
   acpAgentCommand?: string;
   /** Arguments for the ACP agent command. */
@@ -98,6 +100,15 @@ export const DEFAULT_MODELS: Record<ProviderKind, string[]> = {
 
 export type ChatRole = 'user' | 'assistant' | 'system';
 
+/** A user-attached image in the chat composer. */
+export interface ImageAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  dataUrl: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
@@ -106,14 +117,21 @@ export interface ChatMessage {
   timestamp: number;
   /** Tool calls the assistant made while producing this message (Stage 2+). */
   toolCalls?: ToolCallTrace[];
+  /** Images attached to a user message (Stage 6+). */
+  attachments?: ImageAttachment[];
   /** True while the message is still streaming in. */
   pending?: boolean;
 }
+
+/** ACP-style classification for tool calls. */
+export type ToolCallKind = 'read' | 'edit' | 'delete' | 'move' | 'search' | 'execute' | 'think' | 'fetch' | 'other';
 
 export interface ToolCallTrace {
   id: string;
   tool: string;
   args: Record<string, unknown>;
+  /** ACP tool kind classification, when known. */
+  kind?: ToolCallKind;
   status: 'running' | 'ok' | 'error';
   result?: string;
 }
@@ -146,6 +164,13 @@ export interface AgentStartRequest {
   instanceId?: string;
   /** Resolved model id to use for this run. */
   model?: string;
+  /** Images attached to the user message (ACP-aware providers; ignored by others). */
+  attachments?: ImageAttachment[];
+  /**
+   * Resume an existing ACP session (Devin/generic ACP) instead of creating a new one.
+   * The agent is sent `session/resume` or `session/load` depending on capabilities.
+   */
+  resumeSessionId?: string;
 }
 
 export interface AgentStartResult {

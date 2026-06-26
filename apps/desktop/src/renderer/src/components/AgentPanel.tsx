@@ -5,6 +5,8 @@ import {
   FolderGit2,
   Gauge,
   History,
+  ImagePlus,
+  List,
   ListTree,
   Send,
   Settings2,
@@ -12,6 +14,7 @@ import {
   Terminal,
   TriangleAlert,
   Wrench,
+  X,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import {
@@ -22,6 +25,8 @@ import {
   type ChatMessage,
   type ChatRole,
   type HarnessAvailability,
+  type ImageAttachment,
+  type ToolCallKind,
   type ToolCallTrace,
 } from '@triangle/shared';
 import { ProviderModelPicker } from './ProviderModelPicker.js';
@@ -52,6 +57,21 @@ const GREETING: ChatMessage = {
   timestamp: Date.now(),
 };
 
+const MAX_IMAGE_ATTACHMENTS = 8;
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+
+const TOOL_KIND_LABELS: Record<ToolCallKind, string> = {
+  read: 'Read',
+  edit: 'Edit',
+  delete: 'Delete',
+  move: 'Move',
+  search: 'Search',
+  execute: 'Run',
+  think: 'Think',
+  fetch: 'Fetch',
+  other: 'Tool',
+};
+
 interface AgentPanelProps {
   projectName: string;
   /** Active project id — used to scope session history and reset the chat on switch. */
@@ -73,8 +93,13 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
   const [toolArgs, setToolArgs] = useState('{ "prompt": "a low-poly tree", "provider": "hunyuan3d" }');
   const [toolBusy, setToolBusy] = useState(false);
   const [runStartTime, setRunStartTime] = useState<number | null>(null);
+  const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [devinSessions, setDevinSessions] = useState<Array<{ sessionId: string; name?: string; createdAt?: string }> | null>(null);
+  const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const reduceMotion = useReducedMotion();
 
   const selectedInstance = useMemo(
@@ -126,6 +151,9 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
     runRef.current = null;
     setBusy(false);
     setRunStartTime(null);
+    setAttachments([]);
+    setDevinSessions(null);
+    setResumeSessionId(null);
   }, [projectId]);
 
   /** Insert or update a message by id. */
@@ -156,6 +184,90 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
       next[idx] = { ...existing, toolCalls: calls };
       return next;
     });
+  }, []);
+
+  /** Read a File as a base64 data URL. */
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+      reader.readAsDataURL(file);
+    });
+
+  const imageAttachmentDedupKey = (image: ImageAttachment): string => `${image.mimeType}\0${image.sizeBytes}\0${image.name}`;
+
+  const addImages = useCallback(async (files: FileList | File[] | null) => {
+    if (!files || files.length === 0) return;
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      noticeFor(new Error('Only image files can be attached.'));
+      return;
+    }
+    const accepted: ImageAttachment[] = [];
+    for (const file of imageFiles) {
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        noticeFor(new Error(`'${file.name}' exceeds the 10 MB image attachment limit.`));
+        continue;
+      }
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        accepted.push({
+          id: nextId(),
+          name: file.name || 'image',
+          mimeType: file.type,
+          sizeBytes: file.size,
+          dataUrl,
+        });
+      } catch (e) {
+        noticeFor(e);
+      }
+    }
+    if (accepted.length === 0) return;
+    setAttachments((prev) => {
+      const existingKeys = new Set(prev.map(imageAttachmentDedupKey));
+      const deduped = accepted.filter((a) => !existingKeys.has(imageAttachmentDedupKey(a)));
+      const combined = [...prev, ...deduped];
+      if (combined.length > MAX_IMAGE_ATTACHMENTS) {
+        noticeFor(new Error(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images.`));
+        return combined.slice(0, MAX_IMAGE_ATTACHMENTS);
+      }
+      return combined;
+    });
+  }, []);
+
+  const removeImage = useCallback((id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const onPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    void addImages(e.clipboardData.files);
+  }, [addImages]);
+
+  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    const nextTarget = e.relatedTarget;
+    if (nextTarget instanceof Node && e.currentTarget.contains(nextTarget)) return;
+    setIsDragging(false);
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    setIsDragging(false);
+    void addImages(e.dataTransfer.files);
+  }, [addImages]);
+
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
   }, []);
 
   // Subscribe to streamed run events + approval prompts.
@@ -242,8 +354,15 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
     if (!text || busy || !selectedInstance) return;
     const runId = newRunId();
     runRef.current = runId;
-    setMessages((m) => [...m, { id: nextId(), role: 'user', content: text, timestamp: Date.now() }]);
+    const currentAttachments = attachments;
+    const currentResumeSessionId = resumeSessionId ?? undefined;
+    setMessages((m) => [
+      ...m,
+      { id: nextId(), role: 'user', content: text, timestamp: Date.now(), attachments: currentAttachments },
+    ]);
     setInput('');
+    setAttachments([]);
+    setResumeSessionId(null);
     setBusy(true);
     setRunStartTime(Date.now());
 
@@ -255,6 +374,8 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
         autoApproveWrites: autoApprove,
         instanceId: selectedInstance.id,
         model: selectedModel,
+        attachments: currentAttachments,
+        resumeSessionId: currentResumeSessionId,
       })
       .then((res) => {
         if (!res.accepted) {
@@ -373,6 +494,29 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
 
   const grouped = useMemo(() => groupMessages(messages), [messages]);
 
+  const loadDevinSessions = useCallback(() => {
+    void window.triangle.devin
+      .sessions()
+      .then((sessions) => {
+        setDevinSessions(sessions);
+        if (sessions.length === 0) {
+          noticeFor(new Error('No resumable Devin sessions found.'));
+        }
+      })
+      .catch((e: unknown) => noticeFor(new Error(`Could not list Devin sessions: ${String(e)}`)));
+  }, []);
+
+  const selectDevinSession = useCallback((sessionId: string) => {
+    setResumeSessionId(sessionId);
+    setDevinSessions(null);
+    upsert({
+      id: `resume-${sessionId}`,
+      role: 'system',
+      content: `Resuming Devin session ${sessionId}. Send a message to continue.`,
+      timestamp: Date.now(),
+    });
+  }, [upsert]);
+
   return (
     <div className="agent agent--engine">
       <div className="agent__bar">
@@ -413,6 +557,19 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
         >
           <Settings2 size={14} />
         </button>
+        {selectedHarness === 'devin' && (
+          <button
+            className={`btn btn--icon${devinSessions ? ' btn--active' : ''}`}
+            onClick={() => {
+              if (devinSessions) setDevinSessions(null);
+              else loadDevinSessions();
+            }}
+            title="Devin ACP sessions"
+            aria-pressed={devinSessions !== null}
+          >
+            <List size={14} />
+          </button>
+        )}
         <span className="chip" title={`Project: ${projectName}`}>
           <FolderGit2 size={12} />
           {projectName}
@@ -420,6 +577,25 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
       </div>
 
       {showConfig && <ProviderInstancesSettings availability={availability} onSaved={refreshHarnesses} />}
+
+      {devinSessions && devinSessions.length > 0 && (
+        <div className="agent__notice agent__notice--sessions">
+          <List size={14} />
+          <div className="agent__session-list">
+            <span className="agent__session-list-title">Devin sessions</span>
+            {devinSessions.map((s) => (
+              <button
+                key={s.sessionId}
+                className="agent__session-item"
+                onClick={() => selectDevinSession(s.sessionId)}
+                title={`Resume ${s.sessionId}`}
+              >
+                {s.name ?? s.sessionId}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showHistory ? (
         <SessionHistory projectId={projectId} />
@@ -449,6 +625,7 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
                         {msg.toolCalls.map((t) => (
                           <div key={t.id} className={`tool tool--${t.status}`}>
                             <span className="tool__dot" />
+                            <span className="tool__kind">{t.kind ? TOOL_KIND_LABELS[t.kind] : 'Tool'}</span>
                             <span className="tool__name">{t.tool}</span>
                             <span className="tool__args">
                               {t.args.path ? String(t.args.path) : t.args.command ? String(t.args.command) : ''}
@@ -462,6 +639,19 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
                       <Card className={cn('msg__bubble', msg.role === 'system' && 'msg__bubble--system')}>
                         {msg.content}
                       </Card>
+                    )}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="msg__attachments">
+                        {msg.attachments.map((a) => (
+                          <img
+                            key={a.id}
+                            src={a.dataUrl}
+                            alt={a.name}
+                            className="msg__attachment-thumb"
+                            title={`${a.name} (${(a.sizeBytes / 1024).toFixed(1)} KB)`}
+                          />
+                        ))}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -523,7 +713,12 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
             </motion.div>
           )}
 
-          <div className="agent__composer">
+          <div
+            className={cn('agent__composer', isDragging && 'agent__composer--drag-over')}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+          >
             <div className="agent__quick-actions">
               <button
                 className="toolbar-btn"
@@ -547,12 +742,30 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
                 <Gauge size={14} />
               </button>
               <button
+                className="toolbar-btn"
+                onClick={openFilePicker}
+                title="Attach images (drag & drop or paste also works)"
+              >
+                <ImagePlus size={14} />
+              </button>
+              <button
                 className={`toolbar-btn${showToolRunner ? ' toolbar-btn--active' : ''}`}
                 onClick={() => setShowToolRunner((s) => !s)}
                 title="Run an integration tool manually"
               >
                 <Wrench size={14} />
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  void addImages(e.target.files);
+                  if (e.target) e.target.value = '';
+                }}
+              />
             </div>
             {showToolRunner && (
               <div className="agent__tool-runner">
@@ -581,12 +794,37 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
               </div>
             )}
             <div className="composer">
+              {attachments.length > 0 && (
+                <div className="agent__attachment-strip">
+                  {attachments.map((a) => (
+                    <div key={a.id} className="agent__attachment-chip">
+                      <img src={a.dataUrl} alt={a.name} className="agent__attachment-thumb" />
+                      <span className="agent__attachment-name">{a.name}</span>
+                      <button
+                        className="agent__attachment-remove"
+                        onClick={() => removeImage(a.id)}
+                        title="Remove image"
+                        aria-label={`Remove ${a.name}`}
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {isDragging && (
+                <div className="agent__drag-overlay">
+                  <ImagePlus size={24} />
+                  <span>Drop images here</span>
+                </div>
+              )}
               <textarea
                 className="agent__input"
                 placeholder="Ask the agent to change the scene…"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
+                onPaste={onPaste}
               />
               <div className="composer__row">
                 <label className="agent__toggle" title="Skip the per-write approval prompt">

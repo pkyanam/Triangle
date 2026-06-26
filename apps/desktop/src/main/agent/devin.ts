@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
-import { fetchDevinModels, runAcpSession } from './acp-session.js';
+import { fetchDevinModels, listAcpSessions, logoutAcpAgent, runAcpSession } from './acp-session.js';
 import type { AgentHarness, RunContext } from './harness.js';
 
 /**
@@ -24,7 +24,14 @@ import type { AgentHarness, RunContext } from './harness.js';
  *    belt-and-braces).
  *  - **Model.** `devinModel` is advertised via `session/new` `_meta` (Devin
  *    defaults to adaptive model selection otherwise).
+ *  - **Mode & session lifecycle.** Devin modes (`normal`, `accept-edits`, `plan`,
+ *    `bypass`) are advertised via `session/new` `_meta` and can be switched later
+ *    via `session/set_mode`. Sessions can be listed, resumed, and closed, and the
+ *    agent can be logged out via the ACP `logout` method.
  */
+
+export const DEVIN_MODES = ['normal', 'accept-edits', 'plan', 'bypass'] as const;
+export type DevinMode = (typeof DEVIN_MODES)[number];
 
 const devinBin = (config: TriangleConfig): string => config.devinPath || 'devin';
 
@@ -32,6 +39,8 @@ const devinBin = (config: TriangleConfig): string => config.devinPath || 'devin'
 const hasWindsurfKey = (): boolean => Boolean(process.env['WINDSURF_API_KEY']);
 
 const AUTH_HINT = 'Run `devin auth login`, or set WINDSURF_API_KEY.';
+
+const devinEnv = (): Record<string, string> => ({ CHISEL_LOG_STDERR: '1' });
 
 /** Spawn `bin args…` and resolve its exit code (or null on spawn failure / timeout). */
 function probe(bin: string, args: string[], timeoutMs: number): Promise<number | null> {
@@ -62,6 +71,25 @@ function probe(bin: string, args: string[], timeoutMs: number): Promise<number |
   });
 }
 
+function isDevinMode(value: string): value is DevinMode {
+  return DEVIN_MODES.includes(value as DevinMode);
+}
+
+function devinModeFromConfig(config: TriangleConfig, instanceConfig?: Record<string, string>): DevinMode | undefined {
+  const value = instanceConfig?.mode ?? config.devinMode;
+  if (value && isDevinMode(value)) return value;
+  return undefined;
+}
+
+function devinConfigOptions(config: TriangleConfig, instanceConfig?: Record<string, string>): Record<string, string> | undefined {
+  const options: Record<string, string> = {};
+  if (config.devinModel) options.model = config.devinModel;
+  if (instanceConfig?.model) options.model = instanceConfig.model;
+  const mode = devinModeFromConfig(config, instanceConfig);
+  if (mode) options.mode = mode;
+  return Object.keys(options).length > 0 ? options : undefined;
+}
+
 export const devinHarness: AgentHarness = {
   id: 'devin',
   label: 'Devin CLI',
@@ -83,20 +111,24 @@ export const devinHarness: AgentHarness = {
   },
 
   async models(config: TriangleConfig): Promise<ModelInfo[]> {
-    return fetchDevinModels(devinBin(config), ['acp'], { CHISEL_LOG_STDERR: '1' }, 10_000);
+    return fetchDevinModels(devinBin(config), ['acp'], devinEnv(), 10_000);
   },
 
   run(ctx: RunContext): Promise<void> {
+    const configOptions = devinConfigOptions(ctx.config, ctx.instanceConfig);
     return runAcpSession(ctx, {
       command: devinBin(ctx.config),
       args: ['acp'],
       label: 'Devin',
       // Keep Devin's diagnostics off stdout so the JSON-RPC stream stays clean.
-      env: { CHISEL_LOG_STDERR: '1' },
+      env: devinEnv(),
       // Devin runs commands in its own execution environment and surfaces output
       // via tool-call updates, so the client need not provide an ACP terminal.
-      terminal: false,
+      capabilities: { fs: { readTextFile: true, writeTextFile: true }, image: true },
       ...(ctx.config.devinModel ? { model: ctx.config.devinModel } : {}),
+      ...(configOptions?.mode ? { mode: configOptions.mode } : {}),
+      ...(configOptions && Object.keys(configOptions).length > 0 ? { configOptions } : {}),
+      ...(ctx.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
       auth: {
         hasCredentials: hasWindsurfKey(),
         prefer: ['windsurf', 'api', 'key', 'token'],
@@ -105,3 +137,15 @@ export const devinHarness: AgentHarness = {
     });
   },
 };
+
+/** List Devin's ACP sessions. Returns an empty list on error. */
+export function listDevinSessions(config: TriangleConfig): Promise<
+  Array<{ sessionId: string; name?: string; createdAt?: string }>
+> {
+  return listAcpSessions(devinBin(config), ['acp'], devinEnv(), 10_000);
+}
+
+/** Log out of the Devin ACP agent. */
+export function logoutDevin(config: TriangleConfig): Promise<{ ok: boolean; error?: string }> {
+  return logoutAcpAgent(devinBin(config), ['acp'], devinEnv(), 10_000);
+}

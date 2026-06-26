@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { app } from 'electron';
 import { DEFAULT_MODELS, type ProviderInstance, type ProviderKind } from '@triangle/shared';
 import type { AgentSettings } from '@triangle/shared';
+import { resolveClaudeAuth } from './agent/claude-auth.js';
 
 /**
  * Agent credentials & settings, resolved from (lowest → highest precedence):
@@ -17,6 +18,12 @@ import type { AgentSettings } from '@triangle/shared';
 export interface TriangleConfig {
   /** Anthropic API key for the Claude Agent SDK. */
   anthropicApiKey?: string;
+  /**
+   * Claude Code long-lived OAuth token (from `claude setup-token`). When provided, it is
+   * preferred over {@link anthropicApiKey} because the Agent SDK bills OAuth tokens against
+   * a Claude subscription while API keys use Console credits.
+   */
+  claudeOAuthToken?: string;
   /** Override the Claude model (else the SDK/CLI default). */
   claudeModel?: string;
   /** Path to the Claude Code executable, if not auto-resolved by the SDK. */
@@ -32,6 +39,8 @@ export interface TriangleConfig {
   devinPath?: string;
   /** Override the Devin model (else Devin's adaptive default). */
   devinModel?: string;
+  /** Override the Devin mode (`normal`, `accept-edits`, `plan`, `bypass`). */
+  devinMode?: string;
   /**
    * Command for an external ACP (Agent Client Protocol) agent that Triangle drives
    * as an ACP *client* (e.g. `gemini` with its experimental ACP flag). When set,
@@ -57,11 +66,13 @@ export interface TriangleConfig {
 interface RawConfigFile extends Partial<TriangleConfig> {
   // Allow snake_case aliases in JSON config files for convenience.
   anthropic_api_key?: string;
+  claude_oauth_token?: string;
   claude_model?: string;
   codex_path?: string;
   codex_model?: string;
   devin_path?: string;
   devin_model?: string;
+  devin_mode?: string;
   acp_agent_command?: string;
   acp_agent_args?: string[];
   acp_agent_label?: string;
@@ -86,12 +97,14 @@ function fromFile(raw: RawConfigFile | null): Partial<TriangleConfig> {
   if (!raw) return {};
   return {
     anthropicApiKey: raw.anthropicApiKey ?? raw.anthropic_api_key,
+    claudeOAuthToken: raw.claudeOAuthToken ?? raw.claude_oauth_token,
     claudeModel: raw.claudeModel ?? raw.claude_model,
     claudeExecutablePath: raw.claudeExecutablePath,
     codexPath: raw.codexPath ?? raw.codex_path,
     codexModel: raw.codexModel ?? raw.codex_model,
     devinPath: raw.devinPath ?? raw.devin_path,
     devinModel: raw.devinModel ?? raw.devin_model,
+    devinMode: raw.devinMode ?? raw.devin_mode,
     acpAgentCommand: raw.acpAgentCommand ?? raw.acp_agent_command,
     acpAgentArgs: raw.acpAgentArgs ?? raw.acp_agent_args,
     acpAgentLabel: raw.acpAgentLabel ?? raw.acp_agent_label,
@@ -113,6 +126,8 @@ function fromEnv(): Partial<TriangleConfig> {
   const out: Partial<TriangleConfig> = {};
   const key = env['ANTHROPIC_API_KEY'] ?? env['TRIANGLE_ANTHROPIC_API_KEY'];
   if (key) out.anthropicApiKey = key;
+  const oauthToken = env['CLAUDE_CODE_OAUTH_TOKEN'] ?? env['TRIANGLE_CLAUDE_OAUTH_TOKEN'];
+  if (oauthToken) out.claudeOAuthToken = oauthToken;
   const model = env['TRIANGLE_CLAUDE_MODEL'] ?? env['ANTHROPIC_MODEL'];
   if (model) out.claudeModel = model;
   if (env['TRIANGLE_CLAUDE_EXECUTABLE']) out.claudeExecutablePath = env['TRIANGLE_CLAUDE_EXECUTABLE'];
@@ -120,6 +135,7 @@ function fromEnv(): Partial<TriangleConfig> {
   if (env['TRIANGLE_CODEX_MODEL']) out.codexModel = env['TRIANGLE_CODEX_MODEL'];
   if (env['TRIANGLE_DEVIN_PATH']) out.devinPath = env['TRIANGLE_DEVIN_PATH'];
   if (env['TRIANGLE_DEVIN_MODEL']) out.devinModel = env['TRIANGLE_DEVIN_MODEL'];
+  if (env['TRIANGLE_DEVIN_MODE']) out.devinMode = env['TRIANGLE_DEVIN_MODE'];
   if (env['TRIANGLE_ACP_AGENT_COMMAND']) out.acpAgentCommand = env['TRIANGLE_ACP_AGENT_COMMAND'];
   if (env['TRIANGLE_ACP_AGENT_ARGS']) {
     out.acpAgentArgs = env['TRIANGLE_ACP_AGENT_ARGS'].split(' ').filter(Boolean);
@@ -152,28 +168,30 @@ export function newProviderInstance(kind: ProviderKind, name: string): ProviderI
 
 /**
  * Seed provider instances on first load:
- *  - migrate legacy per-provider model/path settings into default instances, then
+ *  - migrate legacy per-provider model/path settings into default instances,
+ *  - inject a Claude instance when Claude Code OAuth/API credentials are detected, and
  *  - ensure at least Devin + Codex defaults exist, plus the always-available Mock.
  */
-function ensureProviderInstances(c: TriangleConfig): ProviderInstance[] {
-  if (c.providerInstances && c.providerInstances.length > 0) return c.providerInstances;
-  const instances: ProviderInstance[] = [];
+async function ensureProviderInstances(c: TriangleConfig): Promise<ProviderInstance[]> {
+  const instances: ProviderInstance[] = c.providerInstances ? [...c.providerInstances] : [];
+  const has = (kind: ProviderKind): boolean => instances.some((i) => i.kind === kind);
   const add = (kind: ProviderKind, name: string, model: string, config: Record<string, string>): void => {
     instances.push({ id: kind, kind, name, enabled: true, model, config });
   };
 
-  if (c.devinModel || c.devinPath) {
+  if (!has('devin') && (c.devinModel || c.devinPath)) {
     add('devin', 'Devin CLI', c.devinModel ?? DEFAULT_MODELS.devin[0], { path: c.devinPath ?? 'devin' });
   }
-  if (c.codexModel || c.codexPath) {
+  if (!has('codex') && (c.codexModel || c.codexPath)) {
     add('codex', 'Codex CLI', c.codexModel ?? DEFAULT_MODELS.codex[0], { path: c.codexPath ?? 'codex' });
   }
-  if (c.claudeModel || c.claudeExecutablePath) {
+  const claudeAuth = await resolveClaudeAuth(c);
+  if (!has('claude') && (claudeAuth || c.claudeModel || c.claudeExecutablePath)) {
     add('claude', 'Claude Agent SDK', c.claudeModel ?? DEFAULT_MODELS.claude[0], {
       path: c.claudeExecutablePath ?? '',
     });
   }
-  if (c.acpAgentCommand) {
+  if (!has('acp') && c.acpAgentCommand) {
     add('acp', c.acpAgentLabel ?? 'ACP Agent', DEFAULT_MODELS.acp[0], {
       command: c.acpAgentCommand,
       args: (c.acpAgentArgs ?? []).join(' '),
@@ -183,7 +201,9 @@ function ensureProviderInstances(c: TriangleConfig): ProviderInstance[] {
     add('devin', 'Devin CLI', DEFAULT_MODELS.devin[0], { path: c.devinPath ?? 'devin' });
     add('codex', 'Codex CLI', DEFAULT_MODELS.codex[0], { path: c.codexPath ?? 'codex' });
   }
-  add('mock', 'Mock Agent', DEFAULT_MODELS.mock[0], {});
+  if (!has('mock')) {
+    add('mock', 'Mock Agent', DEFAULT_MODELS.mock[0], {});
+  }
   return instances;
 }
 
@@ -207,9 +227,9 @@ function userConfigPath(): string {
 }
 
 /** The user-editable subset of the effective config (for the harness-config UI). */
-export function loadAgentSettings(): AgentSettings {
+export async function loadAgentSettings(): Promise<AgentSettings> {
   const c = loadConfig();
-  const instances = ensureProviderInstances(c);
+  const instances = await ensureProviderInstances(c);
   const selected =
     c.selectedInstanceId ??
     instances.find((i) => i.kind === 'devin' && i.enabled)?.id ??
@@ -223,6 +243,7 @@ export function loadAgentSettings(): AgentSettings {
     codexModel: c.codexModel,
     devinPath: c.devinPath,
     devinModel: c.devinModel,
+    devinMode: c.devinMode,
     acpAgentCommand: c.acpAgentCommand,
     acpAgentArgs: c.acpAgentArgs,
     acpAgentLabel: c.acpAgentLabel,
@@ -236,7 +257,7 @@ export function loadAgentSettings(): AgentSettings {
  * merging into and preserving any other keys (e.g. an existing API key). An empty
  * string clears a field. Returns the new effective settings.
  */
-export function saveAgentSettings(patch: Partial<AgentSettings>): AgentSettings {
+export async function saveAgentSettings(patch: Partial<AgentSettings>): Promise<AgentSettings> {
   const file = userConfigPath();
   const current = (readJson(file) as Record<string, unknown> | null) ?? {};
   for (const [key, value] of Object.entries(patch)) {

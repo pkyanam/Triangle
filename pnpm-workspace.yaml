@@ -7,3 +7,9 @@ packages:
 onlyBuiltDependencies:
   - electron
   - esbuild
+
+# Auto-approve builds for dependencies above so CI/non-interactive installs work.
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true

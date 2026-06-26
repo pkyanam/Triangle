@@ -66,6 +66,13 @@ export interface TriangleApi {
     /** Subscribe to write-approval prompts. */
     onApprovalRequest: (cb: (req: ApprovalRequest) => void) => Unsubscribe;
   };
+  /** Devin ACP lifecycle helpers. */
+  devin: {
+    /** List resumable ACP sessions advertised by the agent. */
+    sessions: () => Promise<Array<{ sessionId: string; name?: string; createdAt?: string }>>;
+    /** Log out of the Devin ACP agent. */
+    logout: () => Promise<{ ok: boolean; error?: string }>;
+  };
   /** Persisted agent session history for the active project (ADR 0016). */
   session: {
     /** List recorded sessions (newest first). */

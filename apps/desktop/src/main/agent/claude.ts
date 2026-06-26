@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
+import { resolveClaudeAuth } from './claude-auth.js';
 import type { AgentHarness, RunContext } from './harness.js';
 
 /**
@@ -71,13 +72,15 @@ export const claudeHarness: AgentHarness = {
     } catch {
       return { available: false, reason: 'Claude Agent SDK is not installed.' };
     }
-    if (!config.anthropicApiKey) {
+    const auth = await resolveClaudeAuth(config);
+    if (!auth) {
       return {
         available: false,
-        reason: 'Set ANTHROPIC_API_KEY (env or .triangle/config.json).',
+        reason:
+          'Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN (env or .triangle/config.json), or run `claude login`.',
       };
     }
-    return { available: true };
+    return { available: true, reason: `Authenticated via ${auth.source}.` };
   },
 
   async models(): Promise<ModelInfo[]> {
@@ -90,6 +93,13 @@ export const claudeHarness: AgentHarness = {
 
   async run(ctx: RunContext): Promise<void> {
     const { prompt, projectRoot, config, toolset, emit, signal } = ctx;
+    const auth = await resolveClaudeAuth(config);
+    if (!auth) {
+      throw new Error(
+        'No Claude authentication found. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN (env or .triangle/config.json), or run `claude login`.',
+      );
+    }
+
     const sdk = await import('@anthropic-ai/claude-agent-sdk');
     const { query, tool, createSdkMcpServer } = sdk;
 
@@ -313,7 +323,10 @@ export const claudeHarness: AgentHarness = {
       // Don't auto-load arbitrary local .claude/ settings; Triangle drives configuration.
       settingSources: [],
       pathToClaudeCodeExecutable: config.claudeExecutablePath,
-      env: { ...process.env, ANTHROPIC_API_KEY: config.anthropicApiKey },
+      env:
+        auth.type === 'oauth'
+          ? { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: auth.token, ANTHROPIC_API_KEY: undefined }
+          : { ...process.env, ANTHROPIC_API_KEY: auth.token, CLAUDE_CODE_OAUTH_TOKEN: undefined },
       stderr: (data: string) => emit({ type: 'log', level: 'info', text: data.trimEnd() }),
     };
 

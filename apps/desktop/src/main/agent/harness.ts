@@ -41,9 +41,18 @@ export interface ApprovalOutcome {
 
 export interface RunContext {
   prompt: string;
+  /** Images attached to the user message (ACP-aware providers). */
+  attachments?: import('@triangle/shared').ImageAttachment[];
   /** Absolute project root (harnesses set their cwd here). */
   projectRoot: string;
   config: TriangleConfig;
+  /** Driver-specific config from the selected provider instance. */
+  instanceConfig?: Record<string, string>;
+  /**
+   * Resume an existing ACP session instead of creating a new one. Forwarded by
+   * ACP-aware harnesses to `session/resume` or `session/load`.
+   */
+  resumeSessionId?: string;
   /** Triangle filesystem + domain tools (mapped onto ProjectManager + preview). */
   toolset: TriangleToolset;
   /** Loopback bridge for out-of-process tool access (Codex/MCP). */

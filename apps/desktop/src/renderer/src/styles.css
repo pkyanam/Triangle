@@ -370,6 +370,15 @@ button {
 .workspace .dv-dockview .dv-groupview.dv-active-group > .dv-tabs-and-actions-container {
   box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--primary) 55%, transparent);
 }
+.workspace .dv-dockview .dv-groupview.dv-active-group.dv-groupview-header-left > .dv-tabs-and-actions-container {
+  box-shadow: inset 1px 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.workspace .dv-dockview .dv-groupview.dv-active-group.dv-groupview-header-right > .dv-tabs-and-actions-container {
+  box-shadow: inset -1px 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.workspace .dv-dockview .dv-groupview.dv-active-group.dv-groupview-header-bottom > .dv-tabs-and-actions-container {
+  box-shadow: inset 0 -1px 0 0 color-mix(in srgb, var(--primary) 55%, transparent);
+}
 
 /* Tab chrome */
 .workspace .dv-dockview .dv-tabs-and-actions-container {
@@ -387,6 +396,23 @@ button {
 }
 .workspace .dv-dockview .dv-tab:hover {
   color: var(--foreground);
+}
+
+/* Vertical tabs: rotate the separator to keep the active-tab bevel facing the content. */
+.workspace .dv-dockview .dv-tabs-and-actions-container.dv-groupview-header-vertical {
+  width: 80px;
+}
+.workspace .dv-dockview .dv-groupview-header-vertical .dv-tab {
+  padding: 10px 0;
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+}
+.workspace .dv-dockview .dv-groupview-header-left .dv-tab.dv-active-tab,
+.workspace .dv-dockview .dv-groupview-header-right .dv-tab.dv-active-tab {
+  box-shadow: inset 1px 0 0 0 rgb(255 255 255 / 6%);
+}
+.workspace .dv-dockview .dv-groupview-header-bottom .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -1px 0 0 rgb(255 255 255 / 6%);
 }
 
 /* The panel content surface */
@@ -1031,6 +1057,38 @@ button {
   flex: 0 0 auto;
   margin-top: 1px;
 }
+.agent__notice--sessions {
+  color: var(--info-foreground);
+  background: color-mix(in srgb, var(--info) 10%, transparent);
+  border-color: color-mix(in srgb, var(--info) 28%, transparent);
+}
+.agent__session-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+.agent__session-list-title {
+  font-weight: 600;
+  margin-right: 4px;
+}
+.agent__session-item {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent__session-item:hover {
+  background: color-mix(in srgb, var(--info) 12%, transparent);
+}
 .agent__messages {
   flex: 1;
   overflow: auto;
@@ -1112,6 +1170,7 @@ button {
   flex-wrap: wrap;
 }
 .composer {
+  position: relative;
   border-radius: var(--radius-2xl);
   border: 1px solid var(--input);
   background: var(--card);
@@ -1222,6 +1281,99 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 45%;
+}
+.tool__kind {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill, 999px);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary-foreground);
+}
+
+/* ---------- Agent: image attachments ---------- */
+.msg__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.msg__attachment-thumb {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+.agent__composer--drag-over {
+  border: 2px dashed var(--primary);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+.agent__drag-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
+}
+.agent__attachment-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px 2px;
+}
+.agent__attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  max-width: 100%;
+}
+.agent__attachment-chip img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex: 0 0 auto;
+}
+.agent__attachment-name {
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent__attachment-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.agent__attachment-remove:hover {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive-foreground);
 }
 
 /* ---------- Agent: approval gate ---------- */

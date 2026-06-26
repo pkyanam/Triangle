@@ -170,7 +170,7 @@ export class AgentManager {
       return { runId: req.runId, accepted: false, reason: reason ?? 'Harness unavailable.' };
     }
 
-    const settings = loadAgentSettings();
+    const settings = await loadAgentSettings();
     const instance = req.instanceId
       ? settings.providerInstances.find((i) => i.id === req.instanceId)
       : settings.providerInstances.find((i) => i.kind === req.harness && i.enabled);
@@ -188,7 +188,7 @@ export class AgentManager {
     };
     this.runs.set(req.runId, run);
 
-    void this.execute(req, harness, runConfig, run);
+    void this.execute(req, harness, runConfig, run, instance);
     return { runId: req.runId, accepted: true };
   }
 
@@ -197,6 +197,7 @@ export class AgentManager {
     harness: AgentHarness,
     runConfig: TriangleConfig,
     run: ActiveRun,
+    instance: ProviderInstance,
   ): Promise<void> {
     const { runId } = req;
     // Forward every run event to the renderer *and* the session recorder, so a
@@ -270,8 +271,11 @@ export class AgentManager {
     try {
       await harness.run({
         prompt: req.prompt,
+        attachments: req.attachments,
         projectRoot: this.project.getRoot(),
         config: runConfig,
+        instanceConfig: instance.config,
+        resumeSessionId: req.resumeSessionId,
         toolset,
         toolBridge: {
           port: this.toolBridge.getPort(),

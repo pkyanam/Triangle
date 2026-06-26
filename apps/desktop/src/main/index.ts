@@ -13,6 +13,7 @@ import type {
 import { loadAgentSettings, saveAgentSettings } from './config.js';
 import { ProjectManager } from './project.js';
 import { AgentManager } from './agent/manager.js';
+import { listDevinSessions, logoutDevin } from './agent/devin.js';
 import { PreviewBridge } from './preview-bridge.js';
 import { ToolBridgeServer, dispatchTool } from './tool-bridge.js';
 import { McpEndpoint } from './mcp-endpoint.js';
@@ -140,11 +141,21 @@ function registerIpc(): void {
 
   handle('agent:harnesses', () => agents.listHarnesses());
   handle('mcp:endpoint', () => mcpEndpoint.info());
-  handle('config:get', () => loadAgentSettings());
-  handle('config:set', (patch) => saveAgentSettings(patch));
+  handle('config:get', async () => loadAgentSettings());
+  handle('config:set', async (patch) => saveAgentSettings(patch));
   handle('agent:start', (req) => agents.start(req));
   handle('agent:cancel', (req) => agents.cancel(req.runId));
   handle('agent:approval', (req) => agents.resolveApproval(req));
+
+  // Devin ACP lifecycle helpers.
+  handle('devin:sessions', async () => {
+    const settings = await loadAgentSettings();
+    return listDevinSessions({ devinPath: settings.devinPath });
+  });
+  handle('devin:logout', async () => {
+    const settings = await loadAgentSettings();
+    return logoutDevin({ devinPath: settings.devinPath });
+  });
 
   // Session history (ADR 0016) — scoped to the active project.
   handle('session:list', () => sessions.list(project.getActiveId()));
