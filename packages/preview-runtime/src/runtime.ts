@@ -28,7 +28,8 @@ import { SelectionHighlight } from './selection.js';
 import { loadModel, type LoadModelResult, type ModelFormat } from './loaders.js';
 import { applyJoint, buildRobot, type BuiltRobot, type RobotJointInfo } from './robot.js';
 import type { Robot } from '@triangle/robotics';
-import type { TriangleRenderer } from './renderer-type.js';
+import type { TriangleRenderer, RendererBackend } from './renderer-type.js';
+import { createRenderer } from './renderer-factory.js';
 
 export interface PreviewRuntimeOptions {
   /** Called whenever the load/run status changes (idle/loading/running/error). */
@@ -73,6 +74,9 @@ export class PreviewRuntime {
   private running = false;
   private paused = false;
   private disposed = false;
+  /** Whether the renderer backend is initialized (WebGPU init is async). */
+  private initialized = false;
+  private readonly backend: RendererBackend;
 
   private resizeObserver: ResizeObserver | null = null;
 
@@ -103,12 +107,18 @@ export class PreviewRuntime {
     this.canvas = canvas;
     this.options = options;
 
-    this.renderer = new THREE.WebGLRenderer({
-      canvas,
+    // The factory may return a WebGPURenderer (async init) or a legacy
+    // WebGLRenderer (sync). The loop defers the first render until `initialized`.
+    const created = createRenderer(canvas, {
       antialias: true,
-      // Required so the agent screenshot tool can read the framebuffer.
+      // Required so the agent screenshot tool can read the framebuffer (WebGL path).
       preserveDrawingBuffer: true,
       powerPreference: 'high-performance',
+    });
+    this.renderer = created.renderer;
+    this.backend = created.backend;
+    void created.ready.then(() => {
+      this.initialized = true;
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(options.background ?? 0x14161a, 1);
@@ -203,6 +213,11 @@ export class PreviewRuntime {
     return this.grid.visible;
   }
 
+  /** Which GPU backend the renderer is using (`'webgpu'` or `'webgl'`). */
+  getBackend(): RendererBackend {
+    return this.backend;
+  }
+
   /**
    * Load (or hot-reload) an author entry module from its source text. The previous
    * module is disposed and any author-created objects are removed before the new
@@ -230,6 +245,7 @@ export class PreviewRuntime {
 
   /** Capture the current framebuffer as a PNG data URL. */
   screenshot(): string {
+    if (!this.initialized) throw new Error('Renderer is not yet initialized.');
     this.renderer.render(this.scene, this.camera);
     return this.canvas.toDataURL('image/png');
   }
@@ -240,6 +256,7 @@ export class PreviewRuntime {
    * the live preview is unaffected. Backs the `triangle_capture_screenshot` tool.
    */
   capture(options: { width?: number; height?: number } = {}): CaptureResult {
+    if (!this.initialized) throw new Error('Renderer is not yet initialized.');
     const prev = this.renderer.getSize(new THREE.Vector2());
     const width = Math.max(1, Math.round(options.width ?? prev.x));
     const height = Math.max(1, Math.round(options.height ?? prev.y));
@@ -496,6 +513,10 @@ export class PreviewRuntime {
   private loop = (): void => {
     if (!this.running) return;
     this.rafId = requestAnimationFrame(this.loop);
+
+    // WebGPU init is async; skip rendering until the backend is ready so
+    // `render()` is never called before initialization (it would throw).
+    if (!this.initialized) return;
 
     this.timer.update();
     const delta = this.timer.getDelta();
