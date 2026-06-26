@@ -15,6 +15,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 5.5 | Share, Snapshot & Scope | ✅ Done |
 | 5.75 | Game-Engine Visual Overhaul (Outliner, Inspector, HUD, Console) | ✅ Done |
 | 6 | Post-Prototype Hardening & Web Path | ✅ Done |
+| 7 | Engine-Credibility UI Overhaul | ✅ Done |
 
 ## Stage 0 — Foundations & Architecture
 
@@ -199,6 +200,49 @@ See [`STAGE-5.75.md`](STAGE-5.75.md), the handoff prompt
 
 See [`STAGE-6.md`](STAGE-6.md) and ADR
 [`adr/0020-web-robotics-and-asset-pipeline.md`](adr/0020-web-robotics-and-asset-pipeline.md).
+
+## Stage 7 — Engine-Credibility UI Overhaul
+
+A renderer-side overhaul that removes "AI-generated prototype" tells and adds
+the surface features a mature engine is expected to have. Predominantly
+renderer + additive `@triangle/preview-runtime` methods; no IPC contract changes
+except a persisted `rosBridgeUrl` setting.
+
+- [x] **P0 — Remove prototype tells:** on-canvas `TransformControls` gizmo
+      (Move/Rotate/Scale), event-based toast system, empty AgentPanel dev seed,
+      custom SVG logo. (ADR 0021)
+- [x] **Asset Generator dialog** replacing the raw JSON tool runner, with
+      provider/model pickers and progress feedback.
+- [x] **Asset Browser panel** with drag-to-viewport import, integrated into the
+      dockview layout and View menu.
+- [x] **Interactive orientation cube** (standalone three.js renderer mirroring
+      the camera; click a face to snap), **debug view modes** (lit/wireframe/
+      wireframe-overlay/normals/depth/overdraw/uv), and a dockable **Performance
+      panel** (FPS graph + frame-time histogram + renderer.info). (ADR 0021)
+- [x] **Engine-first menu bar** (File/Edit/View/Window/Help) + **command
+      palette** (Cmd/Ctrl+P) + **layout precedence swap** (Inspector fronts the
+      right rail; viewport is the hero; layout key bumped to `v4`). (ADR 0022)
+- [x] **Settings & Integrations hub** with a category nav (Agents / Hugging
+      Face / World Labs / Robotics / MCP Endpoint / About); HF and MCP cards
+      moved out of agent settings into the hub. (ADR 0023)
+- [x] **Inspector Apply-to-source** via a managed `__triangleOverrides` block
+      that survives hot-reload; **drag-to-scrub** numeric fields with
+      step/min/max. **Outliner** search/lock/isolate/drag-to-reparent (new
+      `reparent` SceneEdit op). (ADR 0024)
+- [x] **Robotics URDF importer** (paste or open .urdf → parsed Robot → built
+      directly in the live scene) + **Joint Inspector** (slider per joint,
+      bounded by limits) + ROS2 bridge card with a live reachability probe.
+      (ADR 0025)
+- [x] **Resizable Console** with a command input (eval against the live scene),
+      expandable tool-trace rows, and clear-on-run. **Real status bar** with
+      detected renderer, project + unsaved dot, selected count, and active
+      harness.
+
+See ADRs [`0021`](adr/0021-on-canvas-transform-gizmo.md),
+[`0022`](adr/0022-menu-bar-and-engine-first-layout.md),
+[`0023`](adr/0023-integrations-hub.md),
+[`0024`](adr/0024-inspector-apply-to-source-and-outliner-ops.md),
+[`0025`](adr/0025-robotics-urdf-importer.md).
 
 ## Stages 4–6
 
