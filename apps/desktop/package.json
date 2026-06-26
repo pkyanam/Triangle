@@ -6,6 +6,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev --watch",
+    "predev": "node scripts/brand-dev.mjs",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
@@ -54,53 +55,5 @@
     "tsx": "^4.22.4",
     "typescript": "5.9.3",
     "vite": "7.1.12"
-  },
-  "build": {
-    "appId": "ai.triangle.desktop",
-    "productName": "Triangle",
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "files": [
-      "out/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "out/main/mcp.js",
-        "to": "mcp/mcp.js"
-      },
-      {
-        "from": "out/main/chunks",
-        "to": "mcp/chunks"
-      },
-      {
-        "from": "build/mcp/package.json",
-        "to": "mcp/package.json"
-      },
-      {
-        "from": "../../templates",
-        "to": "templates"
-      }
-    ],
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "category": "public.app-category.developer-tools"
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Development"
-    }
   }
 }

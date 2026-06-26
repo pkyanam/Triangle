@@ -24,6 +24,24 @@ import { hfDeviceCode, hfDisconnect, hfPollToken, hfStatus } from './hf-oauth.js
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
 
+// Force the app name to "Triangle" everywhere (menu bar, About, app:info IPC).
+// In dev, Electron defaults to "Electron" — this overrides it so the brand is
+// correct even when running `npm run dev`.
+app.setName('Triangle');
+
+// In dev on macOS the dock shows the Electron logo; replace it with the Triangle
+// icon. Packaged builds get the icon baked in by electron-builder.
+if (isDev && process.platform === 'darwin') {
+  const devIconPath = path.join(app.getAppPath(), 'build', 'icon.png');
+  if (existsSync(devIconPath)) {
+    try {
+      app.dock?.setIcon(devIconPath);
+    } catch {
+      /* dock.setIcon may be unavailable on some platforms — ignore. */
+    }
+  }
+}
+
 let mainWindow: BrowserWindow | null = null;
 let project: ProjectManager;
 let agents: AgentManager;
