@@ -649,10 +649,11 @@ export class PreviewRuntime {
         blending: THREE.AdditiveBlending,
       });
     else if (mode === 'uv')
-      mat = new THREE.ShaderMaterial({
-        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-        fragmentShader: 'varying vec2 vUv; void main(){ gl_FragColor = vec4(fract(vUv), 0.0, 1.0); }',
-      });
+      // Procedural UV-gradient texture (R=u, G=v, B=0) on a MeshBasicMaterial.
+      // This replaces a raw-GLSL ShaderMaterial so the mode works identically on
+      // the WebGPU and WebGL backends (ShaderMaterial GLSL is WebGL-only).
+      // RepeatWrapping replicates the original `fract(vUv)` behavior for tiled UVs.
+      mat = new THREE.MeshBasicMaterial({ map: uvGradientTexture() });
     if (mat) this.overrideMaterials[mode] = mat;
     return mat;
   }
@@ -726,4 +727,31 @@ export function createPreviewRuntime(
   options?: PreviewRuntimeOptions,
 ): PreviewRuntime {
   return new PreviewRuntime(canvas, options);
+}
+
+/**
+ * Build (and cache) the shared UV-gradient texture used by the `uv` debug view
+ * mode. R = u, G = v, B = 0, A = 1. `RepeatWrapping` makes tiled UVs (>1) wrap,
+ * matching the original GLSL `fract(vUv)` behavior. See ADR 0026.
+ */
+let cachedUvTexture: THREE.DataTexture | null = null;
+function uvGradientTexture(): THREE.DataTexture {
+  if (cachedUvTexture) return cachedUvTexture;
+  const size = 256;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      data[i] = Math.round((x / (size - 1)) * 255);
+      data[i + 1] = Math.round((y / (size - 1)) * 255);
+      data[i + 2] = 0;
+      data[i + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  cachedUvTexture = tex;
+  return tex;
 }
