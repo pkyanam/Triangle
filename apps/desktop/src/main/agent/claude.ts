@@ -4,6 +4,7 @@ import type { ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
 import { resolveClaudeAuth } from './claude-auth.js';
 import type { AgentHarness, RunContext } from './harness.js';
+import { CLAUDE_SYSTEM_PROMPT } from './system-prompt.js';
 
 /**
  * Claude Agent SDK harness. Spawns the SDK's in-process agent loop and exposes the
@@ -27,20 +28,7 @@ const TRIANGLE_TOOL_NAMES = [
   'mcp__triangle__triangle_set_light',
 ];
 
-const SYSTEM_PROMPT =
-  'You are the Triangle agent, an expert Three.js / WebGL developer working inside a live ' +
-  'preview engine. The active project is a Triangle project whose entry module is hot-reloaded ' +
-  'on save. Use the triangle_* tools to inspect and edit project files (paths are project-' +
-  'relative). Entry modules receive an injected THREE context and must not use bare imports. ' +
-  'For visual grounding you can call triangle_capture_screenshot (saves a PNG you can then Read), ' +
-  'triangle_describe_scene (the live scene graph), triangle_validate_shader (compile GLSL and get ' +
-  'diagnostics before writing it to disk), and triangle_performance_snapshot. You can also drive ' +
-  'the live scene directly for fast iteration: triangle_set_uniform, triangle_set_material_color, ' +
-  'triangle_set_transform, triangle_set_visibility, and triangle_set_light all take a target (an ' +
-  'object name or uuid from triangle_describe_scene) and reflect immediately. These live edits are ' +
-  'transient — a hot-reload (file save) resets them — so once a look is right, persist it by writing ' +
-  'the source file. Prefer validating a shader and capturing a screenshot to confirm your changes ' +
-  'look right. Make minimal, targeted edits and briefly explain what you changed.';
+const SYSTEM_PROMPT = CLAUDE_SYSTEM_PROMPT;
 
 /** Extract concatenated text from a Beta assistant message's content blocks. */
 function extractText(message: { content?: unknown }): string {

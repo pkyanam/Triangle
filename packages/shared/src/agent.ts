@@ -202,7 +202,20 @@ export type AgentEvent =
       text: string;
     }
   | { type: 'tool'; runId: string; trace: ToolCallTrace }
-  | { type: 'log'; runId: string; level: 'info' | 'warn' | 'error'; text: string };
+  | { type: 'log'; runId: string; level: 'info' | 'warn' | 'error'; text: string }
+  | {
+      /**
+       * The harness opened or resumed an agent-side conversation/session and
+       * reports its id. The renderer stores it so a follow-up message in the
+       * same chat resumes that session (preserving prior context) instead of
+       * starting a fresh one. ACP/Devin emit this from `session/new`|
+       * `session/resume`; other harnesses may emit it when they have an
+       * equivalent resumable conversation handle.
+       */
+      type: 'session';
+      runId: string;
+      sessionId: string;
+    };
 
 /** Whether a proposed change creates, updates, or deletes a file. */
 export type FileChangeKind = 'create' | 'update' | 'delete';

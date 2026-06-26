@@ -293,6 +293,8 @@ export class AgentManager {
             forward({ type: 'assistant', runId, messageId: event.messageId, text: event.text });
           } else if (event.type === 'tool') {
             forward({ type: 'tool', runId, trace: event.trace });
+          } else if (event.type === 'session') {
+            forward({ type: 'session', runId, sessionId: event.sessionId });
           } else {
             forward({ type: 'log', runId, level: event.level, text: event.text });
           }

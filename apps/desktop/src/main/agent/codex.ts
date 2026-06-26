@@ -3,6 +3,7 @@ import readline from 'node:readline';
 import type { ApprovalFileChange, FileChangeKind, ModelInfo } from '@triangle/shared';
 import type { TriangleConfig } from '../config.js';
 import { harnessTraceId, type AgentHarness, type ApprovalOutcome, type RunContext } from './harness.js';
+import { CODEX_DEVELOPER_INSTRUCTIONS } from './system-prompt.js';
 
 /**
  * Codex harness backed by the **Codex App Server** (`codex app-server`) — the same
@@ -21,22 +22,7 @@ import { harnessTraceId, type AgentHarness, type ApprovalOutcome, type RunContex
 
 const codexBin = (config: TriangleConfig): string => config.codexPath || 'codex';
 
-const DEVELOPER_INSTRUCTIONS =
-  'You are working inside Triangle, a live Three.js preview engine. The project entry ' +
-  'module hot-reloads on save. Triangle exposes MCP tools under the "triangle" server for ' +
-  'visual grounding: triangle_capture_screenshot (saves a PNG you can view), ' +
-  'triangle_describe_scene, triangle_validate_shader (compile GLSL and get diagnostics before ' +
-  'writing it), and triangle_performance_snapshot. You can also drive the live scene for fast ' +
-  'iteration: triangle_set_uniform, triangle_set_material_color, triangle_set_transform, ' +
-  'triangle_set_visibility, and triangle_set_light each take a target (an object name or uuid ' +
-  'from triangle_describe_scene) and reflect immediately. Those live edits are transient — a ' +
-  'hot-reload resets them — so once a look is right, persist it by editing the source file. ' +
-  'For 3D assets, use hf_generate_3d_asset. For text-to-3D use provider "shape-e" ' +
-  '(hysts/Shap-E); for image-to-3D use provider "hunyuan3d" (tencent/Hunyuan3D-2), ' +
-  '"trellis", or "triposr". After generation, call download_3d_asset to save the model, ' +
-  'then triangle_import_3d_asset to load it into the preview. You can also call arbitrary ' +
-  'HF Spaces with hf_call_space. Prefer validating shaders and capturing a screenshot to ' +
-  'confirm visual changes. Make minimal, targeted edits.';
+const DEVELOPER_INSTRUCTIONS = CODEX_DEVELOPER_INSTRUCTIONS;
 
 type JsonValue = unknown;
 interface RpcMessage {

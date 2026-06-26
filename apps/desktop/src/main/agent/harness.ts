@@ -6,7 +6,16 @@ import type { TriangleToolset } from './tools.js';
 export type HarnessEvent =
   | { type: 'assistant'; messageId: string; text: string }
   | { type: 'tool'; trace: Extract<AgentEvent, { type: 'tool' }>['trace'] }
-  | { type: 'log'; level: 'info' | 'warn' | 'error'; text: string };
+  | { type: 'log'; level: 'info' | 'warn' | 'error'; text: string }
+  | {
+      /**
+       * The harness opened or resumed a resumable agent-side session and reports
+       * its id. The manager forwards this to the renderer so a follow-up message
+       * in the same chat resumes that session (preserving prior context).
+       */
+      type: 'session';
+      sessionId: string;
+    };
 
 /**
  * Connection details for the loopback tool bridge (ADR 0008). Out-of-process

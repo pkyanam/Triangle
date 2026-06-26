@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import path from 'node:path';
 import readline from 'node:readline';
 import { harnessTraceId, type RunContext } from './harness.js';
+import { ACP_SYSTEM_PROMPT } from './system-prompt.js';
 import type { ImageAttachment, ModelInfo, ToolCallKind, ToolCallTrace } from '@triangle/shared';
 
 /**
@@ -29,6 +30,9 @@ import type { ImageAttachment, ModelInfo, ToolCallKind, ToolCallTrace } from '@t
  *  - User messages can carry image attachments, sent as ACP image content blocks.
  *  - Optional session lifecycle support: list, load, resume, close, set_model,
  *    set_mode, set_config_option, and logout.
+ *  - The session id from `session/new`|`session/resume` is reported back to the
+ *    manager/renderer so a follow-up message in the same chat resumes it,
+ *    preserving the agent's prior context across turns.
  *
  * This is experimental: it follows the ACP v1 schema but is verified by the
  * operator against a real ACP agent (no agent binary in CI). It parses agent
@@ -36,22 +40,11 @@ import type { ImageAttachment, ModelInfo, ToolCallKind, ToolCallTrace } from '@t
  */
 
 /**
- * System prompt prepended to every ACP/Claude harness turn. It explicitly tells
- * the agent that the Triangle MCP server is available and what tools it can use,
- * because some ACP agents do not introspect MCP tool descriptions reliably.
+ * Re-exported for harnesses that import the canonical ACP system prompt from the
+ * runner. The prompt itself lives in {@link ./system-prompt.ts} (single source of
+ * truth shared across all harnesses).
  */
-export const ACP_SYSTEM_PROMPT = `You are a coding assistant running inside the Triangle desktop app.
-
-You have access to an MCP server named "triangle" that exposes project tools. Always prefer calling these tools over guessing. When the user asks for 3D assets, modeling, code generation, file operations, or live preview changes, use the relevant triangle MCP tools:
-
-- hf_generate_3d_asset — generate a 3D model. For text-to-3D use provider "shape-e" (hysts/Shap-E). For image-to-3D use provider "hunyuan3d" (or trellis/triposr).
-- download_3d_asset — download the generated model file into the project.
-- triangle_import_3d_asset — import the downloaded model into the Triangle scene.
-- hf_call_space — call any other Hugging Face Space by slug and route.
-- triangle_live_* and triangle_scene_* tools — inspect and manipulate the live preview.
-- fs/read_text_file and fs/write_text_file — read and write project files (writes are gated).
-
-Before claiming a tool is unavailable, list the tools available under the "triangle" MCP server by calling the list tools method. If you see triangle tools, use them. If triangle tools are missing, tell the user that the MCP server is not configured.`;
+export { ACP_SYSTEM_PROMPT };
 
 type JsonValue = unknown;
 interface RpcMessage {
@@ -848,6 +841,11 @@ export function runAcpSession(ctx: RunContext, options: AcpSessionOptions): Prom
         sessionId = session.sessionId ?? '';
         if (!sessionId) throw new Error(`${label} did not return a sessionId.`);
         if (signal.aborted) return finishAndClose();
+
+        // Report the session id back to the manager/renderer so a follow-up
+        // message in the same chat can resume this session (preserving prior
+        // context) instead of starting a fresh one.
+        emit({ type: 'session', sessionId });
 
         await applyConfigOptions();
         if (signal.aborted) return finishAndClose();

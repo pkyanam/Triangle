@@ -99,6 +99,11 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<string | null>(null);
+  // The agent-side session id reported by the harness (e.g. Devin/ACP
+  // `session/new`|`session/resume`). A follow-up message in the same chat
+  // resumes this session so the agent keeps its prior context instead of
+  // starting a fresh, context-less conversation. Cleared on project switch.
+  const activeSessionIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reduceMotion = useReducedMotion();
 
@@ -154,6 +159,7 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
     setAttachments([]);
     setDevinSessions(null);
     setResumeSessionId(null);
+    activeSessionIdRef.current = null;
   }, [projectId]);
 
   /** Insert or update a message by id. */
@@ -287,6 +293,11 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
             timestamp: Date.now(),
           });
           break;
+        case 'session':
+          // Remember the agent-side session id so the next message in this
+          // chat resumes it (preserving the agent's prior context).
+          activeSessionIdRef.current = event.sessionId;
+          break;
         case 'status':
           if (event.status === 'error') {
             upsert({
@@ -325,6 +336,11 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
       const nextInstances = settings.providerInstances.map((i) =>
         i.id === instanceId ? { ...i, model } : i,
       );
+      // Switching provider instances invalidates any prior agent-side session:
+      // a Devin session id is meaningless to Claude/Codex, and even across two
+      // instances of the same kind the conversation context doesn't carry over.
+      activeSessionIdRef.current = null;
+      setResumeSessionId(null);
       persistSettings({ ...settings, selectedInstanceId: instanceId, providerInstances: nextInstances });
     },
     [settings, persistSettings],
@@ -348,13 +364,18 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
     const runId = newRunId();
     runRef.current = runId;
     const currentAttachments = attachments;
-    const currentResumeSessionId = resumeSessionId ?? undefined;
+    // A manually-picked resumable session takes precedence; otherwise resume
+    // the session the harness reported from the previous turn in this chat so
+    // the agent keeps its prior context across follow-up messages.
+    const currentResumeSessionId = resumeSessionId ?? activeSessionIdRef.current ?? undefined;
     setMessages((m) => [
       ...m,
       { id: nextId(), role: 'user', content: text, timestamp: Date.now(), attachments: currentAttachments },
     ]);
     setInput('');
     setAttachments([]);
+    // Only clear the manual pick; keep the auto-tracked active session id so
+    // subsequent follow-ups continue to resume it.
     setResumeSessionId(null);
     setBusy(true);
     setRunStartTime(Date.now());
