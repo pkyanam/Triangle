@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
@@ -23,6 +23,48 @@ import { hfDeviceCode, hfDisconnect, hfPollToken, hfStatus } from './hf-oauth.js
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
+
+// Packaged macOS apps launched from Finder/Dock inherit a minimal system PATH
+// (typically /usr/bin:/bin:/usr/sbin:/sbin) that excludes user-level bin dirs
+// where CLIs like `devin` (~/.local/bin), `codex` (~/.nvm/...), homebrew
+// (/opt/homebrew/bin), etc. are installed. In dev the app inherits the shell's
+// full PATH so this isn't needed, but a packaged .app can't find any of them
+// without this augmentation. We prepend the common locations so the harness
+// availability probes (which spawn `devin --version`, `codex --version`, etc.)
+// can actually resolve the binaries.
+if (!isDev) {
+  const home = process.env['HOME'] || '/Users/Shared';
+  const extraPaths = [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    path.join(home, '.local', 'bin'),
+    path.join(home, 'Library', 'pnpm'),
+    path.join(home, '.bun', 'bin'),
+    path.join(home, '.cargo', 'bin'),
+    path.join(home, '.deno', 'bin'),
+  ];
+  // nvm installs Node version-specific bin dirs under ~/.nvm/versions/node/*.
+  // Add every version's bin dir so CLIs installed via `npm i -g` (like codex)
+  // are found regardless of which Node version is active.
+  const nvmDir = path.join(home, '.nvm', 'versions', 'node');
+  if (existsSync(nvmDir)) {
+    try {
+      for (const version of readdirSync(nvmDir)) {
+        const binDir = path.join(nvmDir, version, 'bin');
+        if (existsSync(binDir)) extraPaths.push(binDir);
+      }
+    } catch {
+      /* nvm dir unreadable — skip. */
+    }
+  }
+  const currentPath = process.env['PATH'] ?? '';
+  const seen = new Set(currentPath.split(path.delimiter).filter(Boolean));
+  const additions = extraPaths.filter((p) => !seen.has(p) && existsSync(p));
+  if (additions.length > 0) {
+    process.env['PATH'] = [...additions, currentPath].filter(Boolean).join(path.delimiter);
+  }
+}
 
 // Force the app name to "Triangle" everywhere (menu bar, About, app:info IPC).
 // In dev, Electron defaults to "Electron" — this overrides it so the brand is
