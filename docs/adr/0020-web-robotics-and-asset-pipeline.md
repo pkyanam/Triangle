@@ -34,7 +34,7 @@ We introduced OAuth support so Triangle can act on behalf of a Hugging Face user
 - `HuggingFaceSpacesClient` in `packages/integrations/src/hf-spaces.ts` calls arbitrary Space APIs through the official Gradio JS client (`@gradio/client`), which handles the modern queue-based API (`/gradio_api/call/*`), file uploads, and polling. Legacy direct endpoints still fall back to raw HTTP POST.
 - We use a **public OAuth app** (no client secret). A client id is safe to embed in a desktop binary; a client secret is not.
 - The existing three-tool workflow now prefers the OAuth token and falls back to API tokens:
-  - `hf_generate_3d_asset` — calls a Hugging Face Space via `@gradio/client` and returns a model URL. Text-to-3D defaults to provider `shape-e`; image-to-3D providers are `hunyuan3d` (`tencent/Hunyuan3D-2`), `trellis`, and `triposr`. Free Spaces may sleep or disable text-to-3D; the tool surfaces the underlying Space error.
+  - `hf_generate_3d_asset` — calls a Hugging Face Space via `@gradio/client` and returns a model URL. Text-to-3D defaults to provider `shape-e` (`hysts/Shap-E`); image-to-3D providers are `hunyuan3d` (`tencent/Hunyuan3D-2`), `trellis`, and `triposr`. Free Spaces may sleep or be paused; the tool surfaces the underlying Space error.
   - `download_3d_asset` — downloads the model and saves it as a binary file in the active project.
   - `triangle_import_3d_asset` — loads the binary file into the live preview via a new `load_model` preview request.
 

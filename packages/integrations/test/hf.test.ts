@@ -33,7 +33,7 @@ function fakeFetch(response: Record<string, unknown> | (() => Record<string, unk
 test('generate3dAsset requires prompt or image', async () => {
   const client = new HuggingFaceClient({
     fetch: fakeFetch({ modelUrl: 'https://x/y.glb' }),
-    clientFactory: fakeClient('x', '/predict', []),
+    clientFactory: fakeClient('hysts/Shap-E', '/text-to-3d', []),
   });
   await assert.rejects(() => client.generate3dAsset({ prompt: '', endpoint: 'https://x' }), {
     message: /prompt or image is required/,
@@ -43,7 +43,7 @@ test('generate3dAsset requires prompt or image', async () => {
 test('generate3dAsset requires provider or endpoint', async () => {
   const client = new HuggingFaceClient({
     fetch: fakeFetch({ modelUrl: 'https://x/y.glb' }),
-    clientFactory: fakeClient('x', '/predict', []),
+    clientFactory: fakeClient('hysts/Shap-E', '/text-to-3d', []),
   });
   await assert.rejects(() => client.generate3dAsset({ prompt: 'a cube' }), {
     message: /provider or an endpoint is required/,

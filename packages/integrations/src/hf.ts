@@ -124,11 +124,11 @@ const KNOWN_PROVIDERS: Record<string, ProviderConfig> = {
     extractModelUrl: extractFirstFileUrl,
   },
   'shape-e': {
-    space: 'jbilcke-hf/text-to-3d',
-    route: '/generate',
+    space: 'hysts/Shap-E',
+    route: '/text-to-3d',
     supportsText: true,
     supportsImage: false,
-    args: (prompt) => [prompt],
+    args: (prompt) => [prompt, 0, 15, 64],
     extractModelUrl: extractFirstFileUrl,
   },
 };

@@ -120,9 +120,9 @@ polls for the token. Users can also paste an HF OAuth access token or a personal
 directly. HF supports public apps with no client secret, so only the client id is safe in a
 desktop binary. The `hf_generate_3d_asset` tool routes through the official Gradio JS client
 (`@gradio/client`) so it speaks the modern queue-based HF Spaces API. Text-to-3D defaults to
-provider `shape-e` (a Shap-E text-to-3D Space); image-to-3D providers are `hunyuan3d`
-(`tencent/Hunyuan3D-2`), `trellis`, and `triposr`. Note that free HF Spaces may sleep, error,
-or disable text-to-3D — if generation fails, switch providers or supply an image.
+provider `shape-e` (`hysts/Shap-E`); image-to-3D providers are `hunyuan3d` (`tencent/Hunyuan3D-2`),
+`trellis`, and `triposr`. Note that free HF Spaces may sleep, error, or be paused — if
+generation fails, the tool surfaces the Space error and you can switch providers or supply an image.
 
 The Devin CLI harness uses `devin acp` (ACP) and tries `session/new` before prompting for
 auth, so an already-logged-in user (`devin auth login` or `WINDSURF_API_KEY`) is not

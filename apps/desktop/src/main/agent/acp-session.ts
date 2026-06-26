@@ -44,7 +44,7 @@ export const ACP_SYSTEM_PROMPT = `You are a coding assistant running inside the 
 
 You have access to an MCP server named "triangle" that exposes project tools. Always prefer calling these tools over guessing. When the user asks for 3D assets, modeling, code generation, file operations, or live preview changes, use the relevant triangle MCP tools:
 
-- hf_generate_3d_asset — generate a 3D model. For text-to-3D use provider "shape-e". For image-to-3D use provider "hunyuan3d" (or trellis/triposr).
+- hf_generate_3d_asset — generate a 3D model. For text-to-3D use provider "shape-e" (hysts/Shap-E). For image-to-3D use provider "hunyuan3d" (or trellis/triposr).
 - download_3d_asset — download the generated model file into the project.
 - triangle_import_3d_asset — import the downloaded model into the Triangle scene.
 - hf_call_space — call any other Hugging Face Space by slug and route.

@@ -79,15 +79,26 @@ export class HuggingFaceSpacesClient {
     }
 
     const token = this.token as `hf_${string}` | undefined;
-    const app = this.clientFactory
-      ? await this.clientFactory(space, { ...(token ? { token } : {}) })
-      : await client(space, { ...(token ? { token } : {}) });
-    const result = await app.predict(route, payload as unknown[]);
-    return {
-      data: result.data,
-      status: 'complete',
-      url: `https://huggingface.co/spaces/${space}`,
-    };
+    try {
+      const app = this.clientFactory
+        ? await this.clientFactory(space, { ...(token ? { token } : {}) })
+        : await client(space, { ...(token ? { token } : {}) });
+      const result = await app.predict(route, payload as unknown[]);
+      return {
+        data: result.data,
+        status: 'complete',
+        url: `https://huggingface.co/spaces/${space}`,
+      };
+    } catch (err) {
+      const message = (err as Error).message ?? String(err);
+      if (message.includes('Could not resolve app config') || message.includes('Space metadata')) {
+        throw new Error(
+          `HF Space "${space}" is unavailable (paused, sleeping, or does not exist). ` +
+            `Try a different provider or wait for the Space to wake up.`,
+        );
+      }
+      throw err;
+    }
   }
 
   /**

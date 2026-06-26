@@ -65,6 +65,15 @@ test('call passes the auth token to the client factory', async () => {
   assert.equal(token, 'hf_oauth_abc');
 });
 
+test('call wraps unresolved Space config as an unavailable Space error', async () => {
+  const client = new HuggingFaceSpacesClient({
+    clientFactory: async () => {
+      throw new Error('Could not resolve app config.');
+    },
+  });
+  await assert.rejects(() => client.call({ space: 'foo/bar' }), /unavailable/);
+});
+
 test('listSpaces maps api response', async () => {
   const client = new HuggingFaceSpacesClient({
     token: 'hf_token',
