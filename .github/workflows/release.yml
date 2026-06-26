@@ -1,0 +1,147 @@
+name: Release
+
+# Builds distributable installers for Windows (x64), macOS (x64 + arm64
+# separately on native-arch runners), and Linux (x64), then publishes them
+# to the GitHub Releases section. Triggered by pushing a `vX.Y.Z` tag.
+#
+# Usage:
+#   git tag v0.2.0
+#   git push origin v0.2.0
+#
+# The version in apps/desktop/package.json is auto-bumped to match the tag
+# before building, so the tag is the single source of truth for versioning.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS Intel — native x64 runner
+          - os: macos-13
+            platform: mac
+            arch: x64
+            label: macos-x64
+          # macOS Apple Silicon — native arm64 runner
+          - os: macos-14
+            platform: mac
+            arch: arm64
+            label: macos-arm64
+          # Windows x64
+          - os: windows-latest
+            platform: win
+            arch: x64
+            label: windows-x64
+          # Linux x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            label: linux-x64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxfixes3 libxrandr2 libgbm1 libasound2t64
+
+      - name: Bump version to match tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Setting version to $VERSION"
+          node -e "
+            const fs = require('fs');
+            const file = 'apps/desktop/package.json';
+            const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+            pkg.version = '${VERSION}';
+            fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Build & package
+        shell: bash
+        env:
+          # Prevent electron-builder from auto-discovering signing identities
+          # on macOS CI runners (would fail without certs). Signing can be
+          # enabled by providing CSC_LINK / CSC_KEY_PASSWORD secrets.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: |
+          cd apps/desktop
+          pnpm exec electron-vite build
+          pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: triangle-${{ matrix.label }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.rpm
+            apps/desktop/release/*.yml
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lhR artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Triangle ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            artifacts/*.dmg
+            artifacts/*.zip
+            artifacts/*.exe
+            artifacts/*.AppImage
+            artifacts/*.deb
+            artifacts/*.rpm
+            artifacts/*.yml
