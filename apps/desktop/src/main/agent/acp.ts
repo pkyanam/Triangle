@@ -45,6 +45,18 @@ export const acpHarness: AgentHarness = {
       label: ctx.config.acpAgentLabel || 'ACP agent',
       capabilities: { fs: { readTextFile: true, writeTextFile: true }, image: true },
       ...(ctx.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
+      mcpServers: [
+        {
+          name: 'triangle',
+          command: process.execPath,
+          args: [ctx.toolBridge.serverScriptPath],
+          env: {
+            ELECTRON_RUN_AS_NODE: '1',
+            TRIANGLE_BRIDGE_PORT: String(ctx.toolBridge.port),
+            TRIANGLE_BRIDGE_TOKEN: ctx.toolBridge.token,
+          },
+        },
+      ],
     });
   },
 };

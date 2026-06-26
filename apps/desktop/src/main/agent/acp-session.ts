@@ -304,9 +304,15 @@ export interface AcpSessionOptions {
    * Default false, leaving sessions alive so they can be resumed later.
    */
   closeSessionOnFinish?: boolean;
+  /**
+   * Optional MCP server configs to advertise to the agent in `session/new`.
+   * When omitted, the runner falls back to the standalone MCP endpoint from
+   * `ctx.mcpEndpoint`.
+   */
+  mcpServers?: JsonValue[];
 }
 
-/** Build ACP `mcpServers` from Triangle's standalone endpoint (env as name/value pairs). */
+/** Build ACP `mcpServers` from Triangle's standalone endpoint. */
 function mcpServersFor(ctx: RunContext): JsonValue[] {
   if (!ctx.mcpEndpoint) return [];
   const { command, args, env } = ctx.mcpEndpoint;
@@ -315,7 +321,7 @@ function mcpServersFor(ctx: RunContext): JsonValue[] {
       name: 'triangle',
       command,
       args,
-      env: Object.entries(env).map(([name, value]) => ({ name, value })),
+      env,
     },
   ];
 }
@@ -728,7 +734,7 @@ export function runAcpSession(ctx: RunContext, options: AcpSessionOptions): Prom
     const buildSessionParams = (): Record<string, JsonValue> => {
       const params: Record<string, JsonValue> = {
         cwd: projectRoot,
-        mcpServers: mcpServersFor(ctx),
+        mcpServers: options.mcpServers ?? mcpServersFor(ctx),
       };
       const meta: Record<string, JsonValue> = {};
       if (options.model) meta.model = options.model;

@@ -40,8 +40,9 @@ The desktop app now supports authenticating with Hugging Face via OAuth and call
 
 - **OAuth device-code flow**: `Settings → Configure providers → Hugging Face` lets you paste your own OAuth app client id and click "Connect with Hugging Face". The app starts the device-code flow, shows the 8-character user code in the UI, opens the HF verification page, and polls for the access token. The token is used for all HF API calls and falls back to `HF_TOKEN` / `hfToken` when absent or expired.
 - **New `hf_call_space` agent tool**: call any HF Space API (e.g. `user/space`) with an arbitrary payload. This is surfaced in Claude, MCP, ACP, and the manual tool runner.
-- **Existing 3D asset pipeline** (`hf_generate_3d_asset`, `download_3d_asset`, `triangle_import_3d_asset`) now prefers the OAuth token when connected, so private/gated Spaces and Inference Providers can be used.
+- **Existing 3D asset pipeline** (`hf_generate_3d_asset`, `download_3d_asset`, `triangle_import_3d_asset`) now prefers the OAuth token when connected, so private/gated Spaces and Inference Providers can be used. When the agent omits the `provider`, the tool defaults to `hunyuan3d` (the `tencent/Hunyuan3D-2-mini` Space).
 - **Direct OAuth token paste**: users can paste an HF OAuth access token directly into settings instead of using the device-code flow.
+- **Devin/ACP MCP wiring**: both the first-class Devin harness and the generic ACP harness now advertise the per-run Triangle MCP server in `session/new`, so tools like the HF pipeline are available and file writes are gated through the approval gate.
 
 OAuth configuration:
 - Each user must create their own HF OAuth app at https://huggingface.co/settings/applications/new and paste the Client ID into settings (or set `HF_OAUTH_CLIENT_ID` / `TRIANGLE_HF_OAUTH_CLIENT_ID`). Triangle does not ship a global OAuth app.

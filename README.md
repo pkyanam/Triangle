@@ -118,7 +118,14 @@ Face). Each user creates their own HF OAuth app at https://huggingface.co/settin
 pastes the client id, and clicks Connect; the app displays the 8-character HF user code and
 polls for the token. Users can also paste an HF OAuth access token or a personal `HF_TOKEN`
 directly. HF supports public apps with no client secret, so only the client id is safe in a
-desktop binary.
+desktop binary. When an agent calls `hf_generate_3d_asset` without a provider, it defaults
+to the `tencent/Hunyuan3D-2-mini` Space.
+
+The Devin CLI harness uses `devin acp` (ACP) and tries `session/new` before prompting for
+auth, so an already-logged-in user (`devin auth login` or `WINDSURF_API_KEY`) is not
+re-prompted on every prompt. The Devin and generic ACP harnesses advertise the per-run
+Triangle MCP server in `session/new`, exposing the same HF tools and live-preview tools as
+the in-process Claude harness.
 
 ## Status & roadmap
 

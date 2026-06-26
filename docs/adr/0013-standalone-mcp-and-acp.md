@@ -47,8 +47,10 @@ as a subprocess). The `acp` harness — gated on `config.acpAgentCommand` — sp
 the configured agent over stdio and speaks ACP v1 JSON-RPC:
 
 - `initialize` (advertise `fs.readTextFile` / `fs.writeTextFile` client caps) →
-  `session/new` (cwd = project root; **advertise Triangle's standalone MCP endpoint
-  in `mcpServers`** so the agent gets the domain tools) → `session/prompt`.
+  `session/new` (cwd = project root; **advertise the per-run Triangle MCP server
+  in `mcpServers`**, using the run-scoped bridge token, so the agent gets the
+  same domain tools and gated file operations as the in-process Claude harness) →
+  `session/prompt`.
 - `session/update` notifications map onto Triangle events (assistant/thought text
   chunks accumulate; `tool_call` / `tool_call_update` become tool traces).
 - Agent→client requests are served from the same `TriangleToolset`:

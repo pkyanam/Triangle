@@ -261,7 +261,7 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
         },
         provider: {
           type: 'string',
-          description: 'HF Space provider keyword (trellis, hunyuan3d, triposr) or a user/space name.',
+          description: 'HF Space provider keyword (trellis, hunyuan3d, triposr) or a user/space name. Defaults to hunyuan3d if not provided.',
         },
         endpoint: {
           type: 'string',

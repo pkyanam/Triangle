@@ -129,8 +129,24 @@ export const devinHarness: AgentHarness = {
       ...(configOptions?.mode ? { mode: configOptions.mode } : {}),
       ...(configOptions && Object.keys(configOptions).length > 0 ? { configOptions } : {}),
       ...(ctx.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
+      mcpServers: [
+        {
+          name: 'triangle',
+          command: process.execPath,
+          args: [ctx.toolBridge.serverScriptPath],
+          env: {
+            ELECTRON_RUN_AS_NODE: '1',
+            TRIANGLE_BRIDGE_PORT: String(ctx.toolBridge.port),
+            TRIANGLE_BRIDGE_TOKEN: ctx.toolBridge.token,
+          },
+        },
+      ],
       auth: {
-        hasCredentials: hasWindsurfKey(),
+        // Prefer the no-up-front-auth path: try session/new first and only run the
+        // ACP authenticate flow if the agent rejects the session as unauthenticated.
+        // This avoids re-prompting the user on every Devin prompt when they have
+        // already run `devin auth login` or set WINDSURF_API_KEY.
+        hasCredentials: true,
         prefer: ['windsurf', 'api', 'key', 'token'],
         hint: AUTH_HINT,
       },
