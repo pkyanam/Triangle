@@ -1,4 +1,11 @@
-import type { PreviewRequest, PreviewResult, SceneEdit, ShaderStage, ShaderValidationResult } from '@triangle/shared';
+import type {
+  PreviewRequest,
+  PreviewResult,
+  SceneEdit,
+  ShaderStage,
+  ShaderValidationResult,
+  TransformMode,
+} from '@triangle/shared';
 import type { PreviewRuntime } from '@triangle/preview-runtime';
 
 /**
@@ -132,6 +139,18 @@ export function setActiveViewMode(mode: 'lit' | 'wireframe'): void {
 export function getActiveViewMode(): 'lit' | 'wireframe' {
   if (!activeRuntime) return 'lit';
   return activeRuntime.getViewMode();
+}
+
+/** Set the on-canvas transform gizmo mode (select/translate/rotate/scale). */
+export function setActiveTransformMode(mode: TransformMode): void {
+  if (!activeRuntime) throw new NoPreviewError();
+  activeRuntime.setTransformMode(mode);
+}
+
+/** Current on-canvas transform gizmo mode. */
+export function getActiveTransformMode(): TransformMode {
+  if (!activeRuntime) return 'select';
+  return activeRuntime.getTransformMode();
 }
 
 /** Apply a live scene edit from the human Inspector (same path as agent edits). */

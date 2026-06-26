@@ -38,9 +38,9 @@ export function ViewportGizmo(): React.JSX.Element {
 
   return (
     <svg className="gizmo" viewBox={`0 0 ${SIZE} ${SIZE}`}>
-      <line className="gizmo__axis" x1={CENTER} y1={CENTER} x2={axes.x.x} y2={axes.x.y} stroke="#ff5b5b" />
-      <line className="gizmo__axis" x1={CENTER} y1={CENTER} x2={axes.y.x} y2={axes.y.y} stroke="#5bff72" />
-      <line className="gizmo__axis" x1={CENTER} y1={CENTER} x2={axes.z.x} y2={axes.z.y} stroke="#5b9dff" />
+      <line className="gizmo__axis" x1={CENTER} y1={CENTER} x2={axes.x.x} y2={axes.x.y} stroke="var(--gizmo-x)" />
+      <line className="gizmo__axis" x1={CENTER} y1={CENTER} x2={axes.y.x} y2={axes.y.y} stroke="var(--gizmo-y)" />
+      <line className="gizmo__axis" x1={CENTER} y1={CENTER} x2={axes.z.x} y2={axes.z.y} stroke="var(--gizmo-z)" />
       <text className="gizmo__label" x={axes.x.x} y={axes.x.y}>X</text>
       <text className="gizmo__label" x={axes.y.x} y={axes.y.y}>Y</text>
       <text className="gizmo__label" x={axes.z.x} y={axes.z.y}>Z</text>

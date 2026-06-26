@@ -90,7 +90,7 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
   const [showHistory, setShowHistory] = useState(false);
   const [showToolRunner, setShowToolRunner] = useState(false);
   const [toolName, setToolName] = useState('hf_generate_3d_asset');
-  const [toolArgs, setToolArgs] = useState('{ "prompt": "a low-poly tree", "provider": "hunyuan3d" }');
+  const [toolArgs, setToolArgs] = useState('{}');
   const [toolBusy, setToolBusy] = useState(false);
   const [runStartTime, setRunStartTime] = useState<number | null>(null);
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);

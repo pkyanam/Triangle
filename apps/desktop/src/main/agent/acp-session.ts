@@ -838,7 +838,10 @@ export function runAcpSession(ctx: RunContext, options: AcpSessionOptions): Prom
           }
         }
 
-        sessionId = session.sessionId ?? '';
+        // `session/new` returns the sessionId; `session/resume` and `session/load`
+        // do not (per the ACP spec, their responses only carry configOptions/modes).
+        // When resuming, fall back to the id we passed in so the turn can proceed.
+        sessionId = session.sessionId ?? options.resumeSessionId ?? '';
         if (!sessionId) throw new Error(`${label} did not return a sessionId.`);
         if (signal.aborted) return finishAndClose();
 

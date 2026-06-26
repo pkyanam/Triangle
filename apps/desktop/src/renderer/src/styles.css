@@ -89,6 +89,11 @@
   --viewport-vignette: radial-gradient(circle at 50% 50%, transparent 60%,
     color-mix(in srgb, #000 35%, transparent) 100%);
 
+  /* ---- Orientation gizmo / scene axis colors (X=red, Y=green, Z=blue) ---- */
+  --gizmo-x: oklch(0.66 0.2 25);
+  --gizmo-y: oklch(0.74 0.19 142);
+  --gizmo-z: oklch(0.62 0.18 255);
+
   /* ---- z-index scale ---- */
   --z-sticky: 20;
   --z-popover: 60;
@@ -2916,13 +2921,94 @@ button {
   animation: spin 0.7s linear infinite;
 }
 
+/* ---------- Toasts ---------- */
+.toaster {
+  position: fixed;
+  bottom: calc(var(--statusbar-h) + 14px);
+  right: 14px;
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 240px;
+  max-width: 420px;
+  padding: 9px 10px 9px 11px;
+  border-radius: var(--radius-md);
+  background: var(--popover);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--bevel-top), 0 8px 24px rgb(0 0 0 / 35%);
+  color: var(--foreground);
+  font-size: 12px;
+  pointer-events: auto;
+  animation: toast-in 160ms ease-out;
+}
+
+.toast__icon {
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.toast--success .toast__icon {
+  color: var(--success-foreground);
+}
+
+.toast--error {
+  border-color: var(--signal-border);
+}
+
+.toast--error .toast__icon {
+  color: var(--destructive-foreground);
+}
+
+.toast__message {
+  flex: 1;
+  line-height: 1.35;
+}
+
+.toast__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.toast__close:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ---------- Motion / reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .picker__model-row,
   .picker__rail-btn,
   .select-item,
   .switch,
-  .switch-thumb {
+  .switch-thumb,
+  .toast {
     transition: none;
+    animation: none;
   }
 }

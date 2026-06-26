@@ -76,6 +76,15 @@ export type PreviewStatus =
   | { phase: 'running' }
   | { phase: 'error'; message: string; stack?: string };
 
+/**
+ * Viewport debug view modes. `lit` and `wireframe` are the defaults; the rest
+ * swap analysis materials onto author meshes for inspection (ADR 0021).
+ */
+export type ViewMode = 'lit' | 'wireframe' | 'wireframe-overlay' | 'normals' | 'depth' | 'overdraw' | 'uv';
+
+/** On-canvas manipulation mode for the transform gizmo (ADR 0021). */
+export type TransformMode = 'select' | 'translate' | 'rotate' | 'scale';
+
 // --- Stage 3: domain tooling result shapes (the preview bridge) -------------
 //
 // These describe data the live preview runtime (which owns the WebGL context in

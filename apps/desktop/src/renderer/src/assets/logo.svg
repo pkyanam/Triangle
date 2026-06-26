@@ -1,0 +1,21 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Triangle">
+  <defs>
+    <linearGradient id="triangle-mark" x1="4" y1="20" x2="20" y2="4" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7c5cff" />
+      <stop offset="1" stop-color="#4d8dff" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M12 2.75 L21.25 19.25 H2.75 Z"
+    fill="url(#triangle-mark)"
+    stroke="url(#triangle-mark)"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    fill-opacity="0.18"
+  />
+  <path
+    d="M12 8.5 L16.5 16.5 H7.5 Z"
+    fill="url(#triangle-mark)"
+    stroke-linejoin="round"
+  />
+</svg>

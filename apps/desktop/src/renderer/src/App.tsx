@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { Workspace, type PanelsOpen, type WorkspaceHandle } from './workspace/Workspace.js';
 import type { WorkspaceState } from './workspace/context.js';
 import { installPreviewBridge } from './preview/bridge.js';
+import { Toaster } from './components/ui/toast.js';
 
 // Service agent preview requests (screenshot/scene/perf/shader) against the live runtime.
 installPreviewBridge();
@@ -178,6 +179,8 @@ export function App(): React.JSX.Element {
       <ErrorBoundary title="Console failed" onError={(err) => console.error('Console crashed', err)}>
         <Console status={status} entry={entry} />
       </ErrorBoundary>
+
+      <Toaster />
     </div>
   );
 }

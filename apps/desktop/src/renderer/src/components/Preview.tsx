@@ -15,9 +15,14 @@ import {
   Scaling,
   View,
 } from 'lucide-react';
-import type { PreviewStats, PreviewStatus } from '@triangle/shared';
+import type { PreviewStats, PreviewStatus, TransformMode } from '@triangle/shared';
 import { attachPreview, getRuntime, loadPreviewModule, reloadPreview, stepFrame } from '../preview/host.js';
-import { getActiveViewMode, setActiveViewMode } from '../preview/bridge.js';
+import {
+  getActiveTransformMode,
+  getActiveViewMode,
+  setActiveTransformMode,
+  setActiveViewMode,
+} from '../preview/bridge.js';
 import { ViewportHud } from './ViewportHud.js';
 import { ViewportGizmo } from './ViewportGizmo.js';
 
@@ -41,6 +46,7 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
   const [hud, setHud] = useState(true);
   const [gizmo, setGizmo] = useState(true);
   const [viewMode, setViewModeState] = useState<'lit' | 'wireframe'>(() => getActiveViewMode());
+  const [toolMode, setToolMode] = useState<TransformMode>(() => getActiveTransformMode());
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<PreviewStats | null>(null);
 
@@ -94,6 +100,10 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
     setActiveViewMode(next);
     setViewModeState(next);
   };
+  const selectToolMode = (mode: TransformMode): void => {
+    setActiveTransformMode(mode);
+    setToolMode(mode);
+  };
   const setCameraPreset = (preset: 'perspective' | 'top' | 'front'): void => {
     const camera = getRuntime().camera;
     const controls = getRuntime().controls;
@@ -123,12 +133,10 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
           </button>
         </div>
         <div className="toolbar-group" style={{ display: 'flex', gap: 2, marginLeft: 8 }}>
-          <button className="toolbar-btn toolbar-btn--active" title="Select (active)">
-            <BoxSelect size={14} />
-          </button>
-          <DisabledToolBtn icon={Move} label="Move" />
-          <DisabledToolBtn icon={Rotate3D} label="Rotate" />
-          <DisabledToolBtn icon={Scaling} label="Scale" />
+          <ToolModeBtn icon={BoxSelect} label="Select" mode="select" active={toolMode} onSelect={selectToolMode} />
+          <ToolModeBtn icon={Move} label="Move" mode="translate" active={toolMode} onSelect={selectToolMode} />
+          <ToolModeBtn icon={Rotate3D} label="Rotate" mode="rotate" active={toolMode} onSelect={selectToolMode} />
+          <ToolModeBtn icon={Scaling} label="Scale" mode="scale" active={toolMode} onSelect={selectToolMode} />
         </div>
         <div className="preview__toolbar-spacer" />
         <div className="toolbar-group" style={{ display: 'flex', gap: 2 }}>
@@ -193,9 +201,25 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
   );
 }
 
-function DisabledToolBtn({ icon: Icon, label }: { icon: typeof Move; label: string }): React.JSX.Element {
+function ToolModeBtn({
+  icon: Icon,
+  label,
+  mode,
+  active,
+  onSelect,
+}: {
+  icon: typeof Move;
+  label: string;
+  mode: TransformMode;
+  active: TransformMode;
+  onSelect: (mode: TransformMode) => void;
+}): React.JSX.Element {
   return (
-    <button className="toolbar-btn" disabled title={`${label} — on-canvas gizmo coming in a future stage`}>
+    <button
+      className={`toolbar-btn${active === mode ? ' toolbar-btn--active' : ''}`}
+      onClick={() => onSelect(mode)}
+      title={`${label} tool`}
+    >
       <Icon size={14} />
     </button>
   );

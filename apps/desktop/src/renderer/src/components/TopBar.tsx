@@ -18,7 +18,7 @@ import {
 import type { ComponentType } from 'react';
 import type { PanelId, PanelsOpen } from '../workspace/Workspace.js';
 import { ProjectMenu } from './ProjectMenu.js';
-import logoUrl from '../assets/logo.jpg';
+import logoUrl from '../assets/logo.svg';
 import { getActiveViewMode, setActiveViewMode } from '../preview/bridge.js';
 
 interface TopBarProps {

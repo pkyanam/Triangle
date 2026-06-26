@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import type {
   CaptureResult,
   PerformanceSnapshot,
@@ -12,6 +13,7 @@ import type {
   SetupContext,
   ShaderStage,
   ShaderValidationResult,
+  TransformMode,
 } from '@triangle/shared';
 import {
   describeScene as inspectScene,
@@ -50,6 +52,7 @@ export class PreviewRuntime {
   readonly camera: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGLRenderer;
   readonly controls: OrbitControls;
+  readonly transform: TransformControls;
   readonly timer = new THREE.Timer();
 
   private readonly canvas: HTMLCanvasElement;
@@ -80,6 +83,9 @@ export class PreviewRuntime {
   private viewMode: 'lit' | 'wireframe' = 'lit';
   private stepFrames = 0;
   private readonly wireframeSnapshot = new Map<string, boolean>();
+
+  // On-canvas transform gizmo state (ADR 0021).
+  private transformMode: TransformMode = 'select';
 
   constructor(canvas: HTMLCanvasElement, options: PreviewRuntimeOptions = {}) {
     this.canvas = canvas;
@@ -116,6 +122,25 @@ export class PreviewRuntime {
 
     this.selection = new SelectionHighlight(this.scene, options.selectionColor);
     this.persistent.add(this.selection.persistent);
+
+    // On-canvas transform gizmo. Hidden until a mode other than `select` is
+    // chosen with an object selected. Pauses orbit while dragging and persists
+    // the edit (Inspector refresh) on release. See ADR 0021.
+    this.transform = new TransformControls(this.camera, canvas);
+    this.transform.setSpace('world');
+    const gizmo = this.transform.getHelper();
+    gizmo.visible = false;
+    this.scene.add(gizmo);
+    this.persistent.add(gizmo);
+    this.transform.addEventListener('dragging-changed', (e) => {
+      this.controls.enabled = !(e as unknown as { value: boolean }).value;
+    });
+    this.transform.addEventListener('objectChange', () => {
+      this.selection.update();
+    });
+    this.transform.addEventListener('mouseUp', () => {
+      this.options.onSceneChanged?.();
+    });
 
     this.observeResize();
     this.emitStatus({ phase: 'idle' });
@@ -253,16 +278,46 @@ export class PreviewRuntime {
     if (!target) {
       this.selectedUuid = null;
       this.selection.setTarget(null);
+      this.syncTransformAttachment(null);
       return;
     }
     const obj = this.findObject(target);
     this.selectedUuid = obj?.uuid ?? null;
     this.selection.setTarget(obj);
+    this.syncTransformAttachment(obj);
   }
 
   /** Return the current selected uuid, if any. */
   getSelection(): string | null {
     return this.selectedUuid;
+  }
+
+  /**
+   * Set the on-canvas manipulation mode. `select` hides the gizmo; the other
+   * modes attach a translate/rotate/scale gizmo to the current selection.
+   */
+  setTransformMode(mode: TransformMode): void {
+    this.transformMode = mode;
+    if (mode === 'select') {
+      this.transform.detach();
+    } else {
+      this.transform.setMode(mode);
+      this.syncTransformAttachment(this.selectedUuid ? this.findObject(this.selectedUuid) : null);
+    }
+  }
+
+  /** Current on-canvas manipulation mode. */
+  getTransformMode(): TransformMode {
+    return this.transformMode;
+  }
+
+  /** Attach/detach the transform gizmo to match the selection and active mode. */
+  private syncTransformAttachment(obj: THREE.Object3D | null): void {
+    if (this.transformMode === 'select' || !obj) {
+      this.transform.detach();
+      return;
+    }
+    this.transform.attach(obj);
   }
 
   /** Toggle wireframe view on all author materials. */
@@ -318,6 +373,8 @@ export class PreviewRuntime {
     this.teardownModule();
     this.resizeObserver?.disconnect();
     this.controls.dispose();
+    this.transform.detach();
+    this.transform.dispose();
     this.selection.dispose();
     this.renderer.dispose();
   }
@@ -355,6 +412,8 @@ export class PreviewRuntime {
     }
     this.module = null;
     this.moduleState = undefined;
+    // Detach before clearing — the attached object is about to be removed.
+    this.transform?.detach();
     this.clearAuthorObjects();
     if (this.moduleUrl) {
       URL.revokeObjectURL(this.moduleUrl);
@@ -468,6 +527,7 @@ export class PreviewRuntime {
     const obj = this.findObject(this.selectedUuid);
     this.selection.setTarget(obj);
     if (!obj) this.selectedUuid = null;
+    this.syncTransformAttachment(obj);
   }
 
   private applyWireframe(enable: boolean): void {

@@ -14,6 +14,7 @@ import { Input } from './ui/input.js';
 import { Switch } from './ui/switch.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js';
 import { Badge } from './ui/badge.js';
+import { toast } from './ui/toast.js';
 import { cn } from '../lib/utils.js';
 
 interface ProviderInstancesSettingsProps {
@@ -332,7 +333,15 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
                       <Button
                         variant="ghost"
                         size="xs"
-                        onClick={() => void window.triangle.devin.logout().then((r) => alert(r.ok ? 'Logged out.' : `Logout failed: ${r.error ?? ''}`))}
+                        onClick={() =>
+                          void window.triangle.devin
+                            .logout()
+                            .then((r) =>
+                              r.ok
+                                ? toast('Logged out of Devin.', { variant: 'success' })
+                                : toast(`Logout failed: ${r.error ?? 'unknown error'}`, { variant: 'error' }),
+                            )
+                        }
                       >
                         <LogOut size={12} /> Log out
                       </Button>
