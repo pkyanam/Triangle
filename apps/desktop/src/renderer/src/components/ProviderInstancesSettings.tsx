@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Link2, Link2Off, LogOut, Plus, Server, Trash2 } from 'lucide-react';
+import { LogOut, Plus, Trash2 } from 'lucide-react';
 import {
   DEFAULT_MODELS,
   type AgentSettings,
@@ -7,7 +7,6 @@ import {
   type ProviderInstance,
   type ProviderKind,
 } from '@triangle/shared';
-import type { McpEndpointInfo } from '@triangle/shared';
 import { Card, CardContent, CardHeader } from './ui/card.js';
 import { Button } from './ui/button.js';
 import { Input } from './ui/input.js';
@@ -15,7 +14,6 @@ import { Switch } from './ui/switch.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js';
 import { Badge } from './ui/badge.js';
 import { toast } from './ui/toast.js';
-import { cn } from '../lib/utils.js';
 
 interface ProviderInstancesSettingsProps {
   /** Live availability from the main process, including dynamic model lists. */
@@ -69,41 +67,16 @@ function isDefaultInstance(instance: ProviderInstance): boolean {
   return instance.id === instance.kind;
 }
 
-interface HfStatus {
-  connected: boolean;
-  username?: string;
-  expiresAt?: number;
-  scopes?: string;
-}
-
-function formatHfExpiresAt(ts?: number): string {
-  if (!ts) return 'unknown expiry';
-  const diff = Math.max(0, Math.round((ts - Date.now()) / 60000));
-  return diff < 1 ? 'expires soon' : `expires in ${diff} min`;
-}
-
 export function ProviderInstancesSettings({ availability, onSaved }: ProviderInstancesSettingsProps): React.JSX.Element {
   const [settings, setSettings] = useState<AgentSettings | null>(null);
-  const [endpoint, setEndpoint] = useState<McpEndpointInfo | null>(null);
   const [saved, setSaved] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [newKind, setNewKind] = useState<ProviderKind>('devin');
   const [newName, setNewName] = useState('');
-  const [hfStatus, setHfStatus] = useState<HfStatus>({ connected: false });
-  const [hfBusy, setHfBusy] = useState(false);
-  const [hfError, setHfError] = useState<string | null>(null);
-  const [hfUserCode, setHfUserCode] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    void Promise.all([window.triangle.config.get(), window.triangle.mcp.endpoint()]).then(([s, e]) => {
-      if (!active) return;
-      setSettings(s);
-      setEndpoint(e);
-    });
-    void window.triangle.hf.status().then((s) => {
-      if (!active) return;
-      setHfStatus(s);
+    void window.triangle.config.get().then((s) => {
+      if (active) setSettings(s);
     });
     return () => {
       active = false;
@@ -167,61 +140,6 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
     }));
     persist({ ...settings, providerInstances: next });
   }, [settings, persist]);
-
-  const copyEndpoint = useCallback(() => {
-    if (!endpoint) return;
-    const block = {
-      mcpServers: { triangle: { command: endpoint.command, args: endpoint.args, env: endpoint.env } },
-    };
-    void navigator.clipboard.writeText(`${JSON.stringify(block, null, 2)}\n`).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
-    });
-  }, [endpoint]);
-
-  const connectHf = useCallback(async () => {
-    setHfBusy(true);
-    setHfError(null);
-    setHfUserCode(null);
-    try {
-      const device = await window.triangle.hf.deviceCode({ clientId: settings?.hfOAuthClientId });
-      if (!device.ok) {
-        setHfError(device.error ?? 'Hugging Face device-code request failed.');
-        setHfBusy(false);
-        return;
-      }
-      setHfUserCode(device.userCode ?? null);
-
-      const res = await window.triangle.hf.pollToken({
-        deviceCode: device.deviceCode ?? '',
-        clientId: settings?.hfOAuthClientId,
-      });
-      if (res.ok) {
-        setHfStatus({ connected: true, username: res.username, expiresAt: res.expiresAt });
-        setHfUserCode(null);
-      } else {
-        setHfError(res.error ?? 'Hugging Face token polling failed.');
-      }
-    } catch (e) {
-      setHfError(String(e));
-    } finally {
-      setHfBusy(false);
-    }
-  }, [settings?.hfOAuthClientId]);
-
-  const disconnectHf = useCallback(async () => {
-    setHfBusy(true);
-    setHfError(null);
-    try {
-      await window.triangle.hf.disconnect();
-      setHfStatus({ connected: false });
-      setHfUserCode(null);
-    } catch (e) {
-      setHfError(String(e));
-    } finally {
-      setHfBusy(false);
-    }
-  }, []);
 
   if (!settings) return <div className="provider-settings">Loading settings…</div>;
 
@@ -398,117 +316,6 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
           </Card>
         ))}
       </div>
-
-      <Card>
-        <CardHeader>
-          <div className="provider-settings__header" style={{ marginBottom: 0 }}>
-            <span className="engine-section__label">Hugging Face</span>
-            <span className={cn('hconfig__dot', hfStatus.connected && 'hconfig__dot--ok')} />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="provider-card__fields">
-            <p className="provider-settings__hint">
-              You must provide your own Hugging Face OAuth app client id (or a personal access token). Triangle does not ship a global OAuth app.
-            </p>
-
-            <div className="provider-card__row">
-              <label>OAuth client id</label>
-              <Input
-                placeholder="Create one at huggingface.co/settings/applications"
-                value={settings.hfOAuthClientId ?? ''}
-                onChange={(e) => persist({ ...settings, hfOAuthClientId: e.target.value || undefined })}
-                style={{ flex: 1 }}
-              />
-            </div>
-
-            <div className="provider-card__row">
-              <div className="composer__spacer" />
-              {hfStatus.connected ? (
-                <Button variant="ghost" size="xs" onClick={disconnectHf} disabled={hfBusy}>
-                  <Link2Off size={12} /> Disconnect
-                </Button>
-              ) : (
-                <Button variant="primary" size="xs" onClick={connectHf} disabled={hfBusy || !settings.hfOAuthClientId}>
-                  <Link2 size={12} /> Connect with Hugging Face
-                </Button>
-              )}
-              {hfStatus.connected && !hfBusy && (
-                <span className="provider-settings__hint">
-                  Connected{hfStatus.username ? ` as ${hfStatus.username}` : ''} ({formatHfExpiresAt(hfStatus.expiresAt)}).
-                </span>
-              )}
-            </div>
-
-            {hfUserCode && (
-              <div className="provider-card__row">
-                <div className="provider-settings__user-code">
-                  <span className="provider-settings__hint">Enter this code on the Hugging Face website:</span>
-                  <code className="provider-settings__code">{hfUserCode}</code>
-                </div>
-              </div>
-            )}
-
-            {hfBusy && <div className="provider-settings__hint">Waiting for Hugging Face authorization…</div>}
-
-            {hfError && <div className="provider-settings__error">{hfError}</div>}
-
-            <div className="provider-card__row">
-              <label>OAuth token</label>
-              <Input
-                type="password"
-                placeholder="Paste an HF OAuth access token (optional)"
-                value={settings.hfOAuthToken ?? ''}
-                onChange={(e) => persist({ ...settings, hfOAuthToken: e.target.value || undefined })}
-                style={{ flex: 1 }}
-              />
-            </div>
-            <p className="provider-settings__hint">
-              Alternatively, paste an OAuth access token directly. Takes precedence over device-code sign-in when present.
-            </p>
-
-            <div className="provider-card__row">
-              <label>HF API token</label>
-              <Input
-                type="password"
-                placeholder="HF_TOKEN or TRIANGLE_HF_TOKEN env var"
-                value={settings.hfToken ?? ''}
-                onChange={(e) => persist({ ...settings, hfToken: e.target.value || undefined })}
-                style={{ flex: 1 }}
-              />
-            </div>
-            <p className="provider-settings__hint">
-              Used as a fallback by the 3D asset generation tools. May also be set via <code>HF_TOKEN</code> in the environment.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <div className="hconfig__endpoint">
-            <div className="hconfig__endpoint-head">
-              <Server size={12} />
-              <span>MCP endpoint</span>
-              <span className={cn('hconfig__dot', endpoint?.ready && 'hconfig__dot--ok')} />
-            </div>
-            <div className="hconfig__endpoint-sub">
-              {endpoint ? `${endpoint.tools.length} Three.js tools · point any MCP client here` : 'unavailable'}
-            </div>
-            <Button variant="ghost" size="xs" onClick={copyEndpoint} disabled={!endpoint?.ready}>
-              {copied ? (
-                <>
-                  <Check size={12} /> Copied
-                </>
-              ) : (
-                <>
-                  <Copy size={12} /> Copy client config
-                </>
-              )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="hconfig__footer">
         <span>{saved ? 'Saved.' : 'Changes apply on the next run.'}</span>

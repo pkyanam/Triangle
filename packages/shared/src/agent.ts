@@ -97,6 +97,8 @@ export interface AgentSettings {
   hfOAuthExpiresAt?: number;
   /** Hugging Face OAuth client id used for the device-code flow. */
   hfOAuthClientId?: string;
+  /** rosbridge / Foxglove WebSocket URL for the ROS2 bridge (Integrations hub). */
+  rosBridgeUrl?: string;
 }
 
 /** Default model lists for each provider kind. */

@@ -3,6 +3,7 @@ import type { PreviewStatus, ProjectInfo } from '@triangle/shared';
 import { TopBar, PANEL_MENU } from './components/TopBar.js';
 import { Console } from './components/Console.js';
 import { CommandPalette } from './components/CommandPalette.js';
+import { IntegrationsHub } from './components/IntegrationsHub.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { Workspace, type PanelsOpen, type WorkspaceHandle } from './workspace/Workspace.js';
 import type { WorkspaceState } from './workspace/context.js';
@@ -22,6 +23,7 @@ export function App(): React.JSX.Element {
   const [playing, setPlaying] = useState(false);
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [hubOpen, setHubOpen] = useState(false);
 
   // Tab orientation preference (persisted globally). New and reset layouts respect this.
   const [tabOrientation, setTabOrientation] = useState<'horizontal' | 'vertical'>(() => {
@@ -132,6 +134,13 @@ export function App(): React.JSX.Element {
     // Re-subscribe only when the project root changes.
   }, [project?.root]);
 
+  // The Preferences menu / command palette opens the Settings & Integrations hub.
+  useEffect(() => {
+    const onOpen = (): void => setHubOpen(true);
+    window.addEventListener('triangle:open-settings', onOpen);
+    return () => window.removeEventListener('triangle:open-settings', onOpen);
+  }, []);
+
   // Global keyboard shortcuts (command palette + rail toggles).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -221,6 +230,8 @@ export function App(): React.JSX.Element {
           }
         }}
       />
+
+      <IntegrationsHub open={hubOpen} onClose={() => setHubOpen(false)} />
 
       <Toaster />
     </div>

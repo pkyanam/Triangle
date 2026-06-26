@@ -61,6 +61,8 @@ export interface TriangleConfig {
   hfOAuthExpiresAt?: number;
   /** Hugging Face OAuth client id used for the device-code flow. */
   hfOAuthClientId?: string;
+  /** rosbridge / Foxglove WebSocket URL for the ROS2 bridge. */
+  rosBridgeUrl?: string;
   /** Provider instances (new provider-instance UI). */
   providerInstances?: ProviderInstance[];
   /** Id of the currently selected provider instance. */
@@ -82,6 +84,7 @@ interface RawConfigFile extends Partial<TriangleConfig> {
   acp_agent_command?: string;
   acp_agent_args?: string[];
   acp_agent_label?: string;
+  ros_bridge_url?: string;
   auto_approve_writes?: boolean;
   hf_token?: string;
   hf_oauth_token?: string;
@@ -122,6 +125,7 @@ function fromFile(raw: RawConfigFile | null): Partial<TriangleConfig> {
     hfOAuthToken: raw.hfOAuthToken ?? raw.hf_oauth_token,
     hfOAuthExpiresAt: raw.hfOAuthExpiresAt ?? raw.hf_oauth_expires_at,
     hfOAuthClientId: raw.hfOAuthClientId ?? raw.hf_oauth_client_id,
+    rosBridgeUrl: raw.rosBridgeUrl ?? raw.ros_bridge_url,
     providerInstances: raw.providerInstances ?? raw.provider_instances,
     selectedInstanceId: raw.selectedInstanceId ?? raw.selected_instance_id,
     favorites: raw.favorites,
@@ -270,6 +274,7 @@ export async function loadAgentSettings(): Promise<AgentSettings> {
     hfOAuthToken: c.hfOAuthToken,
     hfOAuthExpiresAt: c.hfOAuthExpiresAt,
     hfOAuthClientId: c.hfOAuthClientId,
+    rosBridgeUrl: c.rosBridgeUrl,
   };
 }
 

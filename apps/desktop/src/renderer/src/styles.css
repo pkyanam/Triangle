@@ -3045,6 +3045,142 @@ button {
   border-top: 1px solid var(--border);
 }
 
+.modal--wide {
+  width: min(760px, calc(100vw - 48px));
+}
+
+/* ---------- Settings & Integrations hub ---------- */
+.hub__layout {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.hub__nav {
+  flex: 0 0 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.hub__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.hub__nav-item:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.hub__nav-item--active {
+  background: var(--accent-strong);
+  color: var(--foreground);
+}
+.hub__nav-item svg {
+  color: var(--muted-foreground);
+}
+.hub__body {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+.hub__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hub__card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hub__card-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.hub__card-sub {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.hub__hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.hub__field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hub__field > label {
+  flex: 0 0 110px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.hub__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hub__link,
+.hub__inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--info-foreground);
+  cursor: pointer;
+}
+.hub__code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hub__code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  color: var(--foreground);
+}
+.hub__error {
+  font-size: 12px;
+  color: var(--destructive-foreground);
+}
+.hub__about {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.hub__about > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.hub__about span:first-child {
+  color: var(--muted-foreground);
+}
+.hub__about span:last-child {
+  font-family: var(--font-mono);
+}
+
+/* The hub body hosts ProviderInstancesSettings; let it fill the panel. */
+.hub__body .provider-settings {
+  padding: 0;
+}
+
 /* ---------- Command palette ---------- */
 .palette {
   display: flex;
