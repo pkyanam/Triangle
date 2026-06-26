@@ -85,9 +85,12 @@ jobs:
       - name: Build & package
         shell: bash
         env:
-          # Don't auto-discover signing identities from the runner keychain;
-          # we explicitly provide a cert via CSC_LINK when signing is desired.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Enable identity auto-discovery only when CSC_LINK is provided, so
+          # electron-builder finds and uses the cert it imports from CSC_LINK.
+          # When CSC_LINK is absent, disable auto-discovery to prevent
+          # electron-builder from grabbing random identities on the runner
+          # and failing. This expression evaluates to 'true' or 'false'.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK && 'true' || 'false' }}
           # macOS code-signing + notarization credentials. When these secrets
           # are absent (empty), electron-builder skips signing/notarizing and
           # the after-pack.cjs hook falls back to an ad-hoc signature so the
