@@ -91,10 +91,32 @@ describe('runAcpSession', () => {
     const ids = new Set(assistantEvents.map((e) => e.messageId));
     assert.equal(ids.size, 2, 'assistant events should have distinct messageIds');
 
-    const first = assistantEvents.findLast((e) => e.messageId === 'msg-1');
-    const second = assistantEvents.findLast((e) => e.messageId === 'msg-2');
+    const first = assistantEvents.findLast((e) => e.messageId === 'msg-1:0');
+    const second = assistantEvents.findLast((e) => e.messageId === 'msg-2:0');
     assert.equal(first?.text, 'Hello there', 'first message should accumulate all chunks');
     assert.equal(second?.text, 'world', 'second message should be buffered correctly');
+  });
+
+  it('splits text after a tool call into a new message', async () => {
+    const { events } = await runFakeAgent('fake-agent-message-tool-order.mjs', fakeContext());
+
+    const assistantEvents = events.filter((e) => e.type === 'assistant');
+    const toolEvents = events.filter((e) => e.type === 'tool');
+    assert.equal(toolEvents.length, 1, 'one tool call should be emitted');
+
+    // There are three text chunks all with the same raw messageId, but the tool
+    // call in the middle should split them into two separate messages.
+    const ids = new Set(assistantEvents.map((e) => e.messageId));
+    assert.equal(ids.size, 2, 'text before and after the tool call should have distinct messageIds');
+
+    const before = assistantEvents.findLast((e) => e.messageId === 'msg-1:0');
+    const after = assistantEvents.findLast((e) => e.messageId === 'msg-1:1');
+    assert.equal(before?.text, 'Before tool', 'text before the tool call should be its own message');
+    assert.equal(after?.text, 'After tool', 'text after the tool call should start a new message');
+
+    // The event stream order should be text, tool, text.
+    const orderedTypes = events.filter((e) => e.type === 'assistant' || e.type === 'tool').map((e) => e.type);
+    assert.deepEqual(orderedTypes, ['assistant', 'tool', 'assistant'], 'events should interleave correctly');
   });
 
   it('sends image attachments as ACP content blocks', async () => {

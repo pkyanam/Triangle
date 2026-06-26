@@ -537,8 +537,11 @@ export function runAcpSession(ctx: RunContext, options: AcpSessionOptions): Prom
     const stderrTail: string[] = [];
     // Track in-flight tool calls by stable ACP id so updates don't create duplicates.
     const toolCalls = new Map<string, ToolCallTrace>();
-    // Accumulate streamed text per logical ACP message id.
+    // Accumulate streamed text per logical ACP message id. The segment counter is
+    // incremented after every tool call so text that resumes after a tool call
+    // becomes a new message, preserving the real conversation order.
     const messageBuffers = new Map<string, { text: string; role: 'assistant' | 'thought' }>();
+    let messageSegment = 0;
 
     const finish = (err?: Error): void => {
       if (settled) return;
@@ -579,7 +582,8 @@ export function runAcpSession(ctx: RunContext, options: AcpSessionOptions): Prom
       switch (kind) {
         case 'agent_message_chunk':
         case 'agent_thought_chunk': {
-          const messageId = String(update['messageId'] ?? (kind === 'agent_thought_chunk' ? 'acp-thought' : 'acp-msg'));
+          const rawMessageId = String(update['messageId'] ?? (kind === 'agent_thought_chunk' ? 'acp-thought' : 'acp-msg'));
+          const messageId = `${rawMessageId}:${messageSegment}`;
           const text = contentText(update['content']);
           if (!text) return;
           const existing = messageBuffers.get(messageId);
@@ -639,6 +643,9 @@ export function runAcpSession(ctx: RunContext, options: AcpSessionOptions): Prom
           };
           toolCalls.set(id, trace);
           emit({ type: 'tool', trace });
+          // Any text that resumes after this tool call should start a new message
+          // so the conversation order matches the event stream.
+          messageSegment++;
           break;
         }
       }
