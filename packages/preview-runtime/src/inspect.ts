@@ -279,13 +279,17 @@ export function performanceSnapshot(
   fps: number,
 ): PerformanceSnapshot {
   const info = renderer.info;
+  // WebGL exposes `info.programs` as an array; the WebGPU/common path exposes
+  // `info.memory.programs` as a count. Normalize so the HUD/Performance panel
+  // shows a correct program count on either backend. See ADR 0026.
+  const programs = info.programs?.length ?? info.memory.programs ?? 0;
   return {
     fps,
     drawCalls: info.render.calls,
     triangles: info.render.triangles,
     geometries: info.memory.geometries,
     textures: info.memory.textures,
-    programs: info.programs?.length ?? 0,
+    programs,
     gpuMemoryEstimateMb: estimateGpuMemoryMb(scene),
   };
 }
