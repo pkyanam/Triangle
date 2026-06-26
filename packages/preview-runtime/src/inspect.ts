@@ -203,7 +203,7 @@ export function summarizeObjectDetail(obj: THREE.Object3D): SceneObjectDetail {
 export function describeScene(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
-  renderer: TriangleRenderer,
+  renderer: TriangleRenderer | null,
   persistent: ReadonlySet<THREE.Object3D>,
 ): SceneSummary {
   const cameraSummary: SceneCameraSummary = {
@@ -231,14 +231,14 @@ export function describeScene(
     .filter((c) => !persistent.has(c) && !(c as THREE.Light).isLight)
     .map(summarizeObject);
 
-  const info = renderer.info;
+  const info = renderer?.info;
   return {
     objectCount: scene.children.length,
     camera: cameraSummary,
     lights,
     objects,
-    triangles: info.render.triangles,
-    drawCalls: info.render.calls,
+    triangles: info?.render.triangles ?? 0,
+    drawCalls: info?.render.calls ?? 0,
   };
 }
 

@@ -40,9 +40,15 @@ export function StatusBar({ status, entry, projectName, selectedCount }: StatusB
   const [stats, setStats] = useState<PreviewStats | null>(null);
   const [dirty, setDirty] = useState(false);
   const [harness, setHarness] = useState<string | null>(null);
-  const [renderer] = useState(detectRenderer);
+  const [renderer, setRenderer] = useState(detectRenderer);
 
   useEffect(() => subscribeStats(setStats), []);
+
+  // The runtime picks its GPU backend (WebGPU vs WebGL) lazily on the first
+  // module load, so re-read the backend once stats start flowing.
+  useEffect(() => {
+    if (stats && renderer === 'unknown') setRenderer(detectRenderer());
+  }, [stats, renderer]);
 
   useEffect(() => {
     const onDirty = (e: Event): void => setDirty(Boolean((e as CustomEvent).detail));

@@ -21,6 +21,13 @@ export interface CreateRendererOptions {
   /** Legacy WebGL only — keeps the framebuffer readable via `canvas.toDataURL()`. */
   preserveDrawingBuffer?: boolean;
   powerPreference?: 'high-performance' | 'low-power';
+  /**
+   * Force the legacy WebGLRenderer even when WebGPU is available. Used for
+   * author modules that use `ShaderMaterial`/`RawShaderMaterial` (raw GLSL),
+   * which the WebGPU backend cannot translate (three 0.184 has no
+   * ShaderMaterial→node mapping). See ADR 0026.
+   */
+  forceWebGL?: boolean;
 }
 
 /**
@@ -41,9 +48,17 @@ export function createRenderer(
   canvas: HTMLCanvasElement,
   options: CreateRendererOptions = {},
 ): CreateRendererResult {
-  const { antialias = true, preserveDrawingBuffer = true, powerPreference = 'high-performance' } = options;
+  const {
+    antialias = true,
+    preserveDrawingBuffer = true,
+    powerPreference = 'high-performance',
+    forceWebGL = false,
+  } = options;
 
-  const gpu = typeof navigator !== 'undefined' ? (navigator as Navigator & { gpu?: unknown }).gpu : undefined;
+  const gpu =
+    !forceWebGL && typeof navigator !== 'undefined'
+      ? (navigator as Navigator & { gpu?: unknown }).gpu
+      : undefined;
 
   if (gpu) {
     // Attempt WebGPU. If init fails (no adapter/device), fall back to WebGL.

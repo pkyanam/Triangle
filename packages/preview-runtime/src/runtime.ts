@@ -55,7 +55,15 @@ export interface PreviewRuntimeOptions {
 export class PreviewRuntime {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
-  readonly renderer: TriangleRenderer;
+  /**
+   * The GPU renderer. Created lazily on the first `loadModule` so the backend
+   * (WebGPU vs WebGL) can be chosen from the module's content — a canvas can
+   * only hold one context type, and `ShaderMaterial`/`RawShaderMaterial` (raw
+   * GLSL) are not supported by the WebGPU backend (three 0.184 has no
+   * ShaderMaterial→node mapping), so GLSL modules must get the WebGL backend.
+   * See ADR 0026. `null` until the first module load.
+   */
+  renderer: TriangleRenderer | null = null;
   readonly controls: OrbitControls;
   readonly transform: TransformControls;
   readonly timer = new THREE.Timer();
@@ -76,7 +84,7 @@ export class PreviewRuntime {
   private disposed = false;
   /** Whether the renderer backend is initialized (WebGPU init is async). */
   private initialized = false;
-  private readonly backend: RendererBackend;
+  private backend: RendererBackend = 'webgl';
 
   private resizeObserver: ResizeObserver | null = null;
 
@@ -107,22 +115,8 @@ export class PreviewRuntime {
     this.canvas = canvas;
     this.options = options;
 
-    // The factory may return a WebGPURenderer (async init) or a legacy
-    // WebGLRenderer (sync). The loop defers the first render until `initialized`.
-    const created = createRenderer(canvas, {
-      antialias: true,
-      // Required so the agent screenshot tool can read the framebuffer (WebGL path).
-      preserveDrawingBuffer: true,
-      powerPreference: 'high-performance',
-    });
-    this.renderer = created.renderer;
-    this.backend = created.backend;
-    void created.ready.then(() => {
-      this.initialized = true;
-    });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setClearColor(options.background ?? 0x14161a, 1);
-
+    // The renderer is created lazily by `ensureRenderer()` on the first
+    // `loadModule`, so the backend can be chosen from the module's content.
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
     this.camera.position.set(3, 2.5, 4);
 
@@ -166,6 +160,39 @@ export class PreviewRuntime {
 
     this.observeResize();
     this.emitStatus({ phase: 'idle' });
+  }
+
+  /**
+   * Create the renderer on the first module load, choosing the backend from the
+   * module source. A canvas can only hold one context type, so the backend is
+   * fixed once chosen. Modules that reference `ShaderMaterial`/`RawShaderMaterial`
+   * (raw GLSL) get the WebGL backend (the WebGPU backend has no
+   * ShaderMaterial→node mapping in three 0.184); other modules get WebGPU when
+   * available. Idempotent. See ADR 0026.
+   */
+  private ensureRenderer(sourceHint: string): void {
+    if (this.renderer) return;
+    const usesGlslShaders = /ShaderMaterial|RawShaderMaterial/.test(sourceHint);
+    const created = createRenderer(this.canvas, {
+      antialias: true,
+      // Required so the agent screenshot tool can read the framebuffer (WebGL path).
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
+      forceWebGL: usesGlslShaders,
+    });
+    this.renderer = created.renderer;
+    this.backend = created.backend;
+    void created.ready.then(
+      () => {
+        this.initialized = true;
+      },
+      (err) => {
+        console.error('[preview-runtime] renderer init failed:', err);
+      },
+    );
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setClearColor(this.options.background ?? 0x14161a, 1);
+    this.applyResize();
   }
 
   /** Start (or resume) the render loop. Idempotent and safe to call repeatedly. */
@@ -227,6 +254,9 @@ export class PreviewRuntime {
     if (this.disposed) return;
     this.emitStatus({ phase: 'loading' });
     try {
+      // Create the renderer on first load, choosing the backend from the source
+      // (GLSL ShaderMaterial modules → WebGL, others → WebGPU when available).
+      this.ensureRenderer(source);
       this.teardownModule();
       const next = await this.evaluate(source);
       this.module = next;
@@ -245,7 +275,7 @@ export class PreviewRuntime {
 
   /** Capture the current framebuffer as a PNG data URL. */
   screenshot(): string {
-    if (!this.initialized) throw new Error('Renderer is not yet initialized.');
+    if (!this.renderer || !this.initialized) throw new Error('Renderer is not yet initialized.');
     this.renderer.render(this.scene, this.camera);
     return this.canvas.toDataURL('image/png');
   }
@@ -256,7 +286,7 @@ export class PreviewRuntime {
    * the live preview is unaffected. Backs the `triangle_capture_screenshot` tool.
    */
   capture(options: { width?: number; height?: number } = {}): CaptureResult {
-    if (!this.initialized) throw new Error('Renderer is not yet initialized.');
+    if (!this.renderer || !this.initialized) throw new Error('Renderer is not yet initialized.');
     const prev = this.renderer.getSize(new THREE.Vector2());
     const width = Math.max(1, Math.round(options.width ?? prev.x));
     const height = Math.max(1, Math.round(options.height ?? prev.y));
@@ -285,6 +315,17 @@ export class PreviewRuntime {
 
   /** Snapshot current performance counters (FPS, draw calls, memory, …). */
   performanceSnapshot(): PerformanceSnapshot {
+    if (!this.renderer) {
+      return {
+        fps: this.lastFps,
+        drawCalls: 0,
+        triangles: 0,
+        geometries: 0,
+        textures: 0,
+        programs: 0,
+        gpuMemoryEstimateMb: 0,
+      };
+    }
     return inspectPerformance(this.renderer, this.scene, this.lastFps);
   }
 
@@ -444,7 +485,7 @@ export class PreviewRuntime {
     this.transform.dispose();
     this.selection.dispose();
     for (const mat of Object.values(this.overrideMaterials)) mat?.dispose();
-    this.renderer.dispose();
+    this.renderer?.dispose();
   }
 
   // --- internals -----------------------------------------------------------
@@ -468,6 +509,11 @@ export class PreviewRuntime {
       controls: this.controls,
       timer: this.timer,
     };
+  }
+
+  /** True once the renderer has been created and its backend initialized. */
+  private get ready(): boolean {
+    return this.renderer !== null && this.initialized;
   }
 
   private teardownModule(): void {
@@ -514,9 +560,10 @@ export class PreviewRuntime {
     if (!this.running) return;
     this.rafId = requestAnimationFrame(this.loop);
 
-    // WebGPU init is async; skip rendering until the backend is ready so
+    // The renderer is created lazily on the first module load, and WebGPU init
+    // is async; skip rendering until a renderer exists and is initialized so
     // `render()` is never called before initialization (it would throw).
-    if (!this.initialized) return;
+    if (!this.ready) return;
 
     this.timer.update();
     const delta = this.timer.getDelta();
@@ -540,11 +587,12 @@ export class PreviewRuntime {
     }
 
     this.selection.update();
-    this.renderer.render(this.scene, this.camera);
+    this.renderer!.render(this.scene, this.camera);
     this.sampleStats();
   };
 
   private sampleStats(): void {
+    if (!this.renderer) return;
     this.frames += 1;
     const now = performance.now();
     const elapsed = now - this.lastStatsAt;
@@ -569,6 +617,7 @@ export class PreviewRuntime {
    * is simply skipped.
    */
   private applyResize = (): void => {
+    if (!this.renderer) return;
     const parent = this.canvas.parentElement;
     if (!parent) return;
     const { clientWidth: w, clientHeight: h } = parent;
