@@ -224,7 +224,29 @@ export const TRIANGLE_TOOLS: ToolDefinition[] = [
     stage: 4,
   },
 
-  // --- Strategic integrations (Stage 6) — 3D asset generation -----------------
+  // --- Strategic integrations (Stage 6) — HF Spaces + 3D asset generation ------
+  {
+    name: 'hf_call_space',
+    description:
+      'Call a Hugging Face Space API on behalf of the authenticated user. Useful for custom Spaces beyond the built-in 3D providers.',
+    parameters: {
+      type: 'object',
+      properties: {
+        space: { type: 'string', description: 'HF Space name in user/space or org/space form.' },
+        route: {
+          type: 'string',
+          description: 'Space API route/method (default "predict").',
+        },
+        payload: {
+          type: 'object',
+          description: 'JSON payload sent to the Space API.',
+        },
+      },
+      required: ['space'],
+    },
+    available: true,
+    stage: 6,
+  },
   {
     name: 'hf_generate_3d_asset',
     description:

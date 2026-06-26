@@ -159,6 +159,20 @@ export class HuggingFaceClient {
     return new Uint8Array(await res.arrayBuffer());
   }
 
+  /**
+   * Verify the configured token by calling the HF `whoami-v2` API.
+   * Returns the raw HF response so callers can inspect the user/type/scopes.
+   */
+  async whoami(): Promise<Record<string, unknown>> {
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    const res = await this.fetch('https://huggingface.co/api/whoami-v2', { headers });
+    if (!res.ok) {
+      throw new Error(`HF whoami failed: ${res.status} ${res.statusText}`);
+    }
+    return (await res.json()) as Record<string, unknown>;
+  }
+
   private extractModelUrl(data: Record<string, unknown>, baseUrl: string): string | null {
     const candidate =
       data['modelUrl'] ??

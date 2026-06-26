@@ -6,7 +6,7 @@ import type {
   ShaderValidationResult,
   ToolCallTrace,
 } from '@triangle/shared';
-import { HuggingFaceClient } from '@triangle/integrations';
+import { HuggingFaceClient, HuggingFaceSpacesClient } from '@triangle/integrations';
 import { generatePhysicsSnippet } from '@triangle/robotics';
 import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
@@ -35,8 +35,19 @@ export interface ToolContext {
   preview: PreviewBridge;
   /** Hugging Face token for 3D asset generation (Stage 6). */
   hfToken?: string;
+  /** Hugging Face OAuth access token for Spaces integration (Stage 6). */
+  hfOAuthToken?: string;
+  /** Epoch ms when the OAuth access token expires. */
+  hfOAuthExpiresAt?: number;
   /** Emit a tool-call trace to the UI (running → ok/error). */
   emitTrace: (trace: ToolCallTrace) => void;
+}
+
+function resolveHfToken(ctx: ToolContext): string | undefined {
+  if (ctx.hfOAuthToken && ctx.hfOAuthExpiresAt && Date.now() < ctx.hfOAuthExpiresAt) {
+    return ctx.hfOAuthToken;
+  }
+  return ctx.hfToken ?? process.env['HF_TOKEN'];
 }
 
 export class ToolError extends Error {}
@@ -128,7 +139,8 @@ export interface TriangleToolset {
   ): Promise<string>;
   setVisibility(target: string, visible: boolean): Promise<string>;
   setLight(target: string, fields: { intensity?: number; color?: string }): Promise<string>;
-  // Strategic integrations (Stage 6) — 3D asset generation.
+  // Strategic integrations (Stage 6) — HF Spaces + 3D asset generation.
+  hfCallSpace(space: string, route?: string, payload?: Record<string, unknown>): Promise<string>;
   hfGenerate3dAsset(prompt: string, image?: string, provider?: string, endpoint?: string): Promise<string>;
   download3dAsset(url: string, path: string, format?: string): Promise<string>;
   import3dAsset(path: string, targetName?: string): Promise<string>;
@@ -297,11 +309,26 @@ export function createToolset(ctx: ToolContext): TriangleToolset {
         ...(fields.color ? { color: fields.color } : {}),
       }),
 
+    hfCallSpace: (space: string, route?: string, payload?: Record<string, unknown>) =>
+      traced('hf_call_space', { space, route, payload }, async () => {
+        const token = resolveHfToken(ctx);
+        if (!token) {
+          throw new ToolError('HF token is required to call a Space. Set HF_TOKEN, configure hfToken in settings, or connect via Hugging Face OAuth.');
+        }
+        const client = new HuggingFaceSpacesClient({ token });
+        const result = await client.call({ space, route, payload });
+        const text = JSON.stringify(result, null, 2);
+        return {
+          result: text,
+          summary: `Called ${space} (status: ${result.status}).`,
+        };
+      }),
+
     hfGenerate3dAsset: (prompt: string, image?: string, provider?: string, endpoint?: string) =>
       traced('hf_generate_3d_asset', { prompt, image: image ? '<image>' : undefined, provider, endpoint }, async () => {
-        const token = ctx.hfToken ?? process.env['HF_TOKEN'];
+        const token = resolveHfToken(ctx);
         if (!token && !endpoint) {
-          throw new ToolError('HF token is required for 3D generation. Set HF_TOKEN or configure hfToken in settings.');
+          throw new ToolError('HF token is required for 3D generation. Set HF_TOKEN, configure hfToken in settings, or connect via Hugging Face OAuth.');
         }
         const client = new HuggingFaceClient({ token });
         const result = await client.generate3dAsset({ prompt, image, provider, endpoint });
@@ -326,7 +353,7 @@ export function createToolset(ctx: ToolContext): TriangleToolset {
           exists,
         });
         if (!approved) throw new ApprovalDeniedError(dest);
-        const token = ctx.hfToken ?? process.env['HF_TOKEN'];
+        const token = resolveHfToken(ctx);
         const client = new HuggingFaceClient({ token });
         const bytes = await client.downloadModel(url);
         await project.writeBinaryFile(dest, bytes);

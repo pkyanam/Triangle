@@ -223,6 +223,25 @@ export interface IpcInvokeChannels {
     request: { tool: string; args: Record<string, unknown> };
     response: { ok: boolean; result?: string; error?: string };
   };
+  /**
+   * Connect Triangle to Hugging Face via OAuth device-code flow. Main starts the
+   * flow, opens the browser, polls for the token, and persists the resulting
+   * access token in the user config. Returns the connected HF username on success.
+   */
+  'hf:connect': {
+    request: { clientId?: string; scope?: string };
+    response: { ok: boolean; username?: string; expiresAt?: number; error?: string };
+  };
+  /** Disconnect Hugging Face OAuth by clearing the persisted token. */
+  'hf:disconnect': {
+    request: void;
+    response: { ok: boolean };
+  };
+  /** Current Hugging Face OAuth status (token presence, expiry, user info). */
+  'hf:status': {
+    request: void;
+    response: { connected: boolean; username?: string; expiresAt?: number; scopes?: string };
+  };
 }
 
 /** Events pushed from main to renderer. */
@@ -279,6 +298,9 @@ export const INVOKE_CHANNELS = [
   'preview:result',
   'preview:save-capture',
   'tool:run',
+  'hf:connect',
+  'hf:disconnect',
+  'hf:status',
 ] as const satisfies readonly IpcInvokeChannel[];
 
 export const EVENT_CHANNELS = [

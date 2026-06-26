@@ -1,11 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Plug, Server } from 'lucide-react';
+import { Check, Copy, Link2, Link2Off, Plug, Server } from 'lucide-react';
 import type { AgentSettings, HarnessId, McpEndpointInfo } from '@triangle/shared';
 
 interface HarnessConfigProps {
   harness: HarnessId;
   /** Called after a save so the parent can refresh harness availability. */
   onSaved?: (settings: AgentSettings) => void;
+}
+
+interface HfStatus {
+  connected: boolean;
+  username?: string;
+  expiresAt?: number;
+  scopes?: string;
+}
+
+function formatExpiresAt(ts?: number): string {
+  if (!ts) return 'unknown expiry';
+  const diff = Math.max(0, Math.round((ts - Date.now()) / 60000));
+  return diff < 1 ? 'expires soon' : `expires in ${diff} min`;
 }
 
 /**
@@ -19,6 +32,9 @@ export function HarnessConfig({ harness, onSaved }: HarnessConfigProps): React.J
   const [endpoint, setEndpoint] = useState<McpEndpointInfo | null>(null);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [hfStatus, setHfStatus] = useState<HfStatus>({ connected: false });
+  const [hfBusy, setHfBusy] = useState(false);
+  const [hfError, setHfError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -29,6 +45,10 @@ export function HarnessConfig({ harness, onSaved }: HarnessConfigProps): React.J
         setEndpoint(e);
       },
     );
+    void window.triangle.hf.status().then((s) => {
+      if (!active) return;
+      setHfStatus(s);
+    });
     return () => {
       active = false;
     };
@@ -57,22 +77,93 @@ export function HarnessConfig({ harness, onSaved }: HarnessConfigProps): React.J
     });
   };
 
+  const connectHf = useCallback(async () => {
+    setHfBusy(true);
+    setHfError(null);
+    try {
+      const res = await window.triangle.hf.connect({ clientId: settings?.hfOAuthClientId });
+      if (res.ok) {
+        setHfStatus({ connected: true, username: res.username, expiresAt: res.expiresAt });
+      } else {
+        setHfError(res.error ?? 'Hugging Face connection failed.');
+      }
+    } catch (e) {
+      setHfError(String(e));
+    } finally {
+      setHfBusy(false);
+    }
+  }, [settings?.hfOAuthClientId]);
+
+  const disconnectHf = useCallback(async () => {
+    setHfBusy(true);
+    setHfError(null);
+    try {
+      await window.triangle.hf.disconnect();
+      setHfStatus({ connected: false });
+    } catch (e) {
+      setHfError(String(e));
+    } finally {
+      setHfBusy(false);
+    }
+  }, []);
+
   if (!settings) return <div className="hconfig hconfig--loading">Loading settings…</div>;
 
   return (
     <div className="hconfig">
-      <label className="hconfig__field">
-        <span className="hconfig__label">Hugging Face token</span>
-        <input
-          className="hconfig__input"
-          type="password"
-          placeholder="HF_TOKEN or TRIANGLE_HF_TOKEN env var"
-          defaultValue={settings.hfToken ?? ''}
-          onBlur={(e) => persist({ hfToken: e.target.value || undefined })}
-        />
-      </label>
-      <div className="hconfig__note" style={{ marginBottom: 8 }}>
-        Used by the 3D asset generation tools. May also be set via <code>HF_TOKEN</code> in the environment.
+      <div className="hconfig__section">
+        <div className="hconfig__section-head">
+          <span className="hconfig__label">Hugging Face</span>
+          <span className={`hconfig__dot${hfStatus.connected ? ' hconfig__dot--ok' : ''}`} />
+        </div>
+        <div className="hconfig__note">
+          Connect via OAuth to call HF Spaces (including private/gated ones) on your behalf. A manual
+          token below is used as a fallback.
+        </div>
+
+        <label className="hconfig__field">
+          <span className="hconfig__label">OAuth client id</span>
+          <input
+            className="hconfig__input"
+            type="text"
+            placeholder="HF_OAUTH_CLIENT_ID env var"
+            defaultValue={settings.hfOAuthClientId ?? ''}
+            onBlur={(e) => persist({ hfOAuthClientId: e.target.value || undefined })}
+          />
+        </label>
+
+        <div className="hconfig__hf-actions" style={{ display: 'flex', gap: 8, marginTop: 8, marginBottom: 8 }}>
+          {hfStatus.connected ? (
+            <button className="btn btn--ghost btn--xs" onClick={disconnectHf} disabled={hfBusy}>
+              <Link2Off size={12} /> Disconnect
+            </button>
+          ) : (
+            <button className="btn btn--primary btn--xs" onClick={connectHf} disabled={hfBusy || !settings.hfOAuthClientId}>
+              <Link2 size={12} /> Connect with Hugging Face
+            </button>
+          )}
+          {hfStatus.connected && (
+            <span className="hconfig__note">
+              Connected{hfStatus.username ? ` as ${hfStatus.username}` : ''} ({formatExpiresAt(hfStatus.expiresAt)}).
+            </span>
+          )}
+        </div>
+        {hfError && <div className="hconfig__error">{hfError}</div>}
+
+        <label className="hconfig__field">
+          <span className="hconfig__label">Manual Hugging Face token</span>
+          <input
+            className="hconfig__input"
+            type="password"
+            placeholder="HF_TOKEN or TRIANGLE_HF_TOKEN env var"
+            defaultValue={settings.hfToken ?? ''}
+            onBlur={(e) => persist({ hfToken: e.target.value || undefined })}
+          />
+        </label>
+        <div className="hconfig__note" style={{ marginBottom: 8 }}>
+          Used as a fallback by the 3D asset generation tools. May also be set via <code>HF_TOKEN</code> in the
+          environment.
+        </div>
       </div>
 
       {(harness === 'claude' || harness === 'codex') && (

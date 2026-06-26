@@ -84,7 +84,15 @@ export function dispatchTool(
         intensity: typeof args['intensity'] === 'number' ? args['intensity'] : undefined,
         color: typeof args['color'] === 'string' ? args['color'] : undefined,
       });
-    // Stage 6: 3D asset generation.
+    // Stage 6: HF Spaces + 3D asset generation.
+    case 'hf_call_space':
+      return toolset.hfCallSpace(
+        String(args['space'] ?? ''),
+        typeof args['route'] === 'string' ? args['route'] : undefined,
+        typeof args['payload'] === 'object' && args['payload'] !== null
+          ? (args['payload'] as Record<string, unknown>)
+          : undefined,
+      );
     case 'hf_generate_3d_asset':
       return toolset.hfGenerate3dAsset(
         String(args['prompt'] ?? ''),

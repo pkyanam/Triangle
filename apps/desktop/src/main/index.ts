@@ -19,6 +19,7 @@ import { ToolBridgeServer, dispatchTool } from './tool-bridge.js';
 import { McpEndpoint } from './mcp-endpoint.js';
 import { SessionStore } from './session-store.js';
 import { createToolset } from './agent/tools.js';
+import { hfConnect, hfDisconnect, hfStatus } from './hf-oauth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
@@ -208,6 +209,11 @@ function registerIpc(): void {
       return { ok: false, error: (err as Error).message };
     }
   });
+
+  // Stage 6: Hugging Face OAuth lifecycle for Spaces integration.
+  handle('hf:connect', async (req) => hfConnect({ openBrowser: (url) => void shell.openExternal(url) }, req));
+  handle('hf:disconnect', () => hfDisconnect());
+  handle('hf:status', () => hfStatus());
 }
 
 function createWindow(): void {

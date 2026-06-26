@@ -18,6 +18,7 @@ function makeToolset(): TriangleToolset {
     setTransform: async () => 'transform',
     setVisibility: async () => 'visible',
     setLight: async () => 'light',
+    hfCallSpace: async () => 'space called',
     hfGenerate3dAsset: async () => 'hf generated',
     download3dAsset: async () => 'downloaded',
     import3dAsset: async () => 'imported',
@@ -52,6 +53,10 @@ test('tool bridge dispatches Stage 6 HF and asset tools', async () => {
   const toolset = makeToolset();
   const token = server.register(toolset);
   const port = server.getPort();
+
+  const space = await callBridge(port, token, 'hf_call_space', { space: 'tencent/Hunyuan3D-2-mini', payload: { prompt: 'a cube' } });
+  assert.equal(space['ok'], true);
+  assert.equal(space['result'], 'space called');
 
   const generate = await callBridge(port, token, 'hf_generate_3d_asset', { prompt: 'a cube', provider: 'hunyuan3d' });
   assert.equal(generate['ok'], true);

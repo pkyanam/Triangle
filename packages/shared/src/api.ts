@@ -121,4 +121,10 @@ export interface TriangleApi {
   tool: {
     run: (req: IpcRequest<'tool:run'>) => Promise<IpcResponse<'tool:run'>>;
   };
+  /** Stage 6 Hugging Face OAuth lifecycle — connects the desktop app to Spaces. */
+  hf: {
+    connect: (req: IpcRequest<'hf:connect'>) => Promise<IpcResponse<'hf:connect'>>;
+    disconnect: () => Promise<IpcResponse<'hf:disconnect'>>;
+    status: () => Promise<IpcResponse<'hf:status'>>;
+  };
 }

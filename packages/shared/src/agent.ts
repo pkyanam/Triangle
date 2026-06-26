@@ -87,6 +87,16 @@ export interface AgentSettings {
   autoApproveWrites?: boolean;
   /** Hugging Face API token for 3D asset generation (env HF_TOKEN is preferred). */
   hfToken?: string;
+  /**
+   * Hugging Face OAuth access token obtained through the device-code flow. Takes
+   * precedence over {@link hfToken} and environment variables when present and
+   * not expired.
+   */
+  hfOAuthToken?: string;
+  /** Epoch ms when the OAuth access token expires. */
+  hfOAuthExpiresAt?: number;
+  /** Hugging Face OAuth client id used for the device-code flow. */
+  hfOAuthClientId?: string;
 }
 
 /** Default model lists for each provider kind. */

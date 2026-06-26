@@ -261,6 +261,8 @@ export class AgentManager {
       preview: this.preview,
       approveWrite,
       hfToken: runConfig.hfToken,
+      hfOAuthToken: runConfig.hfOAuthToken,
+      hfOAuthExpiresAt: runConfig.hfOAuthExpiresAt,
       emitTrace: (trace) => forward({ type: 'tool', runId, trace }),
     });
 

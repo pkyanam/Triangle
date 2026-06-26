@@ -55,6 +55,12 @@ export interface TriangleConfig {
   autoApproveWrites?: boolean;
   /** Hugging Face API token for 3D asset generation. */
   hfToken?: string;
+  /** Hugging Face OAuth access token from the device-code flow. */
+  hfOAuthToken?: string;
+  /** Epoch ms when the OAuth access token expires. */
+  hfOAuthExpiresAt?: number;
+  /** Hugging Face OAuth client id used for the device-code flow. */
+  hfOAuthClientId?: string;
   /** Provider instances (new provider-instance UI). */
   providerInstances?: ProviderInstance[];
   /** Id of the currently selected provider instance. */
@@ -78,6 +84,9 @@ interface RawConfigFile extends Partial<TriangleConfig> {
   acp_agent_label?: string;
   auto_approve_writes?: boolean;
   hf_token?: string;
+  hf_oauth_token?: string;
+  hf_oauth_expires_at?: number;
+  hf_oauth_client_id?: string;
   provider_instances?: ProviderInstance[];
   selected_instance_id?: string;
   favorites?: Array<{ instanceId: string; model: string }>;
@@ -110,6 +119,9 @@ function fromFile(raw: RawConfigFile | null): Partial<TriangleConfig> {
     acpAgentLabel: raw.acpAgentLabel ?? raw.acp_agent_label,
     autoApproveWrites: raw.autoApproveWrites ?? raw.auto_approve_writes,
     hfToken: raw.hfToken ?? raw.hf_token,
+    hfOAuthToken: raw.hfOAuthToken ?? raw.hf_oauth_token,
+    hfOAuthExpiresAt: raw.hfOAuthExpiresAt ?? raw.hf_oauth_expires_at,
+    hfOAuthClientId: raw.hfOAuthClientId ?? raw.hf_oauth_client_id,
     providerInstances: raw.providerInstances ?? raw.provider_instances,
     selectedInstanceId: raw.selectedInstanceId ?? raw.selected_instance_id,
     favorites: raw.favorites,
@@ -145,6 +157,12 @@ function fromEnv(): Partial<TriangleConfig> {
     out.autoApproveWrites = env['TRIANGLE_AUTO_APPROVE_WRITES'] === 'true';
   const hfToken = env['HF_TOKEN'] ?? env['TRIANGLE_HF_TOKEN'];
   if (hfToken) out.hfToken = hfToken;
+  const hfOAuthToken = env['HF_OAUTH_TOKEN'] ?? env['TRIANGLE_HF_OAUTH_TOKEN'];
+  if (hfOAuthToken) out.hfOAuthToken = hfOAuthToken;
+  const hfOAuthExpiresAt = env['HF_OAUTH_EXPIRES_AT'] ?? env['TRIANGLE_HF_OAUTH_EXPIRES_AT'];
+  if (hfOAuthExpiresAt) out.hfOAuthExpiresAt = Number(hfOAuthExpiresAt);
+  const hfOAuthClientId = env['HF_OAUTH_CLIENT_ID'] ?? env['TRIANGLE_HF_OAUTH_CLIENT_ID'];
+  if (hfOAuthClientId) out.hfOAuthClientId = hfOAuthClientId;
   return out;
 }
 
@@ -249,6 +267,9 @@ export async function loadAgentSettings(): Promise<AgentSettings> {
     acpAgentLabel: c.acpAgentLabel,
     autoApproveWrites: c.autoApproveWrites,
     hfToken: c.hfToken,
+    hfOAuthToken: c.hfOAuthToken,
+    hfOAuthExpiresAt: c.hfOAuthExpiresAt,
+    hfOAuthClientId: c.hfOAuthClientId,
   };
 }
 

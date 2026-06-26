@@ -6,6 +6,7 @@ import type { ProjectManager } from './project.js';
 import type { PreviewBridge } from './preview-bridge.js';
 import type { ToolBridgeServer } from './tool-bridge.js';
 import { createToolset } from './agent/tools.js';
+import { loadConfig } from './config.js';
 
 /**
  * The standalone Triangle MCP endpoint (ADR 0013).
@@ -41,6 +42,7 @@ export class McpEndpoint {
   /** Register the standalone toolset and write the launcher descriptor. */
   async start(): Promise<void> {
     if (this.token) return;
+    const config = loadConfig();
     const toolset = createToolset({
       project: this.project,
       preview: this.preview,
@@ -48,6 +50,9 @@ export class McpEndpoint {
       // writes files (those flow through a gated harness run). The exposed domain
       // tools are all stage ≥ 3 and don't call this, so it's a belt-and-braces deny.
       approveWrite: async () => false,
+      hfToken: config.hfToken,
+      hfOAuthToken: config.hfOAuthToken,
+      hfOAuthExpiresAt: config.hfOAuthExpiresAt,
       emitTrace: () => {}, // no agent run to attach traces to
     });
     this.token = this.toolBridge.register(toolset);

@@ -34,15 +34,19 @@ pnpm --filter @triangle/web build
 
 The root shortcut `pnpm build:web` exports `templates/starter` and builds the site into `apps/web/dist`.
 
-## WS-2: Hugging Face 3D asset generation
+## WS-2: Hugging Face OAuth + Spaces integration
 
-The desktop app now exposes a three-step workflow:
+The desktop app now supports authenticating with Hugging Face via OAuth and calling Spaces on the user's behalf:
 
-1. `hf_generate_3d_asset` — returns a model URL from a Hugging Face Space or Inference Endpoint.
-2. `download_3d_asset` — downloads the model and saves it as a binary file in the active project.
-3. `triangle_import_3d_asset` — reads the binary file and loads it into the live preview via the new `load_model` preview request.
+- **OAuth device-code flow**: `Settings → Configure providers → Hugging Face` lets you enter an OAuth client id and click "Connect with Hugging Face". Main starts the device-code flow, opens the browser, polls for the access token, and persists it in the user config. The token is used for all HF API calls and falls back to `HF_TOKEN` / `hfToken` when absent or expired.
+- **New `hf_call_space` agent tool**: call any HF Space API (e.g. `user/space`) with an arbitrary payload. This is surfaced in Claude, MCP, ACP, and the manual tool runner.
+- **Existing 3D asset pipeline** (`hf_generate_3d_asset`, `download_3d_asset`, `triangle_import_3d_asset`) now prefers the OAuth token when connected, so private/gated Spaces and Inference Providers can be used.
 
-The token is read from `HF_TOKEN` / `TRIANGLE_HF_TOKEN` env vars, or from the `hfToken` field in the agent settings / `config.json`. A token is only required when the tool uses the public HF API; an explicit `endpoint` bypasses the token check.
+OAuth configuration:
+- Set `HF_OAUTH_CLIENT_ID` / `TRIANGLE_HF_OAUTH_CLIENT_ID` in the environment, or configure `hfOAuthClientId` in settings.
+- Requested scopes default to `openid profile inference-api`.
+
+The token is read from `HF_TOKEN` / `TRIANGLE_HF_TOKEN` env vars, or from the `hfToken` field in the agent settings / `config.json`, as a fallback. A token is only required when the tool uses the public HF API; an explicit `endpoint` bypasses the token check.
 
 For manual testing there is a "Run integration tool" panel in the Agent panel (wrench icon). It bypasses the agent harness and auto-approves downloads, so you can try the HF pipeline or the robotics snippet directly.
 
@@ -65,7 +69,9 @@ The agent tool `triangle_robotics_snippet` exposes this generator in the Claude/
 - `apps/desktop/src/renderer/src/components/ErrorBoundary.tsx` isolates panel crashes in Explorer, Editor, Preview, Agent, Outliner, Inspector, and Console.
 - `packages/shared/src/tools.ts` JSON schema now supports nested `properties` and `required` on object/array nodes, enabling richer tool definitions.
 - New tests:
-  - `packages/integrations/test/hf.test.ts` — mocks the HF API.
+  - `packages/integrations/test/hf.test.ts` — mocks the HF 3D asset API.
+  - `packages/integrations/test/hf-oauth.test.ts` — device-code OAuth flow.
+  - `packages/integrations/test/hf-spaces.test.ts` — generic Space API client.
   - `packages/robotics/test/robotics.test.ts` — snippet generation.
   - `apps/desktop/test/tool-bridge.test.ts` — end-to-end tool dispatch over the loopback bridge, including the Stage 6 tools.
 
@@ -73,11 +79,13 @@ The agent tool `triangle_robotics_snippet` exposes this generator in the Claude/
 
 - `packages/shared/src/agent.ts`, `preview.ts`, `tools.ts` — Stage 6 types and tool definitions.
 - `packages/preview-runtime/src/loaders.ts`, `runtime.ts`, `index.ts` — model loader.
-- `apps/desktop/src/main/agent/tools.ts`, `preview-bridge.ts`, `tool-bridge.ts`, `agent/manager.ts`, `config.ts`, `agent/claude.ts` — tool integration.
+- `apps/desktop/src/main/agent/tools.ts`, `preview-bridge.ts`, `tool-bridge.ts`, `agent/manager.ts`, `config.ts`, `agent/claude.ts`, `hf-oauth.ts`, `mcp-endpoint.ts` — tool integration + OAuth lifecycle.
 - `apps/desktop/src/renderer/src/preview/bridge.ts` — `load_model` request handling.
 - `apps/desktop/src/main/project.ts` — binary file helpers.
 - `apps/web/**` — new web build package.
 - `packages/robotics/**` — new robotics simulation prep package.
 - `apps/desktop/src/renderer/src/components/ErrorBoundary.tsx` — error boundaries.
 - `apps/desktop/src/renderer/src/workspace/Workspace.tsx`, `App.tsx`, `styles.css` — panel isolation.
+- `apps/desktop/src/renderer/src/components/HarnessConfig.tsx` — HF OAuth UI.
+- `packages/integrations/src/hf-oauth.ts`, `hf-spaces.ts` — OAuth + Spaces clients.
 - `docs/STAGE-6.md` (this file).

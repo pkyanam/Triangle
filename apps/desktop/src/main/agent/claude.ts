@@ -241,6 +241,19 @@ export const claudeHarness: AgentHarness = {
         },
       ),
       tool(
+        'hf_call_space',
+        'Call a Hugging Face Space API on behalf of the authenticated user. Useful for custom Spaces beyond the built-in 3D providers.',
+        {
+          space: z.string().describe('HF Space name in user/space or org/space form.'),
+          route: z.string().optional().describe('Space API route/method (default "predict").'),
+          payload: z.any().optional().describe('JSON payload sent to the Space API.'),
+        },
+        async ({ space, route, payload }) => {
+          const text = await toolset.hfCallSpace(space, route, payload as Record<string, unknown> | undefined);
+          return { content: [{ type: 'text' as const, text }] };
+        },
+      ),
+      tool(
         'hf_generate_3d_asset',
         'Generate a 3D asset on Hugging Face from a text prompt or image and return a downloadable model URL.',
         {
@@ -311,6 +324,7 @@ export const claudeHarness: AgentHarness = {
         'Read',
         'Grep',
         'Glob',
+        'mcp__triangle__hf_call_space',
         'mcp__triangle__hf_generate_3d_asset',
         'mcp__triangle__download_3d_asset',
         'mcp__triangle__triangle_import_3d_asset',

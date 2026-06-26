@@ -24,17 +24,22 @@ We added a dedicated workspace package `apps/web`. It is a static Vite site that
 - An export script copies an arbitrary project into `public/project` before building.
 - The default `pnpm build:web` shortcut exports `templates/starter` and produces `apps/web/dist`.
 
-### 2. Hugging Face 3D asset pipeline
+### 2. Hugging Face OAuth + Spaces integration
 
-We introduced a three-tool workflow:
+We introduced OAuth support so Triangle can act on behalf of a Hugging Face user when calling Spaces and the Inference API. The flow uses the HF device-code OAuth flow, which is well suited to a desktop app without a web-hosted redirect URL.
 
-- `hf_generate_3d_asset` — calls a Hugging Face Space or Inference Endpoint and returns a model URL.
-- `download_3d_asset` — downloads the model and saves it as a binary file in the active project.
-- `triangle_import_3d_asset` — loads the binary file into the live preview via a new `load_model` preview request.
+- `HuggingFaceOAuth` in `packages/integrations/src/hf-oauth.ts` implements the device-code flow, opens the browser, and polls for the access token.
+- The access token is persisted as `hfOAuthToken` / `hfOAuthExpiresAt` in the user config; `hfOAuthClientId` can be set via `HF_OAUTH_CLIENT_ID` or in the UI.
+- `HuggingFaceSpacesClient` in `packages/integrations/src/hf-spaces.ts` calls arbitrary Space APIs (`/api/predict` or `/api/run/{route}`) with the token.
+- A new agent tool `hf_call_space` exposes the Spaces client to agents.
+- The existing three-tool workflow now prefers the OAuth token and falls back to API tokens:
+  - `hf_generate_3d_asset` — calls a Hugging Face Space or Inference Endpoint and returns a model URL.
+  - `download_3d_asset` — downloads the model and saves it as a binary file in the active project.
+  - `triangle_import_3d_asset` — loads the binary file into the live preview via a new `load_model` preview request.
 
 The model loader lives in `packages/preview-runtime/src/loaders.ts` and uses Three.js `GLTFLoader`/`OBJLoader` for GLB/OBJ/USDZ. It is intentionally shared between desktop and web, so assets imported in the desktop app also work in the web build.
 
-Auth tokens are resolved from `HF_TOKEN` / `TRIANGLE_HF_TOKEN` env vars or the `hfToken` field in `config.json` / agent settings. A token is only required for the public HF API; an explicit `endpoint` bypasses the check.
+Auth tokens are resolved from `HF_TOKEN` / `TRIANGLE_HF_TOKEN` env vars or the `hfToken` field in `config.json` / agent settings as a fallback. OAuth takes precedence when connected and not expired. A token is only required for the public HF API; an explicit `endpoint` bypasses the check.
 
 ### 3. Robotics scaffolding (`packages/robotics`)
 
@@ -52,7 +57,7 @@ The agent tool `triangle_robotics_snippet` exposes the generator. This is scaffo
 - Binary file helpers (`readBinaryFile`, `writeBinaryFile`) were added to `ProjectManager` so downloaded assets are not corrupted by string encoding.
 - React error boundaries isolate the new engine panels (Explorer, Editor, Preview, Agent, Outliner, Inspector, Console) from crashing the entire app.
 - The shared tool schema was extended to support nested `properties` and `required` on object/array nodes.
-- Tests cover the HF client, the snippet generator, and tool-bridge dispatch.
+- Tests cover the HF client, the OAuth flow, the Spaces client, the snippet generator, and tool-bridge dispatch.
 
 ## Consequences
 
@@ -72,5 +77,7 @@ The agent tool `triangle_robotics_snippet` exposes the generator. This is scaffo
 - `docs/STAGE-6.md`
 - `packages/preview-runtime/src/loaders.ts`
 - `packages/integrations/src/hf.ts`
+- `packages/integrations/src/hf-oauth.ts`
+- `packages/integrations/src/hf-spaces.ts`
 - `packages/robotics/src/snippets.ts`
 - `apps/web/**`

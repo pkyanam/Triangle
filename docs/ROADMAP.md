@@ -184,9 +184,9 @@ See [`STAGE-5.75.md`](STAGE-5.75.md), the handoff prompt
 
 - [x] Web build path: new `apps/web` Vite package that exports a Triangle project
       as a self-contained static site using `@triangle/preview-runtime`.
-- [x] Hugging Face 3D asset pipeline: `hf_generate_3d_asset`, `download_3d_asset`,
-      and `triangle_import_3d_asset` agent tools, backed by a new
-      `@triangle/integrations` package with a `HuggingFaceClient`.
+- [x] Hugging Face OAuth + Spaces integration: device-code OAuth flow,
+      `hf_call_space` agent tool, and OAuth-aware 3D asset pipeline
+      (`hf_generate_3d_asset`, `download_3d_asset`, `triangle_import_3d_asset`).
 - [x] Shared model loader in `@triangle/preview-runtime` for GLB/OBJ/USDZ,
       wired through the `load_model` preview request.
 - [x] Robotics simulation prep: new `@triangle/robotics` package with URDF,
