@@ -29,17 +29,15 @@ publish: null
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
-  # x64 and arm64 are built as separate jobs in CI (on native-arch runners)
-  # so the download size stays small and we avoid cross-compilation pitfalls
-  # with native modules. The CLI flag `--x64` / `--arm64` selects the arch.
+  # arm64 only — macOS x64 builds are dropped due to GitHub runner
+  # availability constraints for macos-13 (Intel). Re-enable x64 by adding
+  # it back to the arch lists below when runner capacity improves.
   target:
     - target: dmg
       arch:
-        - x64
         - arm64
     - target: zip
       arch:
-        - x64
         - arm64
   # Code signing + notarization can be enabled later by setting these secrets
   # in the repo: APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID, and
@@ -64,6 +62,10 @@ nsis:
   artifactName: Triangle-Setup-${version}-${arch}.exe
 linux:
   icon: build/icon.png
+  # executableName must be set explicitly — otherwise electron-builder derives
+  # it from the package name "@triangle/desktop", which contains an invalid "@"
+  # for file paths / WM_CLASS.
+  executableName: triangle
   target:
     - target: AppImage
       arch:
