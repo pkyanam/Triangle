@@ -345,6 +345,15 @@ function getValidationContext(): WebGL2RenderingContext | null {
 }
 
 /**
+ * Reset the cached validation context. Intended for tests that swap the DOM /
+ * WebGL2 stub between cases; not part of the public runtime API.
+ */
+export function resetShaderValidationCache(): void {
+  validationGl = null;
+  validationUnavailable = false;
+}
+
+/**
  * Compile a GLSL shader against a dedicated offscreen WebGL2 context without
  * touching the scene or the live renderer. Returns structured diagnostics
  * derived from the driver's info log. Works on both WebGPU and WebGL backends.
