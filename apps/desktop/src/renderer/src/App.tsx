@@ -34,6 +34,7 @@ export function App(): React.JSX.Element {
   // Which dock panels are currently mounted (reflected in the TopBar panels menu).
   const [panelsOpen, setPanelsOpen] = useState<PanelsOpen>({
     explorer: true,
+    assets: true,
     editor: true,
     preview: true,
     agent: true,

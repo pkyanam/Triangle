@@ -3211,6 +3211,152 @@ button {
   color: var(--signal-fg);
 }
 
+/* ---------- Asset Browser panel ---------- */
+.asset-browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.asset-browser__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.asset-browser__filters {
+  display: flex;
+  gap: 2px;
+}
+
+.asset-browser__filter {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.asset-browser__filter:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.asset-browser__filter--active {
+  background: var(--accent-strong);
+  color: var(--foreground);
+}
+
+.asset-browser__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+}
+
+.asset-browser__count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--foreground);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.asset-browser__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.asset-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: center;
+}
+
+.asset-tile:hover {
+  background: var(--accent);
+  border-color: var(--border);
+}
+
+.asset-tile__thumb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  overflow: hidden;
+}
+
+.asset-tile__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.asset-tile__badge {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  padding: 0 4px;
+  font-size: 9px;
+  text-transform: uppercase;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--background) 70%, transparent);
+  color: var(--signal-fg);
+}
+
+.asset-tile__name {
+  font-size: 10px;
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-browser__empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.asset-browser__empty-cta {
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--secondary);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.asset-browser__empty-cta:hover {
+  border-color: var(--ring);
+}
+
 /* ---------- Toasts ---------- */
 .toaster {
   position: fixed;

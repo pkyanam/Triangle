@@ -18,6 +18,8 @@ import {
   resolveRuntimeFiles,
 } from './html-export.js';
 import type {
+  AssetEntry,
+  AssetKind,
   FileChangeEvent,
   FileChangeType,
   FileNode,
@@ -29,6 +31,35 @@ import type {
 } from '@triangle/shared';
 
 const IGNORED = new Set(['node_modules', '.git', '.triangle', '.DS_Store']);
+
+/** Recognised content-asset extensions mapped to their Asset Browser category. */
+const ASSET_EXT_KIND: Record<string, AssetKind> = {
+  glb: 'model',
+  gltf: 'model',
+  obj: 'model',
+  usdz: 'model',
+  fbx: 'model',
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  webp: 'image',
+  hdr: 'hdr',
+  exr: 'hdr',
+};
+
+const ASSET_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  glb: 'model/gltf-binary',
+  gltf: 'model/gltf+json',
+  obj: 'text/plain',
+  usdz: 'model/vnd.usdz+zip',
+  fbx: 'application/octet-stream',
+  hdr: 'image/vnd.radiance',
+  exr: 'image/x-exr',
+};
 const DEFAULT_MANIFEST: ProjectManifest = {
   name: 'Untitled Project',
   entry: 'src/main.js',
@@ -570,6 +601,67 @@ export class ProjectManager {
       kind: 'directory',
       children,
     };
+  }
+
+  /** Scan the project for content assets, returning a flat, sorted list. */
+  async listAssets(): Promise<AssetEntry[]> {
+    const root = this.getRoot();
+    const out: AssetEntry[] = [];
+    const walk = async (absDir: string): Promise<void> => {
+      let entries: Dirent[];
+      try {
+        entries = await fs.readdir(absDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (IGNORED.has(entry.name)) continue;
+        const abs = path.join(absDir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(abs);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).slice(1).toLowerCase();
+          const kind = ASSET_EXT_KIND[ext];
+          if (!kind) continue;
+          let sizeBytes = 0;
+          try {
+            sizeBytes = (await fs.stat(abs)).size;
+          } catch {
+            /* ignore */
+          }
+          out.push({ name: entry.name, path: toRelPosix(root, abs), ext, kind, sizeBytes });
+        }
+      }
+    };
+    await walk(root);
+    out.sort((a, b) => a.path.localeCompare(b.path));
+    return out;
+  }
+
+  /** Read a binary asset back as a data URL for renderer thumbnails. */
+  async assetDataUrl(relPath: string): Promise<{ dataUrl: string }> {
+    const buffer = await fs.readFile(this.resolveSafe(relPath));
+    const ext = path.extname(relPath).slice(1).toLowerCase();
+    const mime = ASSET_MIME[ext] ?? 'application/octet-stream';
+    return { dataUrl: `data:${mime};base64,${buffer.toString('base64')}` };
+  }
+
+  /** Copy an absolute on-disk file into the project's `assets/` dir, deduping names. */
+  async copyAssetInto(absSource: string): Promise<string> {
+    const root = this.getRoot();
+    const base = path.basename(absSource);
+    const ext = path.extname(base);
+    const stem = base.slice(0, base.length - ext.length);
+    let rel = `assets/${base}`;
+    let i = 1;
+    while (existsSync(path.join(root, rel))) {
+      rel = `assets/${stem}-${i}${ext}`;
+      i += 1;
+    }
+    const dest = path.join(root, rel);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.copyFile(absSource, dest);
+    return rel;
   }
 
   /** Resolve a project-relative path to an absolute one, rejecting traversal. */

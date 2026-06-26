@@ -25,6 +25,8 @@ import {
 } from '../preview/bridge.js';
 import { ViewportHud } from './ViewportHud.js';
 import { ViewportGizmo } from './ViewportGizmo.js';
+import { ASSET_DRAG_MIME } from './AssetBrowser.js';
+import { toast } from './ui/toast.js';
 
 interface PreviewProps {
   /** Entry module source; reloading it hot-reloads the scene. */
@@ -103,6 +105,24 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
   const selectToolMode = (mode: TransformMode): void => {
     setActiveTransformMode(mode);
     setToolMode(mode);
+  };
+  const onAssetDragOver = (e: React.DragEvent): void => {
+    if (!e.dataTransfer.types.includes(ASSET_DRAG_MIME)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const onAssetDrop = (e: React.DragEvent): void => {
+    const path = e.dataTransfer.getData(ASSET_DRAG_MIME);
+    if (!path) return;
+    e.preventDefault();
+    void window.triangle.tool
+      .run({ tool: 'triangle_import_3d_asset', args: { path } })
+      .then((res) =>
+        res.ok
+          ? toast('Imported into the scene.', { variant: 'success' })
+          : toast(res.error ?? 'Import failed.', { variant: 'error' }),
+      )
+      .catch((err) => toast(String((err as Error).message ?? err), { variant: 'error' }));
   };
   const setCameraPreset = (preset: 'perspective' | 'top' | 'front'): void => {
     const camera = getRuntime().camera;
@@ -187,7 +207,7 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
           </button>
         </div>
       </div>
-      <div className="preview__stage" ref={stageRef}>
+      <div className="preview__stage" ref={stageRef} onDragOver={onAssetDragOver} onDrop={onAssetDrop}>
         {hud && <ViewportHud stats={stats} />}
         {gizmo && <ViewportGizmo />}
         {error && (

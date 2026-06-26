@@ -4,7 +4,7 @@
  * consumes it via a global `Window` augmentation.
  */
 import type { IpcRequest, IpcResponse } from './ipc.js';
-import type { FileChangeEvent, ProjectInfo, ProjectSummary, SnapshotInfo, TemplateInfo } from './project.js';
+import type { AssetEntry, FileChangeEvent, ProjectInfo, ProjectSummary, SnapshotInfo, TemplateInfo } from './project.js';
 import type { SessionRecord, SessionSummary } from './session.js';
 import type {
   AgentEvent,
@@ -47,10 +47,19 @@ export interface TriangleApi {
     onFileChanged: (cb: (event: FileChangeEvent) => void) => Unsubscribe;
     /** Subscribe to active-project changes. */
     onChanged: (cb: (info: ProjectInfo) => void) => Unsubscribe;
+    /** Scan the active project for content assets (models/textures/HDRIs). */
+    assets: () => Promise<AssetEntry[]>;
   };
   file: {
     read: (path: string) => Promise<IpcResponse<'file:read'>>;
     write: (req: IpcRequest<'file:write'>) => Promise<IpcResponse<'file:write'>>;
+  };
+  /** Content-asset helpers backing the Asset Browser. */
+  asset: {
+    /** Read a binary asset back as a data URL (image/texture thumbnails). */
+    dataUrl: (path: string) => Promise<IpcResponse<'asset:data-url'>>;
+    /** Open a native picker and copy chosen files into the project `assets/`. */
+    import: () => Promise<IpcResponse<'asset:import'>>;
   };
   agent: {
     /** Harnesses with live availability (key/CLI presence). */

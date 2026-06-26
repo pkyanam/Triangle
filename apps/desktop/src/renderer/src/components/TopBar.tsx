@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Bot,
+  Boxes,
   Check,
   Code2,
   FolderTree,
@@ -34,6 +35,7 @@ interface TopBarProps {
 
 const PANEL_MENU: { id: PanelId; label: string; icon: ComponentType<{ size?: number }> }[] = [
   { id: 'explorer', label: 'Explorer', icon: FolderTree },
+  { id: 'assets', label: 'Assets', icon: Boxes },
   { id: 'outliner', label: 'Outliner', icon: ListTree },
   { id: 'editor', label: 'Editor', icon: Code2 },
   { id: 'preview', label: 'Preview', icon: Monitor },

@@ -13,6 +13,22 @@ export interface FileNode {
   children?: FileNode[];
 }
 
+/** Category of a content asset, used by the Asset Browser to pick a renderer. */
+export type AssetKind = 'model' | 'image' | 'hdr';
+
+/** A content asset discovered in the project (3D model, texture, or HDRI). */
+export interface AssetEntry {
+  /** File basename. */
+  name: string;
+  /** POSIX-style path relative to the project root. */
+  path: string;
+  /** Lowercased extension without the dot (e.g. `glb`, `png`). */
+  ext: string;
+  kind: AssetKind;
+  /** Size in bytes. */
+  sizeBytes: number;
+}
+
 /** Lightweight manifest describing a Triangle project (`triangle.json`). */
 export interface ProjectManifest {
   /** Human-readable project name. */

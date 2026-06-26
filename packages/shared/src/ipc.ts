@@ -7,7 +7,7 @@
  * Main (handlers), preload (bindings), and renderer (the `window.triangle` typings)
  * all import these so the contract can never drift.
  */
-import type { FileChangeEvent, ProjectInfo, ProjectSummary, SnapshotInfo, TemplateInfo } from './project.js';
+import type { AssetEntry, FileChangeEvent, ProjectInfo, ProjectSummary, SnapshotInfo, TemplateInfo } from './project.js';
 import type { SessionRecord, SessionSummary } from './session.js';
 import type {
   AgentEvent,
@@ -94,6 +94,32 @@ export interface IpcInvokeChannels {
   'project:import-dir': {
     request: void;
     response: { ok: boolean; info?: ProjectInfo; canceled?: boolean; error?: string };
+  };
+  /**
+   * Scan the active project for content assets (3D models, textures, HDRIs),
+   * filtered by extension. Mirrors `project:get` but returns a flat asset list
+   * for the Asset Browser rather than the full file tree.
+   */
+  'project:assets': {
+    request: void;
+    response: AssetEntry[];
+  };
+  /**
+   * Read a binary project asset back as a data URL (used for image/texture
+   * thumbnails in the Asset Browser). The renderer never sees raw fs.
+   */
+  'asset:data-url': {
+    request: { path: string };
+    response: { dataUrl: string };
+  };
+  /**
+   * Open a native file picker for content assets and copy the chosen files into
+   * the project's `assets/` directory, returning their new project-relative
+   * paths. Main owns the dialog + copy.
+   */
+  'asset:import': {
+    request: void;
+    response: { ok: boolean; paths?: string[]; canceled?: boolean; error?: string };
   };
   /** Read a UTF-8 text file by project-relative path. */
   'file:read': {
@@ -293,6 +319,9 @@ export const INVOKE_CHANNELS = [
   'project:export-html',
   'project:import',
   'project:import-dir',
+  'project:assets',
+  'asset:data-url',
+  'asset:import',
   'file:read',
   'file:write',
   'app:info',

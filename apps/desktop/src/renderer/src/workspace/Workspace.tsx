@@ -12,6 +12,7 @@ import { Preview } from '../components/Preview.js';
 import { AgentPanel } from '../components/AgentPanel.js';
 import { Outliner } from '../components/Outliner.js';
 import { Inspector } from '../components/Inspector.js';
+import { AssetBrowser } from '../components/AssetBrowser.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
@@ -23,7 +24,7 @@ const LAYOUT_KEY_PREFIX = 'triangle.layout.v3';
 const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
-export const PANEL_IDS = ['explorer', 'editor', 'preview', 'agent', 'outliner', 'inspector'] as const;
+export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector'] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 export type PanelsOpen = Record<PanelId, boolean>;
 
@@ -43,6 +44,7 @@ interface WorkspaceProps {
 
 const WIDTHS: Record<PanelId, number> = {
   explorer: 230,
+  assets: 260,
   editor: 420,
   preview: 0,
   agent: 400,
@@ -52,6 +54,7 @@ const WIDTHS: Record<PanelId, number> = {
 
 const MIN_WIDTHS: Record<PanelId, number> = {
   explorer: 170,
+  assets: 200,
   editor: 240,
   preview: 320,
   agent: 300,
@@ -68,6 +71,19 @@ function ExplorerPanel(_props: IDockviewPanelProps): React.JSX.Element {
       <ErrorBoundary title="Explorer failed">
         <div className="tpanel__body">
           <FileTree root={ws.project?.tree ?? null} selectedPath={ws.selectedPath} onSelect={ws.openFile} />
+        </div>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
+function AssetsPanel(_props: IDockviewPanelProps): React.JSX.Element {
+  const ws = useWorkspace();
+  return (
+    <div className="tpanel">
+      <ErrorBoundary title="Asset Browser failed">
+        <div className="tpanel__body">
+          <AssetBrowser project={ws.project} openFile={ws.openFile} />
         </div>
       </ErrorBoundary>
     </div>
@@ -131,6 +147,7 @@ function InspectorPanel(_props: IDockviewPanelProps): React.JSX.Element {
 
 const COMPONENTS = {
   explorer: ExplorerPanel,
+  assets: AssetsPanel,
   editor: EditorPanel,
   preview: PreviewPanel,
   agent: AgentDockPanel,
@@ -140,6 +157,7 @@ const COMPONENTS = {
 
 const TITLES: Record<string, string> = {
   explorer: 'Explorer',
+  assets: 'Assets',
   editor: 'Editor',
   preview: 'Preview',
   agent: 'Agent',
@@ -169,6 +187,14 @@ function buildDefaultLayout(api: DockviewApi): void {
     minimumWidth: 170,
     position: { referencePanel: 'outliner', direction: 'left' },
   });
+  // Assets sit as a tab alongside Explorer (content browser, separate from code).
+  api.addPanel({
+    id: 'assets',
+    component: 'assets',
+    title: TITLES.assets,
+    position: { referencePanel: 'explorer', direction: 'within' },
+  });
+  api.getPanel('explorer')?.api.setActive();
 
   // Right rail: Agent + Inspector (Agent front).
   api.addPanel({

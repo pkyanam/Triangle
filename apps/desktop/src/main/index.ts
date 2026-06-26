@@ -137,6 +137,29 @@ function registerIpc(): void {
       return { ok: false, error: (err as Error).message };
     }
   });
+  handle('project:assets', () => project.listAssets());
+  handle('asset:data-url', (req) => project.assetDataUrl(req.path));
+  handle('asset:import', async () => {
+    try {
+      const win = mainWindow ?? BrowserWindow.getAllWindows()[0];
+      const result = await dialog.showOpenDialog(win!, {
+        title: 'Import asset',
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: '3D models', extensions: ['glb', 'gltf', 'obj', 'usdz', 'fbx'] },
+          { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] },
+          { name: 'Environment maps', extensions: ['hdr', 'exr'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      });
+      if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true };
+      const paths: string[] = [];
+      for (const filePath of result.filePaths) paths.push(await project.copyAssetInto(filePath));
+      return { ok: true, paths };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
   handle('file:read', (req) => project.readFile(req.path));
   handle('file:write', (req) => project.writeFile(req.path, req.content, req.suppressWatch));
 

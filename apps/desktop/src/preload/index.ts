@@ -33,10 +33,15 @@ const api: TriangleApi = {
     importDir: () => ipcRenderer.invoke('project:import-dir'),
     onFileChanged: (cb) => subscribe<FileChangeEvent>('project:file-changed', cb),
     onChanged: (cb) => subscribe<ProjectInfo>('project:changed', cb),
+    assets: () => ipcRenderer.invoke('project:assets'),
   },
   file: {
     read: (path) => ipcRenderer.invoke('file:read', { path }),
     write: (req) => ipcRenderer.invoke('file:write', req),
+  },
+  asset: {
+    dataUrl: (path) => ipcRenderer.invoke('asset:data-url', { path }),
+    import: () => ipcRenderer.invoke('asset:import'),
   },
   agent: {
     harnesses: () => ipcRenderer.invoke('agent:harnesses'),
