@@ -167,24 +167,17 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
     });
   }, []);
 
-  /** Merge a tool trace into a per-run "tool activity" bubble. */
+  /** Insert or update a tool trace as its own chronologically ordered message. */
   const upsertTrace = useCallback((runId: string, trace: ToolCallTrace) => {
-    const id = `tools:${runId}`;
-    setMessages((prev) => {
-      const idx = prev.findIndex((m) => m.id === id);
-      if (idx === -1) {
-        return [...prev, { id, role: 'assistant', content: '', timestamp: Date.now(), toolCalls: [trace] }];
-      }
-      const existing = prev[idx];
-      const calls = existing.toolCalls ? [...existing.toolCalls] : [];
-      const tIdx = calls.findIndex((c) => c.id === trace.id);
-      if (tIdx === -1) calls.push(trace);
-      else calls[tIdx] = trace;
-      const next = [...prev];
-      next[idx] = { ...existing, toolCalls: calls };
-      return next;
+    const id = `t:${runId}:${trace.id}`;
+    upsert({
+      id,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      toolCalls: [trace],
     });
-  }, []);
+  }, [upsert]);
 
   /** Read a File as a base64 data URL. */
   const readFileAsDataUrl = (file: File): Promise<string> =>
