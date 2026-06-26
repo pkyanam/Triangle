@@ -51,6 +51,8 @@ export function Editor({ path, content, onSave }: EditorProps): React.JSX.Elemen
   const setDirtyBoth = useCallback((next: boolean) => {
     dirtyRef.current = next;
     setDirty(next);
+    // Broadcast so the StatusBar can reflect unsaved-changes state.
+    window.dispatchEvent(new CustomEvent('triangle:editor-dirty', { detail: next }));
   }, []);
 
   const lintTimer = useRef<number | undefined>(undefined);

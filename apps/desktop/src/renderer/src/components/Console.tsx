@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronRight, CornerDownLeft, Trash2 } from 'lucide-react';
 import type { AgentEvent, PreviewStatus } from '@triangle/shared';
+import { evalActivePreview } from '../preview/bridge.js';
 
-type LogSource = 'preview' | 'agent' | 'error';
+type LogSource = 'preview' | 'agent' | 'error' | 'eval';
 
 interface LogEntry {
   id: string;
@@ -10,6 +11,8 @@ interface LogEntry {
   source: LogSource;
   level: 'info' | 'warn' | 'error';
   message: string;
+  /** Optional expandable detail (e.g. full tool-call JSON). */
+  detail?: string;
 }
 
 interface ConsoleProps {
@@ -29,29 +32,28 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<'all' | LogSource>('all');
   const [search, setSearch] = useState('');
+  const [command, setCommand] = useState('');
+  const [clearOnRun, setClearOnRun] = useState(false);
+  const [openRows, setOpenRows] = useState<Set<string>>(new Set());
+  const [height, setHeight] = useState(240);
   const bodyRef = useRef<HTMLDivElement>(null);
   const lastStatusRef = useRef<PreviewStatus['phase']>('idle');
 
-  const push = (entry: Omit<LogEntry, 'id' | 'time'>) => {
+  const push = (e: Omit<LogEntry, 'id' | 'time'>) => {
     setLogs((prev) => {
-      const next = [...prev, { ...entry, id: `${Date.now()}_${prev.length}`, time: Date.now() }];
+      const next = [...prev, { ...e, id: `${Date.now()}_${prev.length}`, time: Date.now() }];
       if (next.length > 500) next.shift();
       return next;
     });
   };
 
-  // Preview status changes.
   useEffect(() => {
     if (status.phase === lastStatusRef.current) return;
     lastStatusRef.current = status.phase;
-    if (status.phase === 'error') {
-      push({ source: 'error', level: 'error', message: status.message });
-    } else {
-      push({ source: 'preview', level: 'info', message: `Preview ${status.phase}` });
-    }
+    if (status.phase === 'error') push({ source: 'error', level: 'error', message: status.message });
+    else push({ source: 'preview', level: 'info', message: `Preview ${status.phase}` });
   }, [status]);
 
-  // Agent events.
   useEffect(() => {
     const off = window.triangle.agent.onEvent((event: AgentEvent) => {
       switch (event.type) {
@@ -60,14 +62,12 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
             source: 'agent',
             level: event.trace.status === 'error' ? 'error' : 'info',
             message: `${event.trace.tool}${event.trace.status === 'running' ? ' …' : ` → ${event.trace.status}`}`,
+            detail: JSON.stringify({ args: event.trace.args, result: event.trace.result }, null, 2),
           });
           break;
         case 'status':
-          if (event.status === 'error') {
-            push({ source: 'error', level: 'error', message: event.message ?? 'agent run failed' });
-          } else {
-            push({ source: 'agent', level: 'info', message: `Agent ${event.status}` });
-          }
+          if (event.status === 'error') push({ source: 'error', level: 'error', message: event.message ?? 'agent run failed' });
+          else push({ source: 'agent', level: 'info', message: `Agent ${event.status}` });
           break;
         case 'log':
           push({ source: 'agent', level: 'info', message: event.text });
@@ -77,10 +77,44 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
     return off;
   }, []);
 
-  // Auto-scroll to bottom when expanded.
   useEffect(() => {
     if (expanded) bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
   }, [logs, expanded]);
+
+  const runCommand = (): void => {
+    const code = command.trim();
+    if (!code) return;
+    if (clearOnRun) setLogs([]);
+    push({ source: 'eval', level: 'info', message: `› ${code}` });
+    try {
+      const result = evalActivePreview(code);
+      push({ source: 'eval', level: 'info', message: result });
+    } catch (e) {
+      push({ source: 'error', level: 'error', message: String((e as Error).message ?? e) });
+    }
+    setCommand('');
+  };
+
+  const startResize = (e: React.PointerEvent): void => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = height;
+    const onMove = (ev: PointerEvent): void => setHeight(Math.min(600, Math.max(120, startH + (startY - ev.clientY))));
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  const toggleRow = (id: string): void =>
+    setOpenRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -102,7 +136,11 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
         : 'console__summary-dot--ok';
 
   return (
-    <div className={`console console--${expanded ? 'expanded' : 'collapsed'}`}>
+    <div
+      className={`console console--${expanded ? 'expanded' : 'collapsed'}`}
+      style={expanded ? { height } : undefined}
+    >
+      {expanded && <div className="console__resize" onPointerDown={startResize} title="Drag to resize" />}
       <div className="console__header" onClick={() => setExpanded((e) => !e)}>
         <ChevronRight className="console__chevron" size={12} />
         <div className="console__summary">
@@ -121,36 +159,53 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
               {f.label}
             </button>
           ))}
-          <input
-            placeholder="filter"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <button
-            className="toolbar-btn"
-            title="Clear logs"
-            onClick={() => setLogs([])}
-          >
+          <input placeholder="filter" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <button className="toolbar-btn" title="Clear logs" onClick={() => setLogs([])}>
             <Trash2 size={12} />
           </button>
         </div>
       </div>
       {expanded && (
-        <div className="console__body" ref={bodyRef}>
-          {filtered.length === 0 ? (
-            <div className="console__row" style={{ color: 'var(--muted-foreground)' }}>
-              No logs
-            </div>
-          ) : (
-            filtered.map((log) => (
-              <div key={log.id} className="console__row">
-                <span className="console__row-time">{formatTime(log.time)}</span>
-                <span className={`console__row-source console__row-source--${log.source}`}>{log.source}</span>
-                <span className={`console__row-msg console__row-msg--${log.level}`}>{log.message}</span>
+        <>
+          <div className="console__body" ref={bodyRef}>
+            {filtered.length === 0 ? (
+              <div className="console__row" style={{ color: 'var(--muted-foreground)' }}>
+                No logs
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              filtered.map((log) => (
+                <div key={log.id}>
+                  <div
+                    className={`console__row${log.detail ? ' console__row--expandable' : ''}`}
+                    onClick={() => log.detail && toggleRow(log.id)}
+                  >
+                    <span className="console__row-time">{formatTime(log.time)}</span>
+                    <span className={`console__row-source console__row-source--${log.source}`}>{log.source}</span>
+                    <span className={`console__row-msg console__row-msg--${log.level}`}>{log.message}</span>
+                  </div>
+                  {log.detail && openRows.has(log.id) && <pre className="console__detail">{log.detail}</pre>}
+                </div>
+              ))
+            )}
+          </div>
+          <div className="console__command" onClick={(e) => e.stopPropagation()}>
+            <CornerDownLeft size={12} className="console__command-icon" />
+            <input
+              className="console__command-input"
+              placeholder="Evaluate against the scene… (scene, camera, runtime in scope)"
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') runCommand();
+              }}
+              spellCheck={false}
+            />
+            <label className="console__clear-toggle" title="Clear logs before each run">
+              <input type="checkbox" checked={clearOnRun} onChange={(e) => setClearOnRun(e.target.checked)} />
+              clear on run
+            </label>
+          </div>
+        </>
       )}
     </div>
   );

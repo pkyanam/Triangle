@@ -161,6 +161,34 @@ export function applyActiveSceneEdit(edit: SceneEdit): ReturnType<PreviewRuntime
   return activeRuntime.applySceneEdit(edit);
 }
 
+/**
+ * Evaluate a JS expression/statement against the live preview runtime, with
+ * `scene`, `camera`, and `runtime` in scope (Console command input, ADR 0026).
+ * Runs in the renderer's own context — this is a local developer tool.
+ */
+export function evalActivePreview(code: string): string {
+  if (!activeRuntime) throw new NoPreviewError();
+  const { scene, camera } = activeRuntime;
+  const runtime = activeRuntime;
+  let result: unknown;
+  try {
+    // Try as an expression first so bare values echo their result.
+    result = new Function('runtime', 'scene', 'camera', `return (${code});`)(runtime, scene, camera);
+  } catch {
+    // Fall back to statement(s).
+    result = new Function('runtime', 'scene', 'camera', code)(runtime, scene, camera);
+  }
+  if (result === undefined) return 'undefined';
+  if (typeof result === 'object' && result !== null) {
+    try {
+      return JSON.stringify(result, null, 2);
+    } catch {
+      return String(result);
+    }
+  }
+  return String(result);
+}
+
 /** Build a robot from a parsed URDF into the live scene (ADR 0025). */
 export function loadActiveRobot(robot: Robot): ReturnType<PreviewRuntime['loadRobot']> {
   if (!activeRuntime) throw new NoPreviewError();

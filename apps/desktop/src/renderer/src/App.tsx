@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PreviewStatus, ProjectInfo } from '@triangle/shared';
 import { TopBar, PANEL_MENU } from './components/TopBar.js';
 import { Console } from './components/Console.js';
+import { StatusBar } from './components/StatusBar.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { IntegrationsHub } from './components/IntegrationsHub.js';
 import { RobotImporter } from './components/RobotImporter.js';
@@ -222,6 +223,13 @@ export function App(): React.JSX.Element {
       <ErrorBoundary title="Console failed" onError={(err) => console.error('Console crashed', err)}>
         <Console status={status} entry={entry} />
       </ErrorBoundary>
+
+      <StatusBar
+        status={status}
+        entry={entry}
+        projectName={projectName}
+        selectedCount={selectedObject ? 1 : 0}
+      />
 
       <CommandPalette
         open={paletteOpen}

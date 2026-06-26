@@ -370,6 +370,11 @@ button {
 .statusbar__spacer {
   flex: 1;
 }
+.statusbar__dirty {
+  margin-left: 4px;
+  color: var(--warn-signal-fg);
+  font-size: 8px;
+}
 
 /* ---------- Dockview integration ----------
  * dockview supplies the resizable / movable / dockable panes; we override its
@@ -2373,7 +2378,68 @@ button {
   height: var(--statusbar-h);
 }
 .console--expanded {
-  height: 120px;
+  height: 240px;
+  transition: none;
+}
+.console__resize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: ns-resize;
+  z-index: 1;
+}
+.console {
+  position: relative;
+}
+.console__command {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-top: 1px solid var(--border);
+}
+.console__command-icon {
+  color: var(--muted-foreground);
+  flex: none;
+}
+.console__command-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.console__clear-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.console__row--expandable {
+  cursor: pointer;
+}
+.console__row--expandable:hover {
+  background: var(--accent);
+}
+.console__row-source--eval {
+  color: var(--signal-fg);
+}
+.console__detail {
+  margin: 0 0 4px 0;
+  padding: 6px 10px 6px 60px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .console__header {
   flex: 0 0 auto;
