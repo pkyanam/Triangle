@@ -14,6 +14,7 @@ import type {
   ShaderStage,
   ShaderValidationResult,
   TransformMode,
+  ViewMode,
 } from '@triangle/shared';
 import {
   describeScene as inspectScene,
@@ -80,9 +81,14 @@ export class PreviewRuntime {
   // Stage 5.75: engine UX state.
   private readonly selection: SelectionHighlight;
   private selectedUuid: string | null = null;
-  private viewMode: 'lit' | 'wireframe' = 'lit';
+  private viewMode: ViewMode = 'lit';
   private stepFrames = 0;
   private readonly wireframeSnapshot = new Map<string, boolean>();
+  // Debug view-mode state (ADR 0021): original materials backed up while an
+  // override material is applied; wireframe overlays tracked for removal.
+  private readonly materialBackup = new Map<string, THREE.Material | THREE.Material[]>();
+  private readonly overlays = new Set<THREE.LineSegments>();
+  private overrideMaterials: Partial<Record<ViewMode, THREE.Material>> = {};
 
   // On-canvas transform gizmo state (ADR 0021).
   private transformMode: TransformMode = 'select';
@@ -205,7 +211,7 @@ export class PreviewRuntime {
       this.module = next;
       const ctx = this.setupContext();
       this.moduleState = (await next.setup?.(ctx)) ?? undefined;
-      this.applyWireframe(this.viewMode === 'wireframe');
+      this.applyViewMode(this.viewMode);
       this.restoreSelection();
       this.emitStatus({ phase: 'running' });
       this.options.onSceneChanged?.();
@@ -320,14 +326,15 @@ export class PreviewRuntime {
     this.transform.attach(obj);
   }
 
-  /** Toggle wireframe view on all author materials. */
-  setViewMode(mode: 'lit' | 'wireframe'): void {
+  /** Set the viewport debug view mode (lit/wireframe/normals/depth/overdraw/uv). */
+  setViewMode(mode: ViewMode): void {
+    this.clearViewMode();
     this.viewMode = mode;
-    this.applyWireframe(mode === 'wireframe');
+    this.applyViewMode(mode);
   }
 
   /** Current view mode. */
-  getViewMode(): 'lit' | 'wireframe' {
+  getViewMode(): ViewMode {
     return this.viewMode;
   }
 
@@ -376,6 +383,7 @@ export class PreviewRuntime {
     this.transform.detach();
     this.transform.dispose();
     this.selection.dispose();
+    for (const mat of Object.values(this.overrideMaterials)) mat?.dispose();
     this.renderer.dispose();
   }
 
@@ -414,6 +422,11 @@ export class PreviewRuntime {
     this.moduleState = undefined;
     // Detach before clearing — the attached object is about to be removed.
     this.transform?.detach();
+    // Author objects (and their overlay children) are being destroyed; drop the
+    // per-mesh view-mode tracking so it doesn't reference disposed objects.
+    this.overlays.clear();
+    this.materialBackup.clear();
+    this.wireframeSnapshot.clear();
     this.clearAuthorObjects();
     if (this.moduleUrl) {
       URL.revokeObjectURL(this.moduleUrl);
@@ -530,24 +543,99 @@ export class PreviewRuntime {
     this.syncTransformAttachment(obj);
   }
 
-  private applyWireframe(enable: boolean): void {
+  /** Iterate author meshes (skipping runtime-owned/persistent objects). */
+  private forEachAuthorMesh(fn: (mesh: THREE.Mesh) => void): void {
     this.scene.traverse((obj) => {
       if (this.persistent.has(obj)) return;
       const mesh = obj as THREE.Mesh;
-      const materials = mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
-      for (const material of materials) {
-        const m = material as THREE.Material & { wireframe?: boolean; uuid: string };
-        if (enable) {
-          if (!this.wireframeSnapshot.has(m.uuid)) {
-            this.wireframeSnapshot.set(m.uuid, m.wireframe ?? false);
-          }
-          m.wireframe = true;
-        } else {
-          m.wireframe = this.wireframeSnapshot.get(m.uuid) ?? false;
-        }
-      }
+      if ((mesh as THREE.Mesh).isMesh) fn(mesh);
     });
-    if (!enable) this.wireframeSnapshot.clear();
+  }
+
+  /** Lazily build (and cache) the shared override material for a debug mode. */
+  private overrideFor(mode: ViewMode): THREE.Material | null {
+    if (this.overrideMaterials[mode]) return this.overrideMaterials[mode] ?? null;
+    let mat: THREE.Material | null = null;
+    if (mode === 'normals') mat = new THREE.MeshNormalMaterial();
+    else if (mode === 'depth') mat = new THREE.MeshDepthMaterial();
+    else if (mode === 'overdraw')
+      mat = new THREE.MeshBasicMaterial({
+        color: 0x3a86ff,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+    else if (mode === 'uv')
+      mat = new THREE.ShaderMaterial({
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader: 'varying vec2 vUv; void main(){ gl_FragColor = vec4(fract(vUv), 0.0, 1.0); }',
+      });
+    if (mat) this.overrideMaterials[mode] = mat;
+    return mat;
+  }
+
+  /** Apply the given view mode to the live author scene. */
+  private applyViewMode(mode: ViewMode): void {
+    if (mode === 'lit') return;
+    if (mode === 'wireframe') {
+      this.forEachAuthorMesh((mesh) => {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const material of materials) {
+          const m = material as THREE.Material & { wireframe?: boolean; uuid: string };
+          if (!this.wireframeSnapshot.has(m.uuid)) this.wireframeSnapshot.set(m.uuid, m.wireframe ?? false);
+          m.wireframe = true;
+        }
+      });
+      return;
+    }
+    if (mode === 'wireframe-overlay') {
+      this.forEachAuthorMesh((mesh) => {
+        if (!mesh.geometry) return;
+        const overlay = new THREE.LineSegments(
+          new THREE.WireframeGeometry(mesh.geometry),
+          new THREE.LineBasicMaterial({ color: 0x8ab4ff, transparent: true, opacity: 0.4 }),
+        );
+        overlay.name = '__triangle_wire_overlay';
+        mesh.add(overlay);
+        this.overlays.add(overlay);
+      });
+      return;
+    }
+    const override = this.overrideFor(mode);
+    if (!override) return;
+    this.forEachAuthorMesh((mesh) => {
+      this.materialBackup.set(mesh.uuid, mesh.material);
+      mesh.material = override;
+    });
+  }
+
+  /** Restore the scene to lit (remove overrides/overlays, clear wireframe). */
+  private clearViewMode(): void {
+    // Restore swapped materials.
+    this.forEachAuthorMesh((mesh) => {
+      const backup = this.materialBackup.get(mesh.uuid);
+      if (backup) mesh.material = backup;
+    });
+    this.materialBackup.clear();
+    // Remove wireframe overlays.
+    for (const overlay of this.overlays) {
+      overlay.parent?.remove(overlay);
+      overlay.geometry.dispose();
+      (overlay.material as THREE.Material).dispose();
+    }
+    this.overlays.clear();
+    // Clear wireframe flags.
+    if (this.wireframeSnapshot.size > 0) {
+      this.forEachAuthorMesh((mesh) => {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const material of materials) {
+          const m = material as THREE.Material & { wireframe?: boolean; uuid: string };
+          if (this.wireframeSnapshot.has(m.uuid)) m.wireframe = this.wireframeSnapshot.get(m.uuid) ?? false;
+        }
+      });
+      this.wireframeSnapshot.clear();
+    }
   }
 }
 

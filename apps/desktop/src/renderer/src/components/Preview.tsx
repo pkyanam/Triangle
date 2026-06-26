@@ -15,7 +15,7 @@ import {
   Scaling,
   View,
 } from 'lucide-react';
-import type { PreviewStats, PreviewStatus, TransformMode } from '@triangle/shared';
+import type { PreviewStats, PreviewStatus, TransformMode, ViewMode } from '@triangle/shared';
 import { attachPreview, getRuntime, loadPreviewModule, reloadPreview, stepFrame } from '../preview/host.js';
 import {
   getActiveTransformMode,
@@ -27,6 +27,16 @@ import { ViewportHud } from './ViewportHud.js';
 import { ViewportGizmo } from './ViewportGizmo.js';
 import { ASSET_DRAG_MIME } from './AssetBrowser.js';
 import { toast } from './ui/toast.js';
+
+const VIEW_MODES: { id: ViewMode; label: string }[] = [
+  { id: 'lit', label: 'Lit' },
+  { id: 'wireframe', label: 'Wireframe' },
+  { id: 'wireframe-overlay', label: 'Wireframe overlay' },
+  { id: 'normals', label: 'Normals' },
+  { id: 'depth', label: 'Depth' },
+  { id: 'overdraw', label: 'Overdraw' },
+  { id: 'uv', label: 'UV' },
+];
 
 interface PreviewProps {
   /** Entry module source; reloading it hot-reloads the scene. */
@@ -47,7 +57,7 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
   const [grid, setGrid] = useState(() => getRuntime().isGridVisible());
   const [hud, setHud] = useState(true);
   const [gizmo, setGizmo] = useState(true);
-  const [viewMode, setViewModeState] = useState<'lit' | 'wireframe'>(() => getActiveViewMode());
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => getActiveViewMode());
   const [toolMode, setToolMode] = useState<TransformMode>(() => getActiveTransformMode());
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<PreviewStats | null>(null);
@@ -97,8 +107,7 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
     a.download = `triangle-${Date.now()}.png`;
     a.click();
   };
-  const toggleViewMode = (): void => {
-    const next = viewMode === 'lit' ? 'wireframe' : 'lit';
+  const changeViewMode = (next: ViewMode): void => {
     setActiveViewMode(next);
     setViewModeState(next);
   };
@@ -160,13 +169,18 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
         </div>
         <div className="preview__toolbar-spacer" />
         <div className="toolbar-group" style={{ display: 'flex', gap: 2 }}>
-          <button
-            className={`toolbar-btn${viewMode === 'wireframe' ? ' toolbar-btn--active' : ''}`}
-            onClick={toggleViewMode}
-            title="Toggle wireframe"
+          <select
+            className={`preview__viewmode${viewMode !== 'lit' ? ' preview__viewmode--active' : ''}`}
+            value={viewMode}
+            onChange={(e) => changeViewMode(e.target.value as ViewMode)}
+            title="View mode"
           >
-            <View size={14} />
-          </button>
+            {VIEW_MODES.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
           <button
             className={`toolbar-btn${grid ? ' toolbar-btn--active' : ''}`}
             onClick={toggleGrid}

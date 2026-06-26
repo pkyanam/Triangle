@@ -851,23 +851,37 @@ button {
 .gizmo {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  top: 12px;
   z-index: var(--z-gizmo);
-  width: 56px;
-  height: 56px;
-  pointer-events: none;
+  width: 76px;
+  height: 76px;
 }
-.gizmo__axis {
-  stroke-width: 2;
-  stroke-linecap: round;
+.gizmo__cube {
+  width: 76px;
+  height: 76px;
+  cursor: pointer;
 }
-.gizmo__label {
-  font-family: var(--font-num);
-  font-size: 9px;
-  font-weight: 600;
-  fill: var(--foreground);
-  text-anchor: middle;
-  dominant-baseline: central;
+.gizmo__cube canvas {
+  display: block;
+}
+.gizmo__home {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--background) 70%, transparent);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.gizmo__home:hover {
+  color: var(--foreground);
+  border-color: var(--border-strong);
 }
 
 /* ---------- Preview ---------- */
@@ -3211,6 +3225,29 @@ button {
   color: var(--signal-fg);
 }
 
+/* ---------- Preview view-mode select ---------- */
+.preview__viewmode {
+  height: 24px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  color: var(--muted-foreground);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.preview__viewmode:hover {
+  border-color: var(--border-strong);
+  color: var(--foreground);
+}
+
+.preview__viewmode--active {
+  color: var(--signal-fg);
+  border-color: var(--signal-border);
+}
+
 /* ---------- Asset Browser panel ---------- */
 .asset-browser {
   display: flex;
@@ -3355,6 +3392,109 @@ button {
 
 .asset-browser__empty-cta:hover {
   border-color: var(--ring);
+}
+
+/* ---------- Performance panel ---------- */
+.perf {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.perf__section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-bottom: 6px;
+}
+
+.perf__big {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  color: var(--signal-fg);
+}
+
+.perf__graph {
+  width: 100%;
+  height: 64px;
+  display: block;
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+.perf__graph path {
+  fill: color-mix(in srgb, var(--signal) 22%, transparent);
+  stroke: var(--signal-strong);
+  stroke-width: 1.2;
+}
+
+.perf__hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 70px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+.perf__hist-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 3px;
+}
+
+.perf__hist-bar {
+  width: 100%;
+  min-height: 1px;
+  background: var(--signal-strong);
+  border-radius: 2px 2px 0 0;
+}
+
+.perf__hist-label {
+  font-size: 9px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.perf__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.perf__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+  border: 1px solid var(--border);
+}
+
+.perf__metric-label {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+
+.perf__metric-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: var(--foreground);
 }
 
 /* ---------- Toasts ---------- */

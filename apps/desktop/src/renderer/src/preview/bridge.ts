@@ -5,6 +5,7 @@ import type {
   ShaderStage,
   ShaderValidationResult,
   TransformMode,
+  ViewMode,
 } from '@triangle/shared';
 import type { PreviewRuntime } from '@triangle/preview-runtime';
 
@@ -129,14 +130,14 @@ export function getActiveSelection(): string | null {
   return activeRuntime.getSelection();
 }
 
-/** Toggle between lit and wireframe view modes. */
-export function setActiveViewMode(mode: 'lit' | 'wireframe'): void {
+/** Set the viewport debug view mode (lit/wireframe/normals/depth/overdraw/uv). */
+export function setActiveViewMode(mode: ViewMode): void {
   if (!activeRuntime) throw new NoPreviewError();
   activeRuntime.setViewMode(mode);
 }
 
 /** Current view mode from the active runtime. */
-export function getActiveViewMode(): 'lit' | 'wireframe' {
+export function getActiveViewMode(): ViewMode {
   if (!activeRuntime) return 'lit';
   return activeRuntime.getViewMode();
 }

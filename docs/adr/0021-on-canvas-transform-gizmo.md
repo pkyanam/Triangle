@@ -1,4 +1,4 @@
-# ADR 0021 — On-canvas transform gizmo and direct manipulation
+# ADR 0021 — Interactive viewport: transform gizmo, view modes, orientation cube
 
 - **Status:** Accepted
 - **Date:** 2026-06-26
@@ -36,6 +36,22 @@ fields or the agent.
 6. **Renderer-local bridge helpers only.** `setActiveTransformMode` /
    `getActiveTransformMode` join the existing engine-UX helpers in
    `preview/bridge.ts`. No IPC contract or main-process change.
+7. **Widen view modes to a `ViewMode` union** (`lit | wireframe |
+   wireframe-overlay | normals | depth | overdraw | uv`). The runtime backs up
+   original materials and applies a shared override material (normals/depth/uv/
+   overdraw) or adds tracked `WireframeGeometry` overlays; restoring returns the
+   scene to lit. The preview toolbar gains a view-mode dropdown.
+8. **Replace the SVG axis cross with an interactive orientation cube.** A small
+   standalone three.js renderer mirrors the main camera's orientation; clicking a
+   face snaps the main camera to that orthographic view (axis-aligned cube ⇒ the
+   local face normal is the world axis). A home affordance snaps to iso. Face
+   tints come from the `--gizmo-*` theme variables. The component keeps the name
+   `ViewportGizmo`.
+9. **Detailed Performance panel** (opt-in dock panel) reads a host-level stats
+   fan-out (`subscribeStats`) so it works independently of the mounted Preview,
+   keeps a 320-sample FPS history + frame-time histogram, and polls the richer
+   `performanceSnapshot` for GPU estimate/programs. The compact in-viewport HUD
+   stays as-is.
 
 ## Consequences
 

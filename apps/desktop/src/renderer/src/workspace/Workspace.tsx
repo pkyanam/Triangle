@@ -13,6 +13,7 @@ import { AgentPanel } from '../components/AgentPanel.js';
 import { Outliner } from '../components/Outliner.js';
 import { Inspector } from '../components/Inspector.js';
 import { AssetBrowser } from '../components/AssetBrowser.js';
+import { PerformancePanel } from '../components/PerformancePanel.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
@@ -24,7 +25,7 @@ const LAYOUT_KEY_PREFIX = 'triangle.layout.v3';
 const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
-export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector'] as const;
+export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance'] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 export type PanelsOpen = Record<PanelId, boolean>;
 
@@ -50,6 +51,7 @@ const WIDTHS: Record<PanelId, number> = {
   agent: 400,
   outliner: 230,
   inspector: 320,
+  performance: 300,
 };
 
 const MIN_WIDTHS: Record<PanelId, number> = {
@@ -60,6 +62,7 @@ const MIN_WIDTHS: Record<PanelId, number> = {
   agent: 300,
   outliner: 170,
   inspector: 260,
+  performance: 240,
 };
 
 // --- Panel components: rendered by dockview, read live state from context. ---
@@ -145,6 +148,18 @@ function InspectorPanel(_props: IDockviewPanelProps): React.JSX.Element {
   );
 }
 
+function PerformanceDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
+  return (
+    <div className="tpanel">
+      <ErrorBoundary title="Performance panel failed">
+        <div className="tpanel__body">
+          <PerformancePanel />
+        </div>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
 const COMPONENTS = {
   explorer: ExplorerPanel,
   assets: AssetsPanel,
@@ -153,6 +168,7 @@ const COMPONENTS = {
   agent: AgentDockPanel,
   outliner: OutlinerPanel,
   inspector: InspectorPanel,
+  performance: PerformanceDockPanel,
 };
 
 const TITLES: Record<string, string> = {
@@ -163,6 +179,7 @@ const TITLES: Record<string, string> = {
   agent: 'Agent',
   outliner: 'Outliner',
   inspector: 'Inspector',
+  performance: 'Performance',
 };
 
 /** Build the new engine default layout: left rail, hero viewport, right rail. */

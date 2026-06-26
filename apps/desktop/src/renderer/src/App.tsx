@@ -40,6 +40,7 @@ export function App(): React.JSX.Element {
     agent: true,
     outliner: true,
     inspector: true,
+    performance: false,
   });
   const workspaceRef = useRef<WorkspaceHandle>(null);
 

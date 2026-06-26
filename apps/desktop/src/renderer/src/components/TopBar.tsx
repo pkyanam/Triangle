@@ -5,6 +5,7 @@ import {
   Check,
   Code2,
   FolderTree,
+  Gauge,
   LayoutPanelLeft,
   LayoutPanelTop,
   LayoutTemplate,
@@ -17,6 +18,7 @@ import {
   View,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
+import type { ViewMode } from '@triangle/shared';
 import type { PanelId, PanelsOpen } from '../workspace/Workspace.js';
 import { ProjectMenu } from './ProjectMenu.js';
 import logoUrl from '../assets/logo.svg';
@@ -41,6 +43,7 @@ const PANEL_MENU: { id: PanelId; label: string; icon: ComponentType<{ size?: num
   { id: 'preview', label: 'Preview', icon: Monitor },
   { id: 'inspector', label: 'Inspector', icon: Search },
   { id: 'agent', label: 'Agent', icon: Bot },
+  { id: 'performance', label: 'Performance', icon: Gauge },
 ];
 
 const TABS_MENU: { value: 'horizontal' | 'vertical'; label: string; icon: ComponentType<{ size?: number }> }[] = [
@@ -60,7 +63,7 @@ export function TopBar({
 }: TopBarProps): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [tabsMenuOpen, setTabsMenuOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'lit' | 'wireframe'>(() => getActiveViewMode());
+  const [viewMode, setViewMode] = useState<ViewMode>(() => getActiveViewMode());
   const menuRef = useRef<HTMLDivElement>(null);
   const tabsMenuRef = useRef<HTMLDivElement>(null);
 

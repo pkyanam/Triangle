@@ -1,5 +1,5 @@
 import { createPreviewRuntime, type PreviewRuntime } from '@triangle/preview-runtime';
-import type { PreviewStats, PreviewStatus } from '@triangle/shared';
+import type { PreviewStats, PreviewStatus, ViewMode } from '@triangle/shared';
 import { emitSceneChanged, setActiveRuntime } from './bridge.js';
 
 /**
@@ -31,6 +31,18 @@ let subscriber: PreviewSubscriber | null = null;
 let lastStatus: PreviewStatus = { phase: 'idle' };
 let loadedSource: string | null = null;
 
+/** Stats fan-out so panels (e.g. Performance) can read the stream independently
+ * of the single mounted Preview subscriber. */
+const statsListeners = new Set<(stats: PreviewStats) => void>();
+let lastStats: PreviewStats | null = null;
+
+/** Subscribe to the preview stats stream. Replays the latest sample immediately. */
+export function subscribeStats(cb: (stats: PreviewStats) => void): () => void {
+  statsListeners.add(cb);
+  if (lastStats) cb(lastStats);
+  return () => statsListeners.delete(cb);
+}
+
 /** Lazily create the singleton canvas + runtime. Idempotent. */
 function ensure(): { holder: HTMLDivElement; runtime: PreviewRuntime } {
   if (holder && runtime) return { holder, runtime };
@@ -45,7 +57,11 @@ function ensure(): { holder: HTMLDivElement; runtime: PreviewRuntime } {
       lastStatus = s;
       subscriber?.onStatus?.(s);
     },
-    onStats: (s) => subscriber?.onStats?.(s),
+    onStats: (s) => {
+      lastStats = s;
+      subscriber?.onStats?.(s);
+      for (const listener of statsListeners) listener(s);
+    },
     onSceneChanged: () => emitSceneChanged(),
   });
   // Register once for the app's lifetime; the runtime outlives any single mount.
@@ -106,12 +122,12 @@ export function selectObject(target: string | null): void {
 }
 
 /** Current view mode from the persistent runtime. */
-export function getViewMode(): 'lit' | 'wireframe' {
+export function getViewMode(): ViewMode {
   return ensure().runtime.getViewMode();
 }
 
-/** Set the runtime view mode (lit/wireframe). */
-export function setViewMode(mode: 'lit' | 'wireframe'): void {
+/** Set the runtime view mode. */
+export function setViewMode(mode: ViewMode): void {
   ensure().runtime.setViewMode(mode);
 }
 
