@@ -313,29 +313,52 @@ function parseShaderLog(log: string): ShaderDiagnostic[] {
 }
 
 /**
- * Compile a GLSL shader against the live GL context without touching the scene.
- * Returns structured diagnostics derived from the driver's info log.
+ * Lazily create (and cache) an offscreen WebGL2 context used solely for GLSL
+ * shader compilation validation. This decouples `validateShader` from the live
+ * renderer's context so it works identically on both the WebGPU and WebGL
+ * backends — WebGPU has no GL context at all, and the live WebGL context may be
+ * busy. The offscreen context preserves the exact GLSL ES 3.00 dialect and info
+ * log format the tool has always returned. See ADR 0026.
  */
-export function validateShader(
-  renderer: TriangleRenderer,
-  stage: ShaderStage,
-  source: string,
-): ShaderValidationResult {
-  const gl = renderer.getContext?.();
+let validationGl: WebGL2RenderingContext | null = null;
+let validationUnavailable = false;
+
+function getValidationContext(): WebGL2RenderingContext | null {
+  if (validationGl) return validationGl;
+  if (validationUnavailable) return null;
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2');
+    if (gl) {
+      validationGl = gl;
+      return gl;
+    }
+  } catch {
+    /* fall through */
+  }
+  validationUnavailable = true;
+  return null;
+}
+
+/**
+ * Compile a GLSL shader against a dedicated offscreen WebGL2 context without
+ * touching the scene or the live renderer. Returns structured diagnostics
+ * derived from the driver's info log. Works on both WebGPU and WebGL backends.
+ */
+export function validateShader(stage: ShaderStage, source: string): ShaderValidationResult {
+  const gl = getValidationContext();
   if (!gl) {
     return {
       ok: false,
       stage,
-      dialect: 'no GL context',
-      log: 'No WebGL context available for shader validation.',
+      dialect: 'unavailable',
+      log: 'No WebGL2 context available for shader validation.',
       diagnostics: [
-        { line: 1, severity: 'error', message: 'No WebGL context available for shader validation.' },
+        { line: 1, severity: 'error', message: 'No WebGL2 context available for shader validation.' },
       ],
     };
   }
-  const isWebGL2 =
-    typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
-  const dialect = isWebGL2 ? 'WebGL2 (GLSL ES 3.00)' : 'WebGL1 (GLSL ES 1.00)';
+  const dialect = 'WebGL2 (GLSL ES 3.00)';
 
   const shader = gl.createShader(stage === 'vertex' ? gl.VERTEX_SHADER : gl.FRAGMENT_SHADER);
   if (!shader) {

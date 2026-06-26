@@ -288,9 +288,9 @@ export class PreviewRuntime {
     return inspectPerformance(this.renderer, this.scene, this.lastFps);
   }
 
-  /** Compile a GLSL shader against the live GL context (no scene mutation). */
+  /** Compile a GLSL shader via the offscreen WebGL2 validation context (no scene mutation). */
   validateShader(stage: ShaderStage, source: string): ShaderValidationResult {
-    return inspectShader(this.renderer, stage, source);
+    return inspectShader(stage, source);
   }
 
   /** Describe a single object by name or uuid, with full detail for the Inspector. */
