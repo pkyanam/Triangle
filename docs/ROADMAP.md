@@ -16,6 +16,7 @@ Condensed from the PRD (v1.0). Each stage produces usable value and enables the 
 | 5.75 | Game-Engine Visual Overhaul (Outliner, Inspector, HUD, Console) | ✅ Done |
 | 6 | Post-Prototype Hardening & Web Path | ✅ Done |
 | 7 | Engine-Credibility UI Overhaul | ✅ Done |
+| 8 | WebGPU Renderer Migration | ✅ Done |
 
 ## Stage 0 — Foundations & Architecture
 
@@ -243,6 +244,44 @@ See ADRs [`0021`](adr/0021-on-canvas-transform-gizmo.md),
 [`0023`](adr/0023-integrations-hub.md),
 [`0024`](adr/0024-inspector-apply-to-source-and-outliner-ops.md),
 [`0025`](adr/0025-robotics-urdf-importer.md).
+
+## Stage 8 — WebGPU Renderer Migration
+
+Migrate the preview runtime from `THREE.WebGLRenderer` to
+`THREE.WebGPURenderer` with automatic feature detection and graceful fallback
+to WebGL. Predominantly `@triangle/preview-runtime` changes; no IPC contract
+or main-process changes.
+
+- [x] **Renderer abstraction layer** (`renderer-type.ts`): `TriangleRenderer`
+      union type + `TriangleRendererInfo` interface; `inspect.ts` and
+      `runtime.ts` typed against the abstraction.
+- [x] **Feature-detecting factory** (`renderer-factory.ts`): `createRenderer`
+      probes `navigator.gpu`, constructs `WebGPURenderer` (async init) or
+      falls back to `WebGLRenderer`. Returns `{ renderer, backend, ready }`.
+- [x] **Deferred renderer creation + source-based backend selection**: the
+      renderer is created on the first `loadModule` via `ensureRenderer`,
+      which scans the module source for `ShaderMaterial`/`RawShaderMaterial`
+      and forces WebGL for GLSL modules (the WebGPU backend has no
+      ShaderMaterial→node mapping in three 0.184). Node-material modules get
+      WebGPU when available.
+- [x] **Shader validation via offscreen WebGL2 context**: `validateShader`
+      compiles GLSL against a cached offscreen `WebGL2RenderingContext`,
+      decoupled from the live renderer. Works identically on both backends.
+- [x] **UV debug view via procedural texture**: the `uv` view mode uses a
+      `MeshBasicMaterial` + procedural `DataTexture` instead of a raw-GLSL
+      `ShaderMaterial`, so it works on both backends.
+- [x] **Stats/info normalization**: `performanceSnapshot` reads the program
+      count from `info.programs.length` (WebGL) or `info.memory.programs`
+      (WebGPU); `describeScene` accepts a nullable renderer.
+- [x] **Backend indicator in UI**: the StatusBar shows the live runtime
+      backend (WebGPU/WebGL) via `getPreviewBackend()`, re-reading once stats
+      start flowing since the backend is decided lazily.
+- [x] **Tests**: `renderer.test.ts` covers `createRenderer` (WebGPU attempt +
+      WebGL fallback) and `validateShader` (unavailable, valid, failing) in a
+      headless Node environment.
+
+See [`STAGE-8.md`](STAGE-8.md) and
+[ADR `0026`](adr/0026-webgpu-renderer-migration.md).
 
 ## Stages 4–6
 

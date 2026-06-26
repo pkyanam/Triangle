@@ -37,6 +37,8 @@ high-fidelity live Three.js preview with a harness-agnostic agent layer.
 
 - 🔺 **Live Three.js preview** — hot-reloads from local files, with orbit controls,
   pause/grid toggles, screenshots, and an FPS / draw-call / triangle-count HUD.
+  Automatically uses **WebGPU** when available (with a graceful WebGL fallback);
+  GLSL `ShaderMaterial` modules transparently run on the WebGL backend.
 - ✍️ **Monaco editor** — JS / TS / GLSL with syntax highlighting, a dirty/save model,
   and a `suppressWatch` save path that hot-reloads without churn.
 - 🤖 **Harness-agnostic agents** — Claude Agent SDK, Codex (via the Codex App Server),
@@ -148,13 +150,16 @@ tools from its own config.
 | 5.5 | Share, snapshot & scope (standalone HTML, snapshots, per-project layout) | ✅ |
 | 5.75 | Game-engine visual overhaul (Outliner, Inspector, viewport HUD, Console) | ✅ Done |
 | 6 | Post-prototype hardening & web path | ✅ |
+| 7 | Engine-credibility UI overhaul (gizmo, asset browser, menu bar, settings hub) | ✅ Done |
+| 8 | WebGPU renderer migration (feature detection, GLSL fallback, offscreen shader validation) | ✅ Done |
 
 The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Stage write-ups:
 [Stage 1](docs/STAGE-1.md) · [Stage 2](docs/STAGE-2.md) ·
 [Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md) ·
 [Stage 4](docs/STAGE-4.md) · [Stage 4.5](docs/STAGE-4.5-devin-acp.md) ·
 [Stage 5](docs/STAGE-5.md) · [Stage 5.5](docs/STAGE-5.5.md) ·
-[Stage 5.75](docs/STAGE-5.75.md) · [Stage 6](docs/STAGE-6.md) (complete).
+[Stage 5.75](docs/STAGE-5.75.md) · [Stage 6](docs/STAGE-6.md) ·
+[Stage 8](docs/STAGE-8.md) (complete).
 For effective prompting, see [`docs/PROMPTING.md`](docs/PROMPTING.md).
 
 ## Architecture
