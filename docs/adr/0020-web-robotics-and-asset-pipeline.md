@@ -29,8 +29,9 @@ We added a dedicated workspace package `apps/web`. It is a static Vite site that
 We introduced OAuth support so Triangle can act on behalf of a Hugging Face user when calling Spaces and the Inference API. The flow uses the HF device-code OAuth flow, which is well suited to a desktop app without a web-hosted redirect URL.
 
 - `HuggingFaceOAuth` in `packages/integrations/src/hf-oauth.ts` implements the device-code flow, opens the browser, and polls for the access token.
-- The access token is persisted as `hfOAuthToken` / `hfOAuthExpiresAt` in the user config; `hfOAuthClientId` can be set via `HF_OAUTH_CLIENT_ID` or in the UI.
+- The access token is persisted as `hfOAuthToken` / `hfOAuthExpiresAt` in the user config; `hfOAuthClientId` can be set via `HF_OAUTH_CLIENT_ID`, in the UI, or baked into `apps/desktop/src/main/config.ts` as `DEFAULT_HF_OAUTH_CLIENT_ID`.
 - `HuggingFaceSpacesClient` in `packages/integrations/src/hf-spaces.ts` calls arbitrary Space APIs (`/api/predict` or `/api/run/{route}`) with the token.
+- We use a **public OAuth app** (no client secret). A client id is safe to embed in a desktop binary; a client secret is not.
 - A new agent tool `hf_call_space` exposes the Spaces client to agents.
 - The existing three-tool workflow now prefers the OAuth token and falls back to API tokens:
   - `hf_generate_3d_asset` — calls a Hugging Face Space or Inference Endpoint and returns a model URL.
@@ -63,6 +64,7 @@ The agent tool `triangle_robotics_snippet` exposes the generator. This is scaffo
 
 - The web build is a credible shareable output. It does not yet include the editor UI; it is a "player" for a Triangle project.
 - The HF pipeline is additive and does not affect the existing procedural workflow. Users can mix generated assets with hand-written code.
+- OAuth uses a public app (client-id-only) so the client id can be baked into the binary, but a client secret cannot. Users who need organization-bound apps or extra scopes can override `hfOAuthClientId` in settings.
 - Robotics remains a scaffold: the types and snippets are ready, but actual physics simulation requires a later integration with Rapier.
 - Error boundaries improve resilience but do not log to a backend. The `onError` prop is available for future telemetry.
 

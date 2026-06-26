@@ -8,7 +8,7 @@
  */
 
 import { HuggingFaceOAuth } from '@triangle/integrations';
-import { loadAgentSettings, saveAgentSettings } from './config.js';
+import { DEFAULT_HF_OAUTH_CLIENT_ID, loadAgentSettings, saveAgentSettings } from './config.js';
 
 export interface HFOAuthDependencies {
   /** Open a URL in the user's default browser. */
@@ -22,7 +22,12 @@ export async function hfConnect(
   req: { clientId?: string; scope?: string },
 ): Promise<{ ok: boolean; username?: string; expiresAt?: number; error?: string }> {
   const settings = await loadAgentSettings();
-  const clientId = req.clientId?.trim() ?? settings.hfOAuthClientId ?? undefined;
+  const clientId =
+    req.clientId?.trim() ??
+    settings.hfOAuthClientId ??
+    (DEFAULT_HF_OAUTH_CLIENT_ID && !DEFAULT_HF_OAUTH_CLIENT_ID.includes('PLACEHOLDER')
+      ? DEFAULT_HF_OAUTH_CLIENT_ID
+      : undefined);
   if (!clientId) {
     return {
       ok: false,
@@ -70,8 +75,13 @@ export async function hfStatus(): Promise<{ connected: boolean; username?: strin
   const expired = settings.hfOAuthExpiresAt ? Date.now() >= settings.hfOAuthExpiresAt : false;
   if (expired) return { connected: false, expiresAt: settings.hfOAuthExpiresAt };
 
+  const clientId =
+    settings.hfOAuthClientId ??
+    (DEFAULT_HF_OAUTH_CLIENT_ID && !DEFAULT_HF_OAUTH_CLIENT_ID.includes('PLACEHOLDER')
+      ? DEFAULT_HF_OAUTH_CLIENT_ID
+      : 'unknown');
   try {
-    const oauth = new HuggingFaceOAuth({ clientId: settings.hfOAuthClientId ?? 'unknown' });
+    const oauth = new HuggingFaceOAuth({ clientId });
     const userInfo = await oauth.getUserInfo(token);
     return {
       connected: true,

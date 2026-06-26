@@ -113,6 +113,12 @@ paths) are editable in-app and persist to the user config. See
 [`docs/STAGE-2.md`](docs/STAGE-2.md#configuration-credentials) for the full precedence and
 key list.
 
+Hugging Face integration supports OAuth sign-in (Settings → Configure providers → Hugging
+Face) and falls back to `HF_TOKEN` / `hfToken`. To ship a one-click sign-in experience, set
+`DEFAULT_HF_OAUTH_CLIENT_ID` in `apps/desktop/src/main/config.ts` to a real HF OAuth app
+client id; HF supports public apps with no client secret, so only the client id should be
+baked into the binary.
+
 ## Status & roadmap
 
 | Stage | Theme | Status |

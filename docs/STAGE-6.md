@@ -43,8 +43,9 @@ The desktop app now supports authenticating with Hugging Face via OAuth and call
 - **Existing 3D asset pipeline** (`hf_generate_3d_asset`, `download_3d_asset`, `triangle_import_3d_asset`) now prefers the OAuth token when connected, so private/gated Spaces and Inference Providers can be used.
 
 OAuth configuration:
-- Set `HF_OAUTH_CLIENT_ID` / `TRIANGLE_HF_OAUTH_CLIENT_ID` in the environment, or configure `hfOAuthClientId` in settings.
+- Set `HF_OAUTH_CLIENT_ID` / `TRIANGLE_HF_OAUTH_CLIENT_ID` in the environment, configure `hfOAuthClientId` in settings, or bake a default client id into `apps/desktop/src/main/config.ts` (`DEFAULT_HF_OAUTH_CLIENT_ID`). The placeholder is ignored until replaced with a real HF OAuth app client id.
 - Requested scopes default to `openid profile inference-api`.
+- **Security note**: only the client id can be baked into a desktop app; Hugging Face supports public OAuth apps with no client secret. Never embed a client secret in the binary.
 
 The token is read from `HF_TOKEN` / `TRIANGLE_HF_TOKEN` env vars, or from the `hfToken` field in the agent settings / `config.json`, as a fallback. A token is only required when the tool uses the public HF API; an explicit `endpoint` bypasses the token check.
 
@@ -86,6 +87,6 @@ The agent tool `triangle_robotics_snippet` exposes this generator in the Claude/
 - `packages/robotics/**` — new robotics simulation prep package.
 - `apps/desktop/src/renderer/src/components/ErrorBoundary.tsx` — error boundaries.
 - `apps/desktop/src/renderer/src/workspace/Workspace.tsx`, `App.tsx`, `styles.css` — panel isolation.
-- `apps/desktop/src/renderer/src/components/HarnessConfig.tsx` — HF OAuth UI.
+- `apps/desktop/src/renderer/src/components/ProviderInstancesSettings.tsx` — HF OAuth UI.
 - `packages/integrations/src/hf-oauth.ts`, `hf-spaces.ts` — OAuth + Spaces clients.
 - `docs/STAGE-6.md` (this file).
