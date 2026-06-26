@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Activity, Box, Cpu, Gauge, MousePointer2, Triangle as TriangleIcon } from 'lucide-react';
 import type { PreviewStats, PreviewStatus } from '@triangle/shared';
-import { subscribeStats } from '../preview/host.js';
+import { getPreviewBackend, subscribeStats } from '../preview/host.js';
 
 interface StatusBarProps {
   status: PreviewStatus;
@@ -19,6 +19,13 @@ const STATUS_COLOR: Record<PreviewStatus['phase'], string> = {
 };
 
 function detectRenderer(): string {
+  // Prefer the live runtime backend (WebGPU/WebGL); fall back to a canvas
+  // capability probe if the runtime has not been created yet.
+  try {
+    return getPreviewBackend() === 'webgpu' ? 'WebGPU' : 'WebGL';
+  } catch {
+    /* runtime not yet created */
+  }
   try {
     const c = document.createElement('canvas');
     if (c.getContext('webgl2')) return 'WebGL2';

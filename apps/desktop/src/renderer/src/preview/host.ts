@@ -126,6 +126,11 @@ export function getViewMode(): ViewMode {
   return ensure().runtime.getViewMode();
 }
 
+/** Which GPU backend the persistent runtime is using (`'webgpu'` or `'webgl'`). */
+export function getPreviewBackend(): 'webgpu' | 'webgl' {
+  return ensure().runtime.getBackend();
+}
+
 /** Set the runtime view mode. */
 export function setViewMode(mode: ViewMode): void {
   ensure().runtime.setViewMode(mode);
