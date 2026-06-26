@@ -125,7 +125,10 @@ The Devin CLI harness uses `devin acp` (ACP) and tries `session/new` before prom
 auth, so an already-logged-in user (`devin auth login` or `WINDSURF_API_KEY`) is not
 re-prompted on every prompt. The Devin and generic ACP harnesses advertise the per-run
 Triangle MCP server in `session/new`, exposing the same HF tools and live-preview tools as
-the in-process Claude harness.
+the in-process Claude harness. Because some ACP agents (including `devin acp`) do not yet
+wire up client-supplied `mcpServers`, Triangle also mirrors the standalone MCP server into
+`~/.config/devin/config.json` under `mcpServers.triangle` on startup, so Devin sees the
+tools from its own config.
 
 ## Status & roadmap
 

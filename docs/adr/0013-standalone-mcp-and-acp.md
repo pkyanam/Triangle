@@ -51,6 +51,12 @@ the configured agent over stdio and speaks ACP v1 JSON-RPC:
   in `mcpServers`**, using the run-scoped bridge token and ACP's `EnvVariable[]`
   `env` format, so the agent gets the same domain tools and gated file operations
   as the in-process Claude harness) → `session/prompt`.
+  - **Devin fallback:** several ACP agents (including `devin acp`) do not yet
+    wire up client-supplied `mcpServers` from `session/new`. `McpEndpoint` also
+    mirrors the standalone Triangle MCP server into `~/.config/devin/config.json`
+    under `mcpServers.triangle`, so Devin sees the tools from its own config.
+    The standalone endpoint allows the HF `download_3d_asset` write so the full
+    generate → download → import pipeline can complete over MCP.
 - `session/update` notifications map onto Triangle events (assistant/thought text
   chunks accumulate; `tool_call` / `tool_call_update` become tool traces).
 - Agent→client requests are served from the same `TriangleToolset`:

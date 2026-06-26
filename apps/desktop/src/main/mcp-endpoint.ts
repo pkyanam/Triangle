@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { app } from 'electron';
 import { TRIANGLE_TOOLS, type McpEndpointInfo } from '@triangle/shared';
@@ -49,7 +50,10 @@ export class McpEndpoint {
       // The standalone endpoint is read/inspect + live-manipulation only; it never
       // writes files (those flow through a gated harness run). The exposed domain
       // tools are all stage ≥ 3 and don't call this, so it's a belt-and-braces deny.
-      approveWrite: async () => false,
+      // We make one exception: the HF 3D-asset download tool, which only writes a
+      // binary model file to a user-supplied project path and is needed for the
+      // generate → download → import pipeline to complete over MCP.
+      approveWrite: async ({ tool }) => tool === 'download_3d_asset',
       hfToken: config.hfToken,
       hfOAuthToken: config.hfOAuthToken,
       hfOAuthExpiresAt: config.hfOAuthExpiresAt,
@@ -57,6 +61,7 @@ export class McpEndpoint {
     });
     this.token = this.toolBridge.register(toolset);
     await this.writeDescriptor();
+    await this.syncDevinConfig();
   }
 
   /** The current endpoint descriptor (for the renderer / harness-config UI). */
@@ -96,6 +101,39 @@ export class McpEndpoint {
       await fs.writeFile(this.descriptorPath, `${JSON.stringify(descriptor, null, 2)}\n`, 'utf8');
     } catch (err) {
       console.warn('[mcp-endpoint] failed to write descriptor:', err);
+    }
+  }
+
+  /**
+   * Mirror the standalone MCP descriptor into Devin's config file.
+   * Many ACP agents (including `devin acp`) do not yet wire up client-supplied
+   * `mcpServers` from `session/new`, so they only see tools that are configured in
+   * their own config. We merge the Triangle server under `mcpServers.triangle` and
+   * leave the rest of the user's Devin config untouched. The token is only valid
+   * while this Triangle process is running.
+   */
+  private async syncDevinConfig(): Promise<void> {
+    const { command, args, env } = this.info();
+    const configDir =
+      process.platform === 'win32'
+        ? path.join(process.env['LOCALAPPDATA'] || path.join(os.homedir(), 'AppData', 'Local'), 'devin')
+        : path.join(process.env['XDG_CONFIG_HOME'] || path.join(os.homedir(), '.config'), 'devin');
+    const configPath = path.join(configDir, 'config.json');
+    let existing: Record<string, unknown> = {};
+    try {
+      const raw = await fs.readFile(configPath, 'utf8');
+      existing = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // Config doesn't exist yet or is unreadable — start fresh.
+    }
+    const mcpServers = { ...((existing['mcpServers'] as Record<string, unknown> | undefined) ?? {}) };
+    mcpServers['triangle'] = { command, args, env };
+    const updated = { ...existing, mcpServers };
+    try {
+      await fs.mkdir(configDir, { recursive: true });
+      await fs.writeFile(configPath, `${JSON.stringify(updated, null, 2)}\n`, 'utf8');
+    } catch (err) {
+      console.warn('[mcp-endpoint] failed to sync Devin config:', err);
     }
   }
 
