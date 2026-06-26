@@ -134,11 +134,11 @@ export const devinHarness: AgentHarness = {
           name: 'triangle',
           command: process.execPath,
           args: [ctx.toolBridge.serverScriptPath],
-          env: {
-            ELECTRON_RUN_AS_NODE: '1',
-            TRIANGLE_BRIDGE_PORT: String(ctx.toolBridge.port),
-            TRIANGLE_BRIDGE_TOKEN: ctx.toolBridge.token,
-          },
+          env: [
+            { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
+            { name: 'TRIANGLE_BRIDGE_PORT', value: String(ctx.toolBridge.port) },
+            { name: 'TRIANGLE_BRIDGE_TOKEN', value: ctx.toolBridge.token },
+          ],
         },
       ],
       auth: {

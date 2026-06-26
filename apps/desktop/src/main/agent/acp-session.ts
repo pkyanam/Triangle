@@ -312,7 +312,7 @@ export interface AcpSessionOptions {
   mcpServers?: JsonValue[];
 }
 
-/** Build ACP `mcpServers` from Triangle's standalone endpoint. */
+/** Build ACP `mcpServers` from Triangle's standalone endpoint (env as ACP name/value pairs). */
 function mcpServersFor(ctx: RunContext): JsonValue[] {
   if (!ctx.mcpEndpoint) return [];
   const { command, args, env } = ctx.mcpEndpoint;
@@ -321,7 +321,7 @@ function mcpServersFor(ctx: RunContext): JsonValue[] {
       name: 'triangle',
       command,
       args,
-      env,
+      env: Object.entries(env).map(([name, value]) => ({ name, value })),
     },
   ];
 }
