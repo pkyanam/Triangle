@@ -1,5 +1,6 @@
 export { PreviewRuntime, createPreviewRuntime } from './runtime.js';
 export type { PreviewRuntimeOptions } from './runtime.js';
+export type { TriangleRenderer, TriangleRendererInfo, RendererBackend } from './renderer-type.js';
 export {
   describeScene,
   performanceSnapshot,

@@ -28,6 +28,7 @@ import { SelectionHighlight } from './selection.js';
 import { loadModel, type LoadModelResult, type ModelFormat } from './loaders.js';
 import { applyJoint, buildRobot, type BuiltRobot, type RobotJointInfo } from './robot.js';
 import type { Robot } from '@triangle/robotics';
+import type { TriangleRenderer } from './renderer-type.js';
 
 export interface PreviewRuntimeOptions {
   /** Called whenever the load/run status changes (idle/loading/running/error). */
@@ -53,7 +54,7 @@ export interface PreviewRuntimeOptions {
 export class PreviewRuntime {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
-  readonly renderer: THREE.WebGLRenderer;
+  readonly renderer: TriangleRenderer;
   readonly controls: OrbitControls;
   readonly transform: TransformControls;
   readonly timer = new THREE.Timer();

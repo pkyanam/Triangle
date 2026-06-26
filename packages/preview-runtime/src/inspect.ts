@@ -10,6 +10,7 @@ import type {
   ShaderStage,
   ShaderValidationResult,
 } from '@triangle/shared';
+import type { TriangleRenderer } from './renderer-type.js';
 
 /**
  * Pure inspection helpers over a live Three.js scene/renderer. Kept separate from
@@ -202,7 +203,7 @@ export function summarizeObjectDetail(obj: THREE.Object3D): SceneObjectDetail {
 export function describeScene(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
-  renderer: THREE.WebGLRenderer,
+  renderer: TriangleRenderer,
   persistent: ReadonlySet<THREE.Object3D>,
 ): SceneSummary {
   const cameraSummary: SceneCameraSummary = {
@@ -273,7 +274,7 @@ function estimateGpuMemoryMb(scene: THREE.Scene): number {
 
 /** Snapshot current renderer performance counters plus the supplied FPS. */
 export function performanceSnapshot(
-  renderer: THREE.WebGLRenderer,
+  renderer: TriangleRenderer,
   scene: THREE.Scene,
   fps: number,
 ): PerformanceSnapshot {
@@ -316,11 +317,22 @@ function parseShaderLog(log: string): ShaderDiagnostic[] {
  * Returns structured diagnostics derived from the driver's info log.
  */
 export function validateShader(
-  renderer: THREE.WebGLRenderer,
+  renderer: TriangleRenderer,
   stage: ShaderStage,
   source: string,
 ): ShaderValidationResult {
-  const gl = renderer.getContext();
+  const gl = renderer.getContext?.();
+  if (!gl) {
+    return {
+      ok: false,
+      stage,
+      dialect: 'no GL context',
+      log: 'No WebGL context available for shader validation.',
+      diagnostics: [
+        { line: 1, severity: 'error', message: 'No WebGL context available for shader validation.' },
+      ],
+    };
+  }
   const isWebGL2 =
     typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
   const dialect = isWebGL2 ? 'WebGL2 (GLSL ES 3.00)' : 'WebGL1 (GLSL ES 1.00)';
