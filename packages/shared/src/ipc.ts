@@ -224,12 +224,28 @@ export interface IpcInvokeChannels {
     response: { ok: boolean; result?: string; error?: string };
   };
   /**
-   * Connect Triangle to Hugging Face via OAuth device-code flow. Main starts the
-   * flow, opens the browser, polls for the token, and persists the resulting
-   * access token in the user config. Returns the connected HF username on success.
+   * Start the Hugging Face OAuth device-code flow. Returns the user code and
+   * verification URL immediately so the renderer can display the code while the
+   * user authorizes the device in their browser. Use `hf:poll-token` next.
    */
-  'hf:connect': {
+  'hf:device-code': {
     request: { clientId?: string; scope?: string };
+    response: {
+      ok: boolean;
+      deviceCode?: string;
+      userCode?: string;
+      verificationUri?: string;
+      verificationUriComplete?: string;
+      error?: string;
+    };
+  };
+  /**
+   * Poll the HF token endpoint for the device code returned by `hf:device-code`.
+   * On success the access token is persisted to the user config and the HF username
+   * is returned.
+   */
+  'hf:poll-token': {
+    request: { deviceCode: string; clientId?: string; scope?: string };
     response: { ok: boolean; username?: string; expiresAt?: number; error?: string };
   };
   /** Disconnect Hugging Face OAuth by clearing the persisted token. */
@@ -298,7 +314,8 @@ export const INVOKE_CHANNELS = [
   'preview:result',
   'preview:save-capture',
   'tool:run',
-  'hf:connect',
+  'hf:device-code',
+  'hf:poll-token',
   'hf:disconnect',
   'hf:status',
 ] as const satisfies readonly IpcInvokeChannel[];

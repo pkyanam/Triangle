@@ -44,8 +44,10 @@ export interface ToolContext {
 }
 
 function resolveHfToken(ctx: ToolContext): string | undefined {
-  if (ctx.hfOAuthToken && ctx.hfOAuthExpiresAt && Date.now() < ctx.hfOAuthExpiresAt) {
-    return ctx.hfOAuthToken;
+  if (ctx.hfOAuthToken) {
+    if (!ctx.hfOAuthExpiresAt || Date.now() < ctx.hfOAuthExpiresAt) {
+      return ctx.hfOAuthToken;
+    }
   }
   return ctx.hfToken ?? process.env['HF_TOKEN'];
 }

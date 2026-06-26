@@ -38,14 +38,15 @@ The root shortcut `pnpm build:web` exports `templates/starter` and builds the si
 
 The desktop app now supports authenticating with Hugging Face via OAuth and calling Spaces on the user's behalf:
 
-- **OAuth device-code flow**: `Settings → Configure providers → Hugging Face` lets you enter an OAuth client id and click "Connect with Hugging Face". Main starts the device-code flow, opens the browser, polls for the access token, and persists it in the user config. The token is used for all HF API calls and falls back to `HF_TOKEN` / `hfToken` when absent or expired.
+- **OAuth device-code flow**: `Settings → Configure providers → Hugging Face` lets you paste your own OAuth app client id and click "Connect with Hugging Face". The app starts the device-code flow, shows the 8-character user code in the UI, opens the HF verification page, and polls for the access token. The token is used for all HF API calls and falls back to `HF_TOKEN` / `hfToken` when absent or expired.
 - **New `hf_call_space` agent tool**: call any HF Space API (e.g. `user/space`) with an arbitrary payload. This is surfaced in Claude, MCP, ACP, and the manual tool runner.
 - **Existing 3D asset pipeline** (`hf_generate_3d_asset`, `download_3d_asset`, `triangle_import_3d_asset`) now prefers the OAuth token when connected, so private/gated Spaces and Inference Providers can be used.
+- **Direct OAuth token paste**: users can paste an HF OAuth access token directly into settings instead of using the device-code flow.
 
 OAuth configuration:
-- Set `HF_OAUTH_CLIENT_ID` / `TRIANGLE_HF_OAUTH_CLIENT_ID` in the environment, configure `hfOAuthClientId` in settings, or bake a default client id into `apps/desktop/src/main/config.ts` (`DEFAULT_HF_OAUTH_CLIENT_ID`). The placeholder is ignored until replaced with a real HF OAuth app client id.
-- Requested scopes default to `openid profile inference-api`.
-- **Security note**: only the client id can be baked into a desktop app; Hugging Face supports public OAuth apps with no client secret. Never embed a client secret in the binary.
+- Each user must create their own HF OAuth app at https://huggingface.co/settings/applications/new and paste the Client ID into settings (or set `HF_OAUTH_CLIENT_ID` / `TRIANGLE_HF_OAUTH_CLIENT_ID`). Triangle does not ship a global OAuth app.
+- Requested scopes default to `openid profile inference-api read-repos gated-repos`.
+- **Security note**: only the client id is safe in a desktop app; Hugging Face supports public OAuth apps with no client secret. Never embed a client secret in the binary.
 
 The token is read from `HF_TOKEN` / `TRIANGLE_HF_TOKEN` env vars, or from the `hfToken` field in the agent settings / `config.json`, as a fallback. A token is only required when the tool uses the public HF API; an explicit `endpoint` bypasses the token check.
 

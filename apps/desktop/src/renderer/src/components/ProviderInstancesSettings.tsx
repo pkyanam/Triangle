@@ -91,6 +91,7 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
   const [hfStatus, setHfStatus] = useState<HfStatus>({ connected: false });
   const [hfBusy, setHfBusy] = useState(false);
   const [hfError, setHfError] = useState<string | null>(null);
+  const [hfUserCode, setHfUserCode] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -180,12 +181,25 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
   const connectHf = useCallback(async () => {
     setHfBusy(true);
     setHfError(null);
+    setHfUserCode(null);
     try {
-      const res = await window.triangle.hf.connect({ clientId: settings?.hfOAuthClientId });
+      const device = await window.triangle.hf.deviceCode({ clientId: settings?.hfOAuthClientId });
+      if (!device.ok) {
+        setHfError(device.error ?? 'Hugging Face device-code request failed.');
+        setHfBusy(false);
+        return;
+      }
+      setHfUserCode(device.userCode ?? null);
+
+      const res = await window.triangle.hf.pollToken({
+        deviceCode: device.deviceCode ?? '',
+        clientId: settings?.hfOAuthClientId,
+      });
       if (res.ok) {
         setHfStatus({ connected: true, username: res.username, expiresAt: res.expiresAt });
+        setHfUserCode(null);
       } else {
-        setHfError(res.error ?? 'Hugging Face connection failed.');
+        setHfError(res.error ?? 'Hugging Face token polling failed.');
       }
     } catch (e) {
       setHfError(String(e));
@@ -200,6 +214,7 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
     try {
       await window.triangle.hf.disconnect();
       setHfStatus({ connected: false });
+      setHfUserCode(null);
     } catch (e) {
       setHfError(String(e));
     } finally {
@@ -385,13 +400,13 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
         <CardContent>
           <div className="provider-card__fields">
             <p className="provider-settings__hint">
-              Connect via OAuth to call HF Spaces on your behalf. A manual token below is used as a fallback.
+              You must provide your own Hugging Face OAuth app client id (or a personal access token). Triangle does not ship a global OAuth app.
             </p>
 
             <div className="provider-card__row">
               <label>OAuth client id</label>
               <Input
-                placeholder="HF_OAUTH_CLIENT_ID env var"
+                placeholder="Create one at huggingface.co/settings/applications"
                 value={settings.hfOAuthClientId ?? ''}
                 onChange={(e) => persist({ ...settings, hfOAuthClientId: e.target.value || undefined })}
                 style={{ flex: 1 }}
@@ -409,17 +424,42 @@ export function ProviderInstancesSettings({ availability, onSaved }: ProviderIns
                   <Link2 size={12} /> Connect with Hugging Face
                 </Button>
               )}
-              {hfStatus.connected && (
+              {hfStatus.connected && !hfBusy && (
                 <span className="provider-settings__hint">
                   Connected{hfStatus.username ? ` as ${hfStatus.username}` : ''} ({formatHfExpiresAt(hfStatus.expiresAt)}).
                 </span>
               )}
             </div>
 
+            {hfUserCode && (
+              <div className="provider-card__row">
+                <div className="provider-settings__user-code">
+                  <span className="provider-settings__hint">Enter this code on the Hugging Face website:</span>
+                  <code className="provider-settings__code">{hfUserCode}</code>
+                </div>
+              </div>
+            )}
+
+            {hfBusy && <div className="provider-settings__hint">Waiting for Hugging Face authorization…</div>}
+
             {hfError && <div className="provider-settings__error">{hfError}</div>}
 
             <div className="provider-card__row">
-              <label>Manual token</label>
+              <label>OAuth token</label>
+              <Input
+                type="password"
+                placeholder="Paste an HF OAuth access token (optional)"
+                value={settings.hfOAuthToken ?? ''}
+                onChange={(e) => persist({ ...settings, hfOAuthToken: e.target.value || undefined })}
+                style={{ flex: 1 }}
+              />
+            </div>
+            <p className="provider-settings__hint">
+              Alternatively, paste an OAuth access token directly. Takes precedence over device-code sign-in when present.
+            </p>
+
+            <div className="provider-card__row">
+              <label>HF API token</label>
               <Input
                 type="password"
                 placeholder="HF_TOKEN or TRIANGLE_HF_TOKEN env var"

@@ -114,10 +114,11 @@ paths) are editable in-app and persist to the user config. See
 key list.
 
 Hugging Face integration supports OAuth sign-in (Settings → Configure providers → Hugging
-Face) and falls back to `HF_TOKEN` / `hfToken`. To ship a one-click sign-in experience, set
-`DEFAULT_HF_OAUTH_CLIENT_ID` in `apps/desktop/src/main/config.ts` to a real HF OAuth app
-client id; HF supports public apps with no client secret, so only the client id should be
-baked into the binary.
+Face). Each user creates their own HF OAuth app at https://huggingface.co/settings/applications/new,
+pastes the client id, and clicks Connect; the app displays the 8-character HF user code and
+polls for the token. Users can also paste an HF OAuth access token or a personal `HF_TOKEN`
+directly. HF supports public apps with no client secret, so only the client id is safe in a
+desktop binary.
 
 ## Status & roadmap
 

@@ -7,18 +7,6 @@ import type { AgentSettings } from '@triangle/shared';
 import { resolveClaudeAuth } from './agent/claude-auth.js';
 
 /**
- * Default Hugging Face OAuth client id for the desktop app. Hugging Face supports
- * public OAuth apps (no client secret), which is the right model for a desktop app:
- * the client id is not a secret and can be baked into the binary. The client secret
- * MUST NOT be baked in; if your HF app has a secret, switch to a public app or require
- * users to create their own OAuth app.
- *
- * Replace this placeholder with the real client id from your HF OAuth app at
- * https://huggingface.co/settings/applications after creating one for Triangle.
- */
-export const DEFAULT_HF_OAUTH_CLIENT_ID = 'TRIANGLE_HF_OAUTH_CLIENT_ID_PLACEHOLDER';
-
-/**
  * Agent credentials & settings, resolved from (lowest → highest precedence):
  *   1. a dev config at `<repoRoot>/.triangle/config.json` (gitignored),
  *   2. a user config at `<userData>/config.json`,
@@ -281,7 +269,7 @@ export async function loadAgentSettings(): Promise<AgentSettings> {
     hfToken: c.hfToken,
     hfOAuthToken: c.hfOAuthToken,
     hfOAuthExpiresAt: c.hfOAuthExpiresAt,
-    hfOAuthClientId: c.hfOAuthClientId ?? (DEFAULT_HF_OAUTH_CLIENT_ID.includes('PLACEHOLDER') ? undefined : DEFAULT_HF_OAUTH_CLIENT_ID),
+    hfOAuthClientId: c.hfOAuthClientId,
   };
 }
 

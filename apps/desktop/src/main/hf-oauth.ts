@@ -8,43 +8,76 @@
  */
 
 import { HuggingFaceOAuth } from '@triangle/integrations';
-import { DEFAULT_HF_OAUTH_CLIENT_ID, loadAgentSettings, saveAgentSettings } from './config.js';
+import { loadAgentSettings, saveAgentSettings } from './config.js';
 
 export interface HFOAuthDependencies {
   /** Open a URL in the user's default browser. */
   openBrowser: (url: string) => void;
 }
 
-const DEFAULT_OAUTH_SCOPE = 'openid profile inference-api';
+const DEFAULT_OAUTH_SCOPE = 'openid profile inference-api read-repos gated-repos';
 
-export async function hfConnect(
-  deps: HFOAuthDependencies,
-  req: { clientId?: string; scope?: string },
-): Promise<{ ok: boolean; username?: string; expiresAt?: number; error?: string }> {
+async function resolveClientId(requested?: string): Promise<string> {
+  if (requested && requested.trim().length > 0) return requested.trim();
   const settings = await loadAgentSettings();
-  const clientId =
-    req.clientId?.trim() ??
-    settings.hfOAuthClientId ??
-    (DEFAULT_HF_OAUTH_CLIENT_ID && !DEFAULT_HF_OAUTH_CLIENT_ID.includes('PLACEHOLDER')
-      ? DEFAULT_HF_OAUTH_CLIENT_ID
-      : undefined);
+  return settings.hfOAuthClientId ?? '';
+}
+
+export async function hfDeviceCode(req: {
+  clientId?: string;
+  scope?: string;
+}): Promise<{
+  ok: boolean;
+  deviceCode?: string;
+  userCode?: string;
+  verificationUri?: string;
+  verificationUriComplete?: string;
+  error?: string;
+}> {
+  const clientId = await resolveClientId(req.clientId);
   if (!clientId) {
     return {
       ok: false,
       error:
-        'No Hugging Face OAuth client id configured. Set HF_OAUTH_CLIENT_ID (or ' +
-        'TRIANGLE_HF_OAUTH_CLIENT_ID) in the environment, or configure hfOAuthClientId in settings.',
+        'No Hugging Face OAuth client id configured. Create a personal OAuth app at ' +
+        'https://huggingface.co/settings/applications/new, then paste the Client ID into the settings.',
     };
   }
 
   const oauth = new HuggingFaceOAuth({
     clientId,
     scope: req.scope ?? DEFAULT_OAUTH_SCOPE,
-    openBrowser: deps.openBrowser,
   });
 
   try {
-    const token = await oauth.login({ timeoutMs: 10 * 60 * 1000 });
+    const device = await oauth.requestDeviceCode();
+    return {
+      ok: true,
+      deviceCode: device.deviceCode,
+      userCode: device.userCode,
+      verificationUri: device.verificationUri,
+      verificationUriComplete: device.verificationUriComplete,
+    };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+export async function hfPollToken(
+  req: { deviceCode: string; clientId?: string; scope?: string },
+): Promise<{ ok: boolean; username?: string; expiresAt?: number; error?: string }> {
+  const clientId = await resolveClientId(req.clientId);
+  if (!clientId) {
+    return { ok: false, error: 'No Hugging Face OAuth client id configured.' };
+  }
+
+  const oauth = new HuggingFaceOAuth({
+    clientId,
+    scope: req.scope ?? DEFAULT_OAUTH_SCOPE,
+  });
+
+  try {
+    const token = await oauth.pollForToken(req.deviceCode, { timeoutMs: 10 * 60 * 1000 });
     const userInfo = await oauth.getUserInfo(token.accessToken).catch(() => null);
     const expiresAt = token.expiresIn > 0 ? token.fetchedAt + token.expiresIn * 1000 : undefined;
 
@@ -75,13 +108,9 @@ export async function hfStatus(): Promise<{ connected: boolean; username?: strin
   const expired = settings.hfOAuthExpiresAt ? Date.now() >= settings.hfOAuthExpiresAt : false;
   if (expired) return { connected: false, expiresAt: settings.hfOAuthExpiresAt };
 
-  const clientId =
-    settings.hfOAuthClientId ??
-    (DEFAULT_HF_OAUTH_CLIENT_ID && !DEFAULT_HF_OAUTH_CLIENT_ID.includes('PLACEHOLDER')
-      ? DEFAULT_HF_OAUTH_CLIENT_ID
-      : 'unknown');
+  const clientId = await resolveClientId();
   try {
-    const oauth = new HuggingFaceOAuth({ clientId });
+    const oauth = new HuggingFaceOAuth({ clientId: clientId || 'unknown' });
     const userInfo = await oauth.getUserInfo(token);
     return {
       connected: true,

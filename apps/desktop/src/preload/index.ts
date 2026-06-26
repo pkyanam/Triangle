@@ -76,7 +76,8 @@ const api: TriangleApi = {
     run: (req) => ipcRenderer.invoke('tool:run', req),
   },
   hf: {
-    connect: (req) => ipcRenderer.invoke('hf:connect', req),
+    deviceCode: (req) => ipcRenderer.invoke('hf:device-code', req),
+    pollToken: (req) => ipcRenderer.invoke('hf:poll-token', req),
     disconnect: () => ipcRenderer.invoke('hf:disconnect'),
     status: () => ipcRenderer.invoke('hf:status'),
   },
