@@ -1,26 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  Bot,
-  Boxes,
-  Check,
-  Code2,
-  FolderTree,
-  Gauge,
-  LayoutPanelLeft,
-  LayoutPanelTop,
-  LayoutTemplate,
-  ListTree,
-  Monitor,
-  PanelsTopLeft,
-  Play,
-  Search,
-  Square,
-  View,
-} from 'lucide-react';
+import { useState } from 'react';
+import { Bot, Boxes, Code2, FolderTree, Gauge, ListTree, Monitor, Play, Search, Square, View } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { ViewMode } from '@triangle/shared';
 import type { PanelId, PanelsOpen } from '../workspace/Workspace.js';
 import { ProjectMenu } from './ProjectMenu.js';
+import { MenuBar } from './MenuBar.js';
 import logoUrl from '../assets/logo.svg';
 import { getActiveViewMode, setActiveViewMode } from '../preview/bridge.js';
 
@@ -33,9 +17,11 @@ interface TopBarProps {
   onTogglePanel: (id: PanelId) => void;
   onResetLayout: () => void;
   onTabOrientationChange: (orientation: 'horizontal' | 'vertical') => void;
+  onOpenCommandPalette: () => void;
 }
 
-const PANEL_MENU: { id: PanelId; label: string; icon: ComponentType<{ size?: number }> }[] = [
+/** Panel id -> label/icon, shared with the View menu and command palette. */
+export const PANEL_MENU: { id: PanelId; label: string; icon: ComponentType<{ size?: number }> }[] = [
   { id: 'explorer', label: 'Explorer', icon: FolderTree },
   { id: 'assets', label: 'Assets', icon: Boxes },
   { id: 'outliner', label: 'Outliner', icon: ListTree },
@@ -44,11 +30,6 @@ const PANEL_MENU: { id: PanelId; label: string; icon: ComponentType<{ size?: num
   { id: 'inspector', label: 'Inspector', icon: Search },
   { id: 'agent', label: 'Agent', icon: Bot },
   { id: 'performance', label: 'Performance', icon: Gauge },
-];
-
-const TABS_MENU: { value: 'horizontal' | 'vertical'; label: string; icon: ComponentType<{ size?: number }> }[] = [
-  { value: 'horizontal', label: 'Horizontal tabs', icon: LayoutPanelTop },
-  { value: 'vertical', label: 'Vertical tabs', icon: LayoutPanelLeft },
 ];
 
 export function TopBar({
@@ -60,44 +41,14 @@ export function TopBar({
   onTogglePanel,
   onResetLayout,
   onTabOrientationChange,
+  onOpenCommandPalette,
 }: TopBarProps): React.JSX.Element {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [tabsMenuOpen, setTabsMenuOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(() => getActiveViewMode());
-  const menuRef = useRef<HTMLDivElement>(null);
-  const tabsMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onDown = (e: MouseEvent): void => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setMenuOpen(false);
-    };
-    window.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
-
-  useEffect(() => {
-    if (!tabsMenuOpen) return undefined;
-    const onDown = (e: MouseEvent): void => {
-      if (tabsMenuRef.current && !tabsMenuRef.current.contains(e.target as Node)) setTabsMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setTabsMenuOpen(false);
-    };
-    window.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [tabsMenuOpen]);
+  const changeViewMode = (next: ViewMode): void => {
+    setActiveViewMode(next);
+    setViewMode(next);
+  };
 
   return (
     <div className="topbar">
@@ -107,6 +58,19 @@ export function TopBar({
         <span className="topbar__project-sep">/</span>
         <ProjectMenu projectName={projectName} />
       </div>
+
+      <MenuBar
+        panels={PANEL_MENU}
+        panelsOpen={panelsOpen}
+        onTogglePanel={onTogglePanel}
+        onResetLayout={onResetLayout}
+        tabOrientation={tabOrientation}
+        onTabOrientationChange={onTabOrientationChange}
+        viewMode={viewMode}
+        onViewModeChange={changeViewMode}
+        onOpenCommandPalette={onOpenCommandPalette}
+      />
+
       <div className="topbar__spacer" />
       <div className="topbar__actions">
         <button
@@ -120,85 +84,11 @@ export function TopBar({
         <div className="toolbar-divider" />
         <button
           className={`toolbar-btn${viewMode === 'wireframe' ? ' toolbar-btn--active' : ''}`}
-          title={`View mode: ${viewMode === 'wireframe' ? 'Wireframe' : 'Lit'}`}
+          title={`View mode: ${viewMode}`}
           style={{ width: 'auto', padding: '0 7px' }}
-          onClick={() => {
-            const next = viewMode === 'lit' ? 'wireframe' : 'lit';
-            setActiveViewMode(next);
-            setViewMode(next);
-          }}
+          onClick={() => changeViewMode(viewMode === 'lit' ? 'wireframe' : 'lit')}
         >
           <View size={14} />
-        </button>
-        <div className="toolbar-divider" />
-        <div className="menu" ref={menuRef}>
-          <button
-            className={`btn btn--ghost${menuOpen ? ' btn--active' : ''}`}
-            onClick={() => setMenuOpen((o) => !o)}
-            title="Show or hide panels"
-          >
-            <PanelsTopLeft size={15} /> Panels
-          </button>
-          {menuOpen && (
-            <div className="menu__popup" role="menu">
-              {PANEL_MENU.map(({ id, label, icon: Icon }) => {
-                const open = panelsOpen[id];
-                return (
-                  <button
-                    key={id}
-                    role="menuitemcheckbox"
-                    aria-checked={open}
-                    className="menu__item"
-                    onClick={() => onTogglePanel(id)}
-                  >
-                    <span className="menu__item-check">{open && <Check size={13} />}</span>
-                    <Icon size={14} />
-                    <span className="menu__item-label">{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className="menu" ref={tabsMenuRef}>
-          <button
-            className={`btn btn--ghost${tabsMenuOpen ? ' btn--active' : ''}`}
-            onClick={() => setTabsMenuOpen((o) => !o)}
-            title={`Tab orientation: ${tabOrientation === 'horizontal' ? 'Horizontal' : 'Vertical'}`}
-          >
-            {tabOrientation === 'horizontal' ? <LayoutPanelTop size={15} /> : <LayoutPanelLeft size={15} />}
-            Tabs
-          </button>
-          {tabsMenuOpen && (
-            <div className="menu__popup" role="menu">
-              {TABS_MENU.map(({ value, label, icon: Icon }) => {
-                const active = tabOrientation === value;
-                return (
-                  <button
-                    key={value}
-                    role="menuitemradio"
-                    aria-checked={active}
-                    className="menu__item"
-                    onClick={() => {
-                      onTabOrientationChange(value);
-                      setTabsMenuOpen(false);
-                    }}
-                  >
-                    <span className="menu__item-check">{active && <Check size={13} />}</span>
-                    <Icon size={14} />
-                    <span className="menu__item-label">{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <button
-          className="btn btn--ghost btn--icon"
-          onClick={onResetLayout}
-          title="Reset panel layout"
-        >
-          <LayoutTemplate size={15} />
         </button>
       </div>
     </div>

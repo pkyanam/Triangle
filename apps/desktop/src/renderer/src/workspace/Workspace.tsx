@@ -18,10 +18,11 @@ import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
 /**
- * localStorage key prefix for the persisted dockview layout. Stage 5.75 bumps
- * the key to `v3` so existing saved layouts fall back to the new engine default.
+ * localStorage key prefix for the persisted dockview layout. Bumped to `v4`
+ * (ADR 0022) so saved layouts fall back to the engine-first default where the
+ * viewport is the hero and the Inspector fronts the right rail.
  */
-const LAYOUT_KEY_PREFIX = 'triangle.layout.v3';
+const LAYOUT_KEY_PREFIX = 'triangle.layout.v4';
 const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
@@ -213,23 +214,23 @@ function buildDefaultLayout(api: DockviewApi): void {
   });
   api.getPanel('explorer')?.api.setActive();
 
-  // Right rail: Agent + Inspector (Agent front).
-  api.addPanel({
-    id: 'agent',
-    component: 'agent',
-    title: TITLES.agent,
-    initialWidth: 400,
-    minimumWidth: 300,
-    position: { referencePanel: 'preview', direction: 'right' },
-  });
+  // Right rail: Inspector + Agent as tabs, Inspector front (engine-first; the
+  // viewport is the hero, the agent sits one tab behind). See ADR 0022.
   api.addPanel({
     id: 'inspector',
     component: 'inspector',
     title: TITLES.inspector,
-    initialWidth: 320,
+    initialWidth: 340,
     minimumWidth: 260,
-    position: { referencePanel: 'agent', direction: 'right' },
+    position: { referencePanel: 'preview', direction: 'right' },
   });
+  api.addPanel({
+    id: 'agent',
+    component: 'agent',
+    title: TITLES.agent,
+    position: { referencePanel: 'inspector', direction: 'within' },
+  });
+  api.getPanel('inspector')?.api.setActive();
 
   // Editor sits between the left rail and the viewport.
   api.addPanel({

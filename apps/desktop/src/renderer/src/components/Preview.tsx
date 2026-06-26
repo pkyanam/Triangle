@@ -27,6 +27,7 @@ import { ViewportHud } from './ViewportHud.js';
 import { ViewportGizmo } from './ViewportGizmo.js';
 import { ASSET_DRAG_MIME } from './AssetBrowser.js';
 import { toast } from './ui/toast.js';
+import { getViewportPrefs, subscribeViewportPrefs, toggleViewportPref } from '../preview/viewportPrefs.js';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'lit', label: 'Lit' },
@@ -54,9 +55,9 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
 
   // The runtime persists across dock remounts (ADR 0009); read live toggle state.
   const [paused, setPaused] = useState(() => getRuntime().isPaused());
-  const [grid, setGrid] = useState(() => getRuntime().isGridVisible());
-  const [hud, setHud] = useState(true);
-  const [gizmo, setGizmo] = useState(true);
+  // HUD/gizmo/grid overlays live in a shared store so the menu bar can toggle them.
+  const [prefs, setPrefs] = useState(() => getViewportPrefs());
+  const { hud, gizmo, grid } = prefs;
   const [viewMode, setViewModeState] = useState<ViewMode>(() => getActiveViewMode());
   const [toolMode, setToolMode] = useState<TransformMode>(() => getActiveTransformMode());
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +83,9 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
     loadPreviewModule(source);
   }, [source]);
 
+  // Keep the toolbar in sync with the shared viewport prefs store.
+  useEffect(() => subscribeViewportPrefs(setPrefs), []);
+
   const reload = (): void => reloadPreview();
   const togglePause = (): void =>
     setPaused((p) => {
@@ -93,12 +97,7 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
     stepFrame();
     setPaused(true);
   };
-  const toggleGrid = (): void =>
-    setGrid((g) => {
-      const next = !g;
-      getRuntime().setGridVisible(next);
-      return next;
-    });
+  const toggleGrid = (): void => toggleViewportPref('grid');
   const screenshot = (): void => {
     const url = getRuntime().screenshot();
     if (!url) return;
@@ -190,14 +189,14 @@ export function Preview({ source, onStatus, onStats }: PreviewProps): React.JSX.
           </button>
           <button
             className={`toolbar-btn${hud ? ' toolbar-btn--active' : ''}`}
-            onClick={() => setHud((h) => !h)}
+            onClick={() => toggleViewportPref('hud')}
             title="Toggle HUD"
           >
             <Camera size={14} />
           </button>
           <button
             className={`toolbar-btn${gizmo ? ' toolbar-btn--active' : ''}`}
-            onClick={() => setGizmo((g) => !g)}
+            onClick={() => toggleViewportPref('gizmo')}
             title="Toggle gizmo"
           >
             <Redo2 size={14} />

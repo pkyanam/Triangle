@@ -266,6 +266,13 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
     fileInputRef.current?.click();
   }, []);
 
+  // The Edit > Preferences menu item / command palette opens agent settings.
+  useEffect(() => {
+    const onOpenSettings = (): void => setShowConfig(true);
+    window.addEventListener('triangle:open-settings', onOpenSettings);
+    return () => window.removeEventListener('triangle:open-settings', onOpenSettings);
+  }, []);
+
   // Subscribe to streamed run events + approval prompts.
   useEffect(() => {
     const offEvent = window.triangle.agent.onEvent((event: AgentEvent) => {

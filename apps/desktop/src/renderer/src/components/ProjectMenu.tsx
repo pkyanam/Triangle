@@ -74,6 +74,17 @@ export function ProjectMenu({ projectName }: ProjectMenuProps): React.JSX.Elemen
     return () => window.clearTimeout(t);
   }, [notice]);
 
+  // The File menu / command palette can open this menu to a specific view.
+  useEffect(() => {
+    const onOpen = (e: Event): void => {
+      const view = (e as CustomEvent).detail;
+      setView(view === 'create' || view === 'snapshots' ? view : 'list');
+      setOpen(true);
+    };
+    window.addEventListener('triangle:project-menu', onOpen);
+    return () => window.removeEventListener('triangle:project-menu', onOpen);
+  }, []);
+
   // Dismiss on outside-click / Escape.
   useEffect(() => {
     if (!open) return undefined;

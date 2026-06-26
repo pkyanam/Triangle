@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PreviewStatus, ProjectInfo } from '@triangle/shared';
-import { TopBar } from './components/TopBar.js';
+import { TopBar, PANEL_MENU } from './components/TopBar.js';
 import { Console } from './components/Console.js';
+import { CommandPalette } from './components/CommandPalette.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { Workspace, type PanelsOpen, type WorkspaceHandle } from './workspace/Workspace.js';
 import type { WorkspaceState } from './workspace/context.js';
-import { installPreviewBridge } from './preview/bridge.js';
+import { installPreviewBridge, setActiveViewMode } from './preview/bridge.js';
 import { Toaster } from './components/ui/toast.js';
+import { hasMod } from './lib/shortcuts.js';
 
 // Service agent preview requests (screenshot/scene/perf/shader) against the live runtime.
 installPreviewBridge();
@@ -19,6 +21,7 @@ export function App(): React.JSX.Element {
   const [status, setStatus] = useState<PreviewStatus>({ phase: 'idle' });
   const [playing, setPlaying] = useState(false);
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Tab orientation preference (persisted globally). New and reset layouts respect this.
   const [tabOrientation, setTabOrientation] = useState<'horizontal' | 'vertical'>(() => {
@@ -129,6 +132,26 @@ export function App(): React.JSX.Element {
     // Re-subscribe only when the project root changes.
   }, [project?.root]);
 
+  // Global keyboard shortcuts (command palette + rail toggles).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!hasMod(e)) return;
+      const key = e.key.toLowerCase();
+      if (key === 'p') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      } else if (key === 'b') {
+        e.preventDefault();
+        workspaceRef.current?.togglePanel('explorer');
+      } else if (key === 'j') {
+        e.preventDefault();
+        workspaceRef.current?.togglePanel('agent');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Play mode: Esc exits.
   useEffect(() => {
     if (!playing) return;
@@ -167,6 +190,7 @@ export function App(): React.JSX.Element {
         onTogglePanel={(id) => workspaceRef.current?.togglePanel(id)}
         onResetLayout={() => workspaceRef.current?.resetLayout()}
         onTabOrientationChange={handleTabOrientationChange}
+        onOpenCommandPalette={() => setPaletteOpen(true)}
       />
 
       <div className="workspace">
@@ -181,6 +205,22 @@ export function App(): React.JSX.Element {
       <ErrorBoundary title="Console failed" onError={(err) => console.error('Console crashed', err)}>
         <Console status={status} entry={entry} />
       </ErrorBoundary>
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        panels={PANEL_MENU}
+        onTogglePanel={(id) => workspaceRef.current?.togglePanel(id)}
+        onResetLayout={() => workspaceRef.current?.resetLayout()}
+        onTabOrientationChange={handleTabOrientationChange}
+        onViewModeChange={(m) => {
+          try {
+            setActiveViewMode(m);
+          } catch {
+            /* no live preview */
+          }
+        }}
+      />
 
       <Toaster />
     </div>
