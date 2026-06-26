@@ -26,6 +26,9 @@ extraResources:
 # uploads via softprops/action-gh-release so we have full control over naming,
 # release notes, and asset grouping.
 publish: null
+# Ad-hoc sign the .app after packing so Apple Silicon doesn't reject it
+# with "damaged and can't be opened". See build/after-pack.cjs.
+afterPack: build/after-pack.cjs
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
