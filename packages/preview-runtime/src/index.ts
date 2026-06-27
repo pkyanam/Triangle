@@ -1,5 +1,7 @@
 export { PreviewRuntime, createPreviewRuntime } from './runtime.js';
 export type { PreviewRuntimeOptions } from './runtime.js';
+export { SHADER_ERROR_RE, evalPerfThresholds } from './preview-events.js';
+export type { PerfHysteresisState } from './preview-events.js';
 export type { TriangleRenderer, TriangleRendererInfo, RendererBackend } from './renderer-type.js';
 export { createRenderer } from './renderer-factory.js';
 export type { CreateRendererOptions, CreateRendererResult } from './renderer-factory.js';

@@ -2589,6 +2589,23 @@ button {
 .console__row-msg--warn {
   color: var(--warn-signal-fg);
 }
+.console__fix-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--signal-fg);
+  border: 1px solid color-mix(in srgb, var(--signal) 40%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.console__fix-btn:hover {
+  background: color-mix(in srgb, var(--signal) 22%, transparent);
+}
 
 /* ---------- App shell: Play mode (Stage 5.75) ---------- */
 .app--playing .topbar,

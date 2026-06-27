@@ -4,6 +4,8 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import type {
   CaptureResult,
   PerformanceSnapshot,
+  PerfThresholds,
+  PreviewEvent,
   PreviewModule,
   PreviewStats,
   PreviewStatus,
@@ -23,6 +25,7 @@ import {
   type SceneObjectDetail,
   validateShader as inspectShader,
 } from './inspect.js';
+import { evalPerfThresholds, SHADER_ERROR_RE } from './preview-events.js';
 import { applySceneEdit as mutateScene } from './mutate.js';
 import { SelectionHighlight } from './selection.js';
 import { loadModel, type LoadModelResult, type ModelFormat } from './loaders.js';
@@ -30,6 +33,31 @@ import { applyJoint, buildRobot, type BuiltRobot, type RobotJointInfo } from './
 import type { Robot } from '@triangle/robotics';
 import type { TriangleRenderer, RendererBackend } from './renderer-type.js';
 import { createRenderer } from './renderer-factory.js';
+// The WebGPU build (`three/webgpu`) re-exports all of core THREE *plus* the
+// node-material classes, WebGPURenderer, StorageBufferAttribute, and the TSL
+// namespace (Fn, storage, instance, compute, uv, time, …). It is imported here
+// only so author modules can be handed a rich `THREE` that exposes WebGPU/TSL
+// capabilities without importing three themselves (the entry contract forbids
+// bare imports). See ADR 0026.
+import * as THREEWebGPU from 'three/webgpu';
+
+/**
+ * The `THREE` namespace handed to author entry modules. It is the WebGPU build
+ * namespace (a superset of core three — `Scene`, `Mesh`, `MeshStandardMaterial`,
+ * `ShaderMaterial`, … all still resolve) with the TSL namespace spread flat on
+ * top, so an author can write `THREE.Fn`, `THREE.storage`, `THREE.instance`,
+ * `THREE.compute`, `THREE.MeshStandardNodeMaterial`, `THREE.StorageBufferAttribute`,
+ * etc. directly. `THREE.TSL` remains available as the nested namespace too.
+ *
+ * Built once at module load. The WebGPU build is already loaded by
+ * `renderer-factory.ts`, so this adds no new side effects.
+ */
+const AuthorTHREE: unknown = (() => {
+  const webgpu = THREEWebGPU as unknown as Record<string, unknown> & {
+    TSL?: Record<string, unknown>;
+  };
+  return { ...webgpu, ...(webgpu.TSL ?? {}), TSL: webgpu.TSL };
+})();
 
 export interface PreviewRuntimeOptions {
   /** Called whenever the load/run status changes (idle/loading/running/error). */
@@ -38,12 +66,25 @@ export interface PreviewRuntimeOptions {
   onStats?: (stats: PreviewStats) => void;
   /** Called after the scene graph is rebuilt (loadModule) or mutated (applySceneEdit). */
   onSceneChanged?: () => void;
+  /**
+   * V0 preview event bus (ADR 0027): called for each structured preview event
+   * (shader-error, runtime-exception, perf-threshold, scene-mutated,
+   * load-status, interaction). The host forwards these to main over the
+   * `preview:event` IPC channel and to local renderer subscribers (Console).
+   */
+  onEvent?: (event: PreviewEvent) => void;
   /** Background clear color. Defaults to a dark studio grey. */
   background?: number;
   /** Whether the helper grid is visible initially. */
   grid?: boolean;
   /** Hex color for the selection highlight. */
   selectionColor?: number;
+  /**
+   * V0 perf-threshold config. When set, the stats loop emits `perf-threshold`
+   * events with hysteresis (one event per breach — no flapping while a metric
+   * stays across the line). Defaults off (no events). See ADR 0027.
+   */
+  perfThresholds?: PerfThresholds;
 }
 
 /**
@@ -78,6 +119,13 @@ export class PreviewRuntime {
   private moduleState: unknown = undefined;
   private moduleUrl: string | null = null;
 
+  /**
+   * Cached base setup context (THREE/scene/camera/renderer/controls/timer).
+   * Reused across `update`/`dispose` calls so the render loop doesn't allocate
+   * a fresh object every frame. `renderer` is patched in when it's created.
+   */
+  private baseContext: SetupContext | null = null;
+
   private rafId = 0;
   private running = false;
   private paused = false;
@@ -92,6 +140,19 @@ export class PreviewRuntime {
   private frames = 0;
   private lastStatsAt = 0;
   private lastFps = 0;
+
+  // V0 perf-threshold hysteresis: per-metric breach state so a metric staying
+  // across its threshold emits exactly one event (no flapping). See ADR 0027.
+  private perfBreached: { fps: boolean; drawCalls: boolean; triangles: boolean } = {
+    fps: false,
+    drawCalls: false,
+    triangles: false,
+  };
+  private lastGoodPerf: { fps: number; drawCalls: number; triangles: number } = {
+    fps: 0,
+    drawCalls: 0,
+    triangles: 0,
+  };
 
   // Stage 5.75: engine UX state.
   private readonly selection: SelectionHighlight;
@@ -156,6 +217,7 @@ export class PreviewRuntime {
     });
     this.transform.addEventListener('mouseUp', () => {
       this.options.onSceneChanged?.();
+      this.emitEvent({ type: 'interaction', kind: 'gizmo-drag', ...(this.selectedUuid ? { target: this.selectedUuid } : {}) });
     });
 
     this.observeResize();
@@ -182,6 +244,8 @@ export class PreviewRuntime {
     });
     this.renderer = created.renderer;
     this.backend = created.backend;
+    // Patch the cached context so author modules see the now-available renderer.
+    if (this.baseContext) this.baseContext.renderer = this.renderer;
     void created.ready.then(
       () => {
         this.initialized = true;
@@ -267,9 +331,11 @@ export class PreviewRuntime {
       this.restoreSelection();
       this.emitStatus({ phase: 'running' });
       this.options.onSceneChanged?.();
+      this.emitEvent({ type: 'scene-mutated', editKind: 'load' });
     } catch (err) {
       const e = err as Error;
       this.emitStatus({ phase: 'error', message: e.message, stack: e.stack });
+      this.emitErrorEvent(e);
     }
   }
 
@@ -432,6 +498,7 @@ export class PreviewRuntime {
     if (result.ok) {
       this.selection.update();
       this.options.onSceneChanged?.();
+      this.emitEvent({ type: 'scene-mutated', objectId: edit.target, editKind: edit.op });
     }
     return result;
   }
@@ -501,14 +568,22 @@ export class PreviewRuntime {
   }
 
   private setupContext(): SetupContext {
-    return {
-      THREE,
+    // Build once and reuse — the render loop calls this every frame, and the
+    // fields are all stable references (renderer is patched in by ensureRenderer).
+    if (this.baseContext) return this.baseContext;
+    this.baseContext = {
+      // Inject the WebGPU+TSL namespace so author modules can use node
+      // materials, TSL functions, storage buffers, and compute shaders without
+      // importing three (the entry contract forbids bare imports). This is a
+      // superset of core three, so existing templates keep working. See ADR 0026.
+      THREE: AuthorTHREE,
       scene: this.scene,
       camera: this.camera,
       renderer: this.renderer,
       controls: this.controls,
       timer: this.timer,
     };
+    return this.baseContext;
   }
 
   /** True once the renderer has been created and its backend initialized. */
@@ -578,6 +653,7 @@ export class PreviewRuntime {
         const e = err as Error;
         this.running = false;
         this.emitStatus({ phase: 'error', message: e.message, stack: e.stack });
+        this.emitErrorEvent(e);
         return;
       }
     }
@@ -599,15 +675,33 @@ export class PreviewRuntime {
     if (elapsed < 250) return;
     const info = this.renderer.info;
     this.lastFps = Math.round((this.frames * 1000) / elapsed);
-    this.options.onStats?.({
+    const stats: PreviewStats = {
       fps: this.lastFps,
       drawCalls: info.render.calls,
       triangles: info.render.triangles,
       geometries: info.memory.geometries,
       textures: info.memory.textures,
-    });
+    };
+    this.options.onStats?.(stats);
+    this.checkPerfThresholds(stats);
     this.frames = 0;
     this.lastStatsAt = now;
+  }
+
+  /**
+   * V0 perf-threshold check with hysteresis (ADR 0027). A metric crossing its
+   * threshold emits exactly one `perf-threshold` event; it won't fire again
+   * until the metric recovers (crosses back) and then breaches again. This
+   * prevents flapping while a metric stays across the line. Delegates to the
+   * pure {@link evalPerfThresholds} so the logic is unit-testable.
+   */
+  private checkPerfThresholds(stats: PreviewStats): void {
+    const t = this.options.perfThresholds;
+    if (!t) return;
+    const { events, state, lastGood } = evalPerfThresholds(stats, t, this.perfBreached, this.lastGoodPerf);
+    for (const e of events) this.emitEvent(e);
+    this.perfBreached = state;
+    this.lastGoodPerf = lastGood;
   }
 
   /**
@@ -635,6 +729,37 @@ export class PreviewRuntime {
 
   private emitStatus(status: PreviewStatus): void {
     this.options.onStatus?.(status);
+    this.emitEvent({ type: 'load-status', phase: status.phase, ...(status.phase === 'error' ? { message: status.message } : {}) });
+  }
+
+  /** Emit a structured preview event to the bus (V0, ADR 0027). */
+  private emitEvent(event: PreviewEvent): void {
+    this.options.onEvent?.(event);
+  }
+
+  /**
+   * Classify a thrown error and emit a `shader-error` or `runtime-exception`
+   * event. Three.js shader compile failures are detected by message/stack
+   * content (the WebGL backend logs "Shader Error" / "GLSL" / "compile");
+   * everything else is a runtime exception from the author module. See ADR 0027.
+   */
+  private emitErrorEvent(e: Error): void {
+    const text = `${e.message ?? ''}\n${e.stack ?? ''}`;
+    if (SHADER_ERROR_RE.test(text)) {
+      this.emitEvent({ type: 'shader-error', message: e.message, stack: e.stack });
+    } else {
+      this.emitEvent({ type: 'runtime-exception', message: e.message, stack: e.stack });
+    }
+  }
+
+  /**
+   * Update the perf-threshold config at runtime (e.g. when the user changes
+   * `AgentSettings.perfThresholds`). Resets hysteresis state so a freshly
+   * configured threshold can fire immediately on the next stats tick.
+   */
+  setPerfThresholds(thresholds: PerfThresholds | undefined): void {
+    this.options.perfThresholds = thresholds;
+    this.perfBreached = { fps: false, drawCalls: false, triangles: false };
   }
 
   private findObject(target: string): THREE.Object3D | null {

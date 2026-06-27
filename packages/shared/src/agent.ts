@@ -3,6 +3,7 @@
  * shaped to match how real harnesses (Claude Agent SDK, Codex CLI, ACP) will stream
  * messages and tool activity in later stages.
  */
+import type { PerfThresholds } from './preview.js';
 
 /** Supported agent harnesses. Only `mock` is wired in Stage 1. */
 export type HarnessId = 'mock' | 'claude' | 'codex' | 'devin' | 'acp';
@@ -99,6 +100,11 @@ export interface AgentSettings {
   hfOAuthClientId?: string;
   /** rosbridge / Foxglove WebSocket URL for the ROS2 bridge (Integrations hub). */
   rosBridgeUrl?: string;
+  /**
+   * V0 preview event bus: perf thresholds for `perf-threshold` event emission.
+   * All off by default (no events emitted until configured). See ADR 0027.
+   */
+  perfThresholds?: PerfThresholds;
 }
 
 /** Default model lists for each provider kind. */
@@ -183,6 +189,17 @@ export interface AgentStartRequest {
    * The agent is sent `session/resume` or `session/load` depending on capabilities.
    */
   resumeSessionId?: string;
+  /**
+   * V0 audit spine (ADR 0027): what initiated the run. Set by the Console
+   * "Fix with agent" button (a `preview-event` trigger) or (later, V2) by the
+   * automation engine. Absent for a normal manual chat message.
+   */
+  trigger?: import('./session.js').SessionTrigger;
+  /**
+   * V0 audit spine (ADR 0027): summary of the context provided to the agent
+   * (e.g. the error payload that triggered the run).
+   */
+  contextBundle?: import('./session.js').ContextBundle;
 }
 
 export interface AgentStartResult {

@@ -75,6 +75,7 @@ const api: TriangleApi = {
   preview: {
     onRequest: (cb) => subscribe<PreviewRequest>('preview:request', cb),
     result: (result) => ipcRenderer.invoke('preview:result', result),
+    event: (event) => ipcRenderer.invoke('preview:event', event),
     saveCapture: (dataUrl) => ipcRenderer.invoke('preview:save-capture', { dataUrl }),
   },
   tool: {

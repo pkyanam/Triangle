@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, CornerDownLeft, Trash2 } from 'lucide-react';
-import type { AgentEvent, PreviewStatus } from '@triangle/shared';
+import { ChevronRight, CornerDownLeft, Trash2, Wand2 } from 'lucide-react';
+import type { AgentEvent, PreviewEvent, PreviewStatus } from '@triangle/shared';
 import { evalActivePreview } from '../preview/bridge.js';
+import { subscribePreviewEvents } from '../preview/host.js';
 
 type LogSource = 'preview' | 'agent' | 'error' | 'eval';
 
@@ -13,6 +14,8 @@ interface LogEntry {
   message: string;
   /** Optional expandable detail (e.g. full tool-call JSON). */
   detail?: string;
+  /** V0: the preview event backing a shader-error/runtime-exception row, for the "Fix with agent" action. */
+  fixEvent?: PreviewEvent;
 }
 
 interface ConsoleProps {
@@ -77,6 +80,48 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
     return off;
   }, []);
 
+  // V0 preview event bus (ADR 0027): surface shader-error / runtime-exception
+  // events as error rows with a "Fix with agent" action. perf-threshold and
+  // other events are logged as preview info.
+  useEffect(() => {
+    return subscribePreviewEvents((event) => {
+      switch (event.type) {
+        case 'shader-error':
+          push({
+            source: 'error',
+            level: 'error',
+            message: `Shader error: ${event.message}`,
+            detail: event.stack,
+            fixEvent: event,
+          });
+          break;
+        case 'runtime-exception':
+          push({
+            source: 'error',
+            level: 'error',
+            message: `Runtime exception: ${event.message}`,
+            detail: event.stack,
+            fixEvent: event,
+          });
+          break;
+        case 'perf-threshold':
+          push({
+            source: 'preview',
+            level: 'warn',
+            message: `Perf threshold: ${event.metric} (${event.value}) crossed ${event.op} ${event.threshold}`,
+          });
+          break;
+        case 'scene-mutated':
+          push({ source: 'preview', level: 'info', message: `Scene mutated: ${event.editKind}${event.objectId ? ` → ${event.objectId}` : ''}` });
+          break;
+        case 'interaction':
+          push({ source: 'preview', level: 'info', message: `Interaction: ${event.kind}${event.target ? ` → ${event.target}` : ''}` });
+          break;
+        // load-status is already surfaced via the status effect above.
+      }
+    });
+  }, []);
+
   useEffect(() => {
     if (expanded) bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
   }, [logs, expanded]);
@@ -93,6 +138,50 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
       push({ source: 'error', level: 'error', message: String((e as Error).message ?? e) });
     }
     setCommand('');
+  };
+
+  // V0 (ADR 0027): start an agent run pre-loaded with the error payload as
+  // context, tagged with a `preview-event` trigger for the audit spine.
+  const fixWithAgent = (event: PreviewEvent): void => {
+    if (event.type !== 'shader-error' && event.type !== 'runtime-exception') return;
+    const eventType = event.type;
+    const summary = eventType === 'shader-error' ? `Shader error: ${event.message}` : `Runtime exception: ${event.message}`;
+    const prompt =
+      `A preview ${eventType} occurred in the live scene. Fix it.\n\n` +
+      `[Triangle context] ${eventType}:\n${event.message}\n` +
+      (event.stack ? `\nStack trace:\n${event.stack}\n` : '') +
+      `\nInspect the relevant shader/source, diagnose the cause, apply a fix, and validate with triangle_validate_shader.`;
+    void window.triangle.config.get().then((settings) => {
+      const instance =
+        settings.providerInstances.find((i) => i.id === settings.selectedInstanceId) ??
+        settings.providerInstances.find((i) => i.enabled);
+      if (!instance) {
+        push({ source: 'error', level: 'error', message: 'No provider instance configured — open Settings to add one.' });
+        return;
+      }
+      const runId = `fix_${Date.now()}`;
+      void window.triangle.agent
+        .start({
+          runId,
+          harness: instance.kind,
+          prompt,
+          autoApproveWrites: settings.autoApproveWrites ?? false,
+          instanceId: instance.id,
+          model: instance.model,
+          trigger: { kind: 'preview-event', eventType, summary },
+          contextBundle: { summary },
+        })
+        .then((res) => {
+          if (!res.accepted) {
+            push({ source: 'error', level: 'error', message: `Could not start fix run: ${res.reason ?? 'harness unavailable.'}` });
+          } else {
+            push({ source: 'agent', level: 'info', message: `Started fix run for ${eventType}.` });
+          }
+        })
+        .catch((e: unknown) => {
+          push({ source: 'error', level: 'error', message: `Could not start fix run: ${String(e)}` });
+        });
+    });
   };
 
   const startResize = (e: React.PointerEvent): void => {
@@ -182,6 +271,18 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
                     <span className="console__row-time">{formatTime(log.time)}</span>
                     <span className={`console__row-source console__row-source--${log.source}`}>{log.source}</span>
                     <span className={`console__row-msg console__row-msg--${log.level}`}>{log.message}</span>
+                    {log.fixEvent && (
+                      <button
+                        className="console__fix-btn"
+                        title="Start an agent run pre-loaded with this error"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fixWithAgent(log.fixEvent!);
+                        }}
+                      >
+                        <Wand2 size={11} /> Fix with agent
+                      </button>
+                    )}
                   </div>
                   {log.detail && openRows.has(log.id) && <pre className="console__detail">{log.detail}</pre>}
                 </div>

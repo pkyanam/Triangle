@@ -15,7 +15,7 @@ import type {
   HarnessAvailability,
 } from './agent.js';
 import type { McpEndpointInfo } from './endpoint.js';
-import type { PreviewRequest, PreviewResult } from './preview.js';
+import type { PreviewEvent, PreviewRequest, PreviewResult } from './preview.js';
 
 /** Unsubscribe handle returned by event subscriptions. */
 export type Unsubscribe = () => void;
@@ -123,6 +123,11 @@ export interface TriangleApi {
     onRequest: (cb: (req: PreviewRequest) => void) => Unsubscribe;
     /** Reply to a `preview:request`, correlated by `requestId`. */
     result: (result: PreviewResult) => Promise<{ ok: boolean }>;
+    /**
+     * V0 preview event bus (ADR 0027): push a structured preview event to main
+     * so the automation engine (V2) and audit spine can subscribe.
+     */
+    event: (event: PreviewEvent) => Promise<{ ok: boolean }>;
     /** Persist a captured PNG (data URL) to the project, returning its path. */
     saveCapture: (dataUrl: string) => Promise<IpcResponse<'preview:save-capture'>>;
   };

@@ -3,11 +3,14 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import type {
+  ContextBundle,
   HarnessId,
   SessionRecord,
   SessionStatus,
   SessionSummary,
   SessionTranscriptEntry,
+  SessionTrigger,
+  StopReason,
 } from '@triangle/shared';
 
 /**
@@ -48,8 +51,18 @@ export class SessionStore {
     return path.join(this.baseDir(projectId), `${id}.json`);
   }
 
-  /** Start recording a run (records the originating user prompt as entry #1). */
-  begin(id: string, projectId: string, harness: HarnessId, prompt: string): void {
+  /**
+   * Start recording a run (records the originating user prompt as entry #1).
+   * The optional `trigger`/`contextBundle` (V0 audit spine, ADR 0027) record
+   * what initiated the run and what context was provided.
+   */
+  begin(
+    id: string,
+    projectId: string,
+    harness: HarnessId,
+    prompt: string,
+    audit?: { trigger?: SessionTrigger; contextBundle?: ContextBundle },
+  ): void {
     const now = Date.now();
     const record: SessionRecord = {
       id,
@@ -60,6 +73,8 @@ export class SessionStore {
       status: 'running',
       eventCount: 1,
       entries: [{ kind: 'user', ts: now, text: prompt }],
+      ...(audit?.trigger ? { trigger: audit.trigger } : {}),
+      ...(audit?.contextBundle ? { contextBundle: audit.contextBundle } : {}),
     };
     this.active.set(id, record);
     this.scheduleWrite(record);
@@ -99,13 +114,17 @@ export class SessionStore {
     this.scheduleWrite(record);
   }
 
-  /** Mark a run terminal, flush it to disk, and drop it from memory. */
-  finish(id: string, status: SessionStatus, error?: string): void {
+  /**
+   * Mark a run terminal, flush it to disk, and drop it from memory. The optional
+   * `stopReason` (V0 audit spine, ADR 0027) records why the run stopped.
+   */
+  finish(id: string, status: SessionStatus, error?: string, stopReason?: StopReason): void {
     const record = this.active.get(id);
     if (!record) return;
     record.status = status;
     record.endedAt = Date.now();
     if (error) record.error = error;
+    if (stopReason) record.stopReason = stopReason;
     this.active.delete(id);
     const timer = this.writeTimers.get(id);
     if (timer) {

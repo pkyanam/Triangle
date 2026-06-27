@@ -1,5 +1,5 @@
 import { createPreviewRuntime, type PreviewRuntime } from '@triangle/preview-runtime';
-import type { PreviewStats, PreviewStatus, ViewMode } from '@triangle/shared';
+import type { PerfThresholds, PreviewEvent, PreviewStats, PreviewStatus, ViewMode } from '@triangle/shared';
 import { emitSceneChanged, setActiveRuntime } from './bridge.js';
 
 /**
@@ -43,6 +43,21 @@ export function subscribeStats(cb: (stats: PreviewStats) => void): () => void {
   return () => statsListeners.delete(cb);
 }
 
+/**
+ * V0 preview event bus fan-out (ADR 0027). The runtime emits structured
+ * `PreviewEvent`s (shader-error, runtime-exception, perf-threshold, …); local
+ * renderer subscribers (Console) read them here, and the host forwards each to
+ * main over the `preview:event` IPC channel so the future automation engine
+ * (V2) and the audit spine can subscribe.
+ */
+const eventListeners = new Set<(event: PreviewEvent) => void>();
+
+/** Subscribe to the preview event stream (renderer-local). */
+export function subscribePreviewEvents(cb: (event: PreviewEvent) => void): () => void {
+  eventListeners.add(cb);
+  return () => eventListeners.delete(cb);
+}
+
 /** Lazily create the singleton canvas + runtime. Idempotent. */
 function ensure(): { holder: HTMLDivElement; runtime: PreviewRuntime } {
   if (holder && runtime) return { holder, runtime };
@@ -63,10 +78,19 @@ function ensure(): { holder: HTMLDivElement; runtime: PreviewRuntime } {
       for (const listener of statsListeners) listener(s);
     },
     onSceneChanged: () => emitSceneChanged(),
+    onEvent: (event) => {
+      // Fan out to local renderer subscribers (Console, …).
+      for (const listener of eventListeners) listener(event);
+      // Forward to main so the automation engine (V2) + audit spine can subscribe.
+      void window.triangle.preview.event(event);
+    },
   });
   // Register once for the app's lifetime; the runtime outlives any single mount.
   setActiveRuntime(rt);
   rt.start();
+  // Load perf thresholds from the persisted agent settings so the stats loop
+  // emits perf-threshold events from the start. Updated when settings change.
+  void window.triangle.config.get().then((s) => rt.setPerfThresholds(s.perfThresholds));
 
   holder = el;
   runtime = rt;
@@ -129,6 +153,15 @@ export function getViewMode(): ViewMode {
 /** Which GPU backend the persistent runtime is using (`'webgpu'` or `'webgl'`). */
 export function getPreviewBackend(): 'webgpu' | 'webgl' {
   return ensure().runtime.getBackend();
+}
+
+/**
+ * V0: update the live runtime's perf-threshold config (ADR 0027). Call after
+ * the user changes `AgentSettings.perfThresholds` so the stats loop emits
+ * `perf-threshold` events against the new thresholds immediately.
+ */
+export function setPreviewPerfThresholds(thresholds: PerfThresholds | undefined): void {
+  ensure().runtime.setPerfThresholds(thresholds);
 }
 
 /** Set the runtime view mode. */

@@ -275,15 +275,27 @@ function registerIpc(): void {
   // Stage 3 preview bridge: the renderer replies to main's `preview:request`s here,
   // and persists quick-action screenshots via the same ProjectManager capture path.
   handle('preview:result', (req) => preview.resolve(req));
+  // V0 preview event bus (ADR 0027): the renderer's preview runtime pushes
+  // structured events (shader-error, runtime-exception, perf-threshold, …) to
+  // main. The future automation engine (V2) subscribes here; for now main
+  // acknowledges so the event is observable/auditable without a consumer.
+  handle('preview:event', () => ({ ok: true }));
   handle('preview:save-capture', (req) => project.saveCapture(dataUrlToBuffer(req.dataUrl)));
 
   // Stage 6: manual tool runner for integration testing from the UI.
   handle('tool:run', async (req) => {
     try {
+      // Resolve HF credentials from the user config so the Asset Generator dialog
+      // (which calls this channel directly, outside an agent run) honours an
+      // existing Hugging Face OAuth connection / hfToken setting / HF_TOKEN env.
+      const settings = await loadAgentSettings();
       const toolset = createToolset({
         project,
         preview,
         approveWrite: async () => true,
+        hfToken: settings.hfToken,
+        hfOAuthToken: settings.hfOAuthToken,
+        hfOAuthExpiresAt: settings.hfOAuthExpiresAt,
         emitTrace: () => {},
       });
       const result = await dispatchTool(toolset, req.tool, req.args ?? {});

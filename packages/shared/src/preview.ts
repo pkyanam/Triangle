@@ -272,3 +272,88 @@ export interface PreviewResult {
   /** Present when `!ok` (e.g. no live preview, or a runtime error). */
   error?: string;
 }
+
+// --- V0: Preview Event Bus ---------------------------------------------------
+//
+// Structured events emitted by the preview runtime so the Console, the future
+// automation engine (V2), and the audit spine can subscribe to a single typed
+// stream. See ADR 0027. Each event carries a structured payload (error message
+// + stack + source path; threshold name + value + baseline; mutated object id
+// + edit kind).
+
+/** A shader compile failure captured from the live renderer. */
+export interface ShaderErrorPayload {
+  message: string;
+  stack?: string;
+  /** Project-relative path to the shader/module source, when known. */
+  sourcePath?: string;
+  /** Parsed GLSL diagnostics, when available from the compile log. */
+  diagnostics?: ShaderDiagnostic[];
+}
+
+/** An uncaught exception from the author module's setup/update or the render loop. */
+export interface RuntimeExceptionPayload {
+  message: string;
+  stack?: string;
+  sourcePath?: string;
+}
+
+/** Which perf metric crossed a configured threshold. */
+export type PerfMetric = 'fps' | 'drawCalls' | 'triangles';
+
+/** A perf metric crossing a configured threshold (with hysteresis — one event per breach). */
+export interface PerfThresholdPayload {
+  metric: PerfMetric;
+  /** Comparison operator: `fps` uses `<`, draw calls / triangles use `>`. */
+  op: '<' | '>';
+  /** Current observed value. */
+  value: number;
+  /** Configured threshold that was crossed. */
+  threshold: number;
+  /** Last known good value before the breach, when available. */
+  baseline?: number;
+}
+
+/** The scene graph was mutated (loadModule rebuild or a live scene edit). */
+export interface SceneMutatedPayload {
+  /** Object id/name touched by the edit, when applicable. */
+  objectId?: string;
+  /** What kind of mutation: `load`, `set_uniform`, `set_transform`, … */
+  editKind: string;
+}
+
+/** A load/run status transition (idle → loading → running → error). */
+export interface LoadStatusPayload {
+  phase: PreviewStatus['phase'];
+  sourcePath?: string;
+  /** Error message when `phase === 'error'`. */
+  message?: string;
+}
+
+/** A user interaction with the viewport (selection, gizmo drag, …). */
+export interface InteractionPayload {
+  kind: string;
+  target?: string;
+}
+
+/**
+ * The typed preview event union. Emitted by `PreviewRuntime` via `onEvent` and
+ * forwarded to main over the `preview:event` IPC channel (ADR 0027).
+ */
+export type PreviewEvent =
+  | ({ type: 'shader-error' } & ShaderErrorPayload)
+  | ({ type: 'runtime-exception' } & RuntimeExceptionPayload)
+  | ({ type: 'perf-threshold' } & PerfThresholdPayload)
+  | ({ type: 'scene-mutated' } & SceneMutatedPayload)
+  | ({ type: 'load-status' } & LoadStatusPayload)
+  | ({ type: 'interaction' } & InteractionPayload);
+
+/** Configurable performance thresholds for `perf-threshold` event emission. */
+export interface PerfThresholds {
+  /** Emit when FPS drops below this. Off when unset. */
+  fpsMin?: number;
+  /** Emit when draw calls exceed this. Off when unset. */
+  drawCallMax?: number;
+  /** Emit when triangle count exceeds this. Off when unset. */
+  triMax?: number;
+}

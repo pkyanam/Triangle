@@ -215,7 +215,10 @@ export class AgentManager {
     } catch {
       /* project not initialised — record under a placeholder */
     }
-    this.sessions.begin(runId, projectId, req.harness, req.prompt);
+    this.sessions.begin(runId, projectId, req.harness, req.prompt, {
+      ...(req.trigger ? { trigger: req.trigger } : {}),
+      ...(req.contextBundle ? { contextBundle: req.contextBundle } : {}),
+    });
     emitStatus('started');
 
     // Triangle tool writes (Claude in-process / MCP via the bridge): read the
@@ -302,19 +305,19 @@ export class AgentManager {
       });
       if (run.controller.signal.aborted) {
         emitStatus('cancelled');
-        this.sessions.finish(runId, 'cancelled');
+        this.sessions.finish(runId, 'cancelled', undefined, 'cancelled');
       } else {
         emitStatus('completed');
-        this.sessions.finish(runId, 'completed');
+        this.sessions.finish(runId, 'completed', undefined, 'completed');
       }
     } catch (err) {
       if (run.controller.signal.aborted) {
         emitStatus('cancelled');
-        this.sessions.finish(runId, 'cancelled');
+        this.sessions.finish(runId, 'cancelled', undefined, 'cancelled');
       } else {
         const message = (err as Error).message;
         emitStatus('error', message);
-        this.sessions.finish(runId, 'error', message);
+        this.sessions.finish(runId, 'error', message, 'error');
       }
     } finally {
       this.toolBridge.unregister(bridgeToken);

@@ -19,7 +19,7 @@ import type {
   HarnessAvailability,
 } from './agent.js';
 import type { McpEndpointInfo } from './endpoint.js';
-import type { PreviewRequest, PreviewResult } from './preview.js';
+import type { PreviewEvent, PreviewRequest, PreviewResult } from './preview.js';
 
 /** Request/response channels invoked from the renderer. */
 export interface IpcInvokeChannels {
@@ -232,6 +232,17 @@ export interface IpcInvokeChannels {
     response: { ok: boolean };
   };
   /**
+   * V0 preview event bus (ADR 0027). The renderer's preview runtime pushes a
+   * structured {@link PreviewEvent} (shader-error, runtime-exception,
+   * perf-threshold, …) to main so the future automation engine (V2) and the
+   * audit spine can subscribe. Mirrors `preview:request`'s typed bridge; main
+   * acknowledges with `{ ok: true }` (fire-and-forget notification).
+   */
+  'preview:event': {
+    request: PreviewEvent;
+    response: { ok: boolean };
+  };
+  /**
    * Save a renderer-captured framebuffer (PNG data URL) to the project's
    * gitignored capture directory, returning its project-relative path. Backs
    * the "attach screenshot" quick-action; the agent screenshot tool saves via
@@ -341,6 +352,7 @@ export const INVOKE_CHANNELS = [
   'snapshot:create',
   'snapshot:restore',
   'preview:result',
+  'preview:event',
   'preview:save-capture',
   'tool:run',
   'hf:device-code',
