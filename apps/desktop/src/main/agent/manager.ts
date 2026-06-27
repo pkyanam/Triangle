@@ -10,6 +10,7 @@ import type {
   HarnessId,
   ProviderInstance,
 } from '@triangle/shared';
+import { isPathInScope, TIER_SCOPES, type PolicyTier, type Scope } from '@triangle/shared';
 import { loadAgentSettings, loadConfig, type TriangleConfig } from '../config.js';
 import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
@@ -93,6 +94,8 @@ interface ActiveRun {
   approvals: Set<string>;
   /** Once true, the rest of this run's writes are auto-approved (session scope). */
   autoApproveAll: boolean;
+  /** V1 (ADR 0028): the scope constraining which paths this run may write to. */
+  scope: Scope;
 }
 
 /** Summarise a batch of file changes for the session-history approval entry. */
@@ -181,10 +184,15 @@ export class AgentManager {
     const runConfig = buildRunConfig(baseConfig, instance, model);
 
     const controller = new AbortController();
+    // V1 (ADR 0028): resolve the scope from the request's policy tier (default
+    // 'project' — preserves autoApproveWrites). A custom scope is used as-is.
+    const tier: PolicyTier = req.policyTier ?? 'project';
+    const scope: Scope = req.scope ?? TIER_SCOPES[tier];
     const run: ActiveRun = {
       controller,
       approvals: new Set(),
       autoApproveAll: req.autoApproveWrites,
+      scope,
     };
     this.runs.set(req.runId, run);
 
@@ -224,6 +232,19 @@ export class AgentManager {
     // Triangle tool writes (Claude in-process / MCP via the bridge): read the
     // current file so the UI can render a real diff, then route through the gate.
     const approveWrite: ApprovalGate = async ({ tool, path, content, exists }) => {
+      // V1 (ADR 0028): enforce the scope before any approval logic. Out-of-scope
+      // writes are rejected outright with a structured log event so the agent
+      // can self-correct; in-scope writes follow the existing auto-approve /
+      // human-gate policy.
+      if (!isPathInScope(path, run.scope)) {
+        forward({
+          type: 'log',
+          runId,
+          level: 'warn',
+          text: `Write to ${path} rejected: out of scope (${run.scope.mode}).`,
+        });
+        return false;
+      }
       if (run.autoApproveAll) return true;
       let oldContent: string | undefined;
       if (exists) {
@@ -249,6 +270,17 @@ export class AgentManager {
     // Out-of-process harness actions (Codex App Server file-change / command
     // approvals) reach the same gate; the harness chooses how to honour the scope.
     const requestApproval = async (ask: ApprovalAsk): Promise<ApprovalOutcome> => {
+      // V1 (ADR 0028): reject out-of-scope writes before any approval logic.
+      if (ask.changes.some((c) => !isPathInScope(c.path, run.scope))) {
+        const rejected = ask.changes.filter((c) => !isPathInScope(c.path, run.scope)).map((c) => c.path);
+        forward({
+          type: 'log',
+          runId,
+          level: 'warn',
+          text: `Write rejected: out of scope (${run.scope.mode}): ${rejected.join(', ')}`,
+        });
+        return { approved: false, scope: 'once' };
+      }
       if (run.autoApproveAll) return { approved: true, scope: 'session' };
       const changes = ask.changes.map((c) => clipChange(c));
       return this.requestApproval(run, runId, req.harness, {

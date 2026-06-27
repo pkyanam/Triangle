@@ -1279,6 +1279,30 @@ button {
 .agent__toggle input {
   accent-color: var(--primary);
 }
+.agent__scope {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  user-select: none;
+}
+.agent__scope-label {
+  white-space: nowrap;
+}
+.agent__scope-select {
+  font-size: 11px;
+  padding: 2px 6px;
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+}
+.agent__scope-select:hover {
+  border-color: color-mix(in srgb, var(--primary) 50%, var(--border));
+}
 
 /* ---------- Agent: tool traces ---------- */
 .msg__tools {

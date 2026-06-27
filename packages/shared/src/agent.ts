@@ -200,6 +200,17 @@ export interface AgentStartRequest {
    * (e.g. the error payload that triggered the run).
    */
   contextBundle?: import('./session.js').ContextBundle;
+  /**
+   * V1 scoped approval (ADR 0028): the policy tier selected in the UI. Defaults
+   * to `'project'` (aggressive, project-wide — preserves autoApproveWrites).
+   * The ApprovalGate enforces the corresponding {@link Scope} before any write.
+   */
+  policyTier?: import('./scope.js').PolicyTier;
+  /**
+   * V1 scoped approval (ADR 0028): an explicit scope, used when the tier is
+   * `'custom'`. Absent otherwise (the tier's canonical scope applies).
+   */
+  scope?: import('./scope.js').Scope;
 }
 
 export interface AgentStartResult {

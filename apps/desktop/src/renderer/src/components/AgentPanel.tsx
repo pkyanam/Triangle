@@ -25,9 +25,11 @@ import {
   type ChatRole,
   type HarnessAvailability,
   type ImageAttachment,
+  type PolicyTier,
   type ToolCallKind,
   type ToolCallTrace,
 } from '@triangle/shared';
+import { TIER_LABELS } from '@triangle/shared';
 import { ProviderModelPicker } from './ProviderModelPicker.js';
 import { ProviderInstancesSettings } from './ProviderInstancesSettings.js';
 import { AssetGeneratorDialog } from './AssetGeneratorDialog.js';
@@ -85,6 +87,7 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [autoApprove, setAutoApprove] = useState(false);
+  const [policyTier, setPolicyTier] = useState<PolicyTier>('project');
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -387,6 +390,7 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
         model: selectedModel,
         attachments: currentAttachments,
         resumeSessionId: currentResumeSessionId,
+        policyTier,
       })
       .then((res) => {
         if (!res.accepted) {
@@ -792,6 +796,20 @@ export function AgentPanel({ projectName, projectId }: AgentPanelProps): React.J
                     onChange={(e) => setAutoApprovePersisted(e.target.checked)}
                   />
                   Auto-approve writes
+                </label>
+                <label className="agent__scope" title="Constrain which project paths the agent may write to">
+                  <span className="agent__scope-label">Scope</span>
+                  <select
+                    className="agent__scope-select"
+                    value={policyTier}
+                    onChange={(e) => setPolicyTier(e.target.value as PolicyTier)}
+                  >
+                    {(Object.keys(TIER_LABELS) as PolicyTier[]).map((t) => (
+                      <option key={t} value={t}>
+                        {TIER_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <div className="composer__spacer" />
                 {busy ? (
