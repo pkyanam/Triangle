@@ -739,6 +739,17 @@ export class ProjectManager {
   }
 
   /**
+   * Delete a project-relative file (V3, ADR 0030 — backs the verification
+   * pipeline's incremental apply+verify+rollback batch). Missing files are
+   * treated as success so a delete-only batch is idempotent.
+   */
+  async deleteFile(relPath: string): Promise<{ path: string; ok: boolean }> {
+    const abs = this.resolveSafe(relPath);
+    await fs.rm(abs, { force: true });
+    return { path: relPath, ok: true };
+  }
+
+  /**
    * Persist a binary capture (e.g. an agent screenshot) under the project's
    * gitignored `.triangle/captures/` directory and return its project-relative
    * POSIX path. `.triangle` is in {@link IGNORED}, so this never appears in the

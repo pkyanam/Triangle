@@ -8,6 +8,7 @@ import type {
   ProjectInfo,
   TriangleApi,
   Unsubscribe,
+  VerificationReport,
 } from '@triangle/shared';
 
 /** Subscribe to a main->renderer event channel, returning an unsubscribe fn. */
@@ -96,6 +97,13 @@ const api: TriangleApi = {
     run: (id) => ipcRenderer.invoke('automation:run', { id }),
     enable: (id, enabled) => ipcRenderer.invoke('automation:enable', { id, enabled }),
     onTriggered: (cb) => subscribe<AutomationTriggeredEvent>('automation:triggered', cb),
+  },
+  verification: {
+    run: (req) => ipcRenderer.invoke('verification:run', req),
+    setBaseline: (label) => ipcRenderer.invoke('verification:baseline-set', { label }),
+    listBaselines: () => ipcRenderer.invoke('verification:baseline-list'),
+    getReport: () => ipcRenderer.invoke('verification:report-get'),
+    onReport: (cb) => subscribe<VerificationReport>('verification:report', cb),
   },
 };
 

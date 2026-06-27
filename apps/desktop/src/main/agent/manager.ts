@@ -16,6 +16,7 @@ import type { ProjectManager } from '../project.js';
 import type { PreviewBridge } from '../preview-bridge.js';
 import type { ToolBridgeServer } from '../tool-bridge.js';
 import type { SessionStore } from '../session-store.js';
+import type { VerificationHost } from '../verification.js';
 import { createToolset, type ApprovalGate } from './tools.js';
 import type { AgentHarness, ApprovalAsk, ApprovalOutcome } from './harness.js';
 import { mockHarness } from './mock.js';
@@ -96,6 +97,8 @@ interface ActiveRun {
   autoApproveAll: boolean;
   /** V1 (ADR 0028): the scope constraining which paths this run may write to. */
   scope: Scope;
+  /** V3 (ADR 0030): set true once any write is approved, gating post-run verification. */
+  writesApproved: boolean;
 }
 
 /** Summarise a batch of file changes for the session-history approval entry. */
@@ -128,6 +131,8 @@ export class AgentManager {
     private readonly sendApproval: (req: ApprovalRequest) => void,
     /** Returns the standalone MCP endpoint config to advertise to ACP agents. */
     private readonly mcpEndpointConfig: () => McpServerConfig | null = () => null,
+    /** V3 (ADR 0030): the verification host, used to verify after a run's writes land. */
+    private readonly verification: VerificationHost | null = null,
   ) {
     this.harnesses = {
       mock: mockHarness,
@@ -193,6 +198,7 @@ export class AgentManager {
       approvals: new Set(),
       autoApproveAll: req.autoApproveWrites,
       scope,
+      writesApproved: false,
     };
     this.runs.set(req.runId, run);
 
@@ -245,7 +251,10 @@ export class AgentManager {
         });
         return false;
       }
-      if (run.autoApproveAll) return true;
+      if (run.autoApproveAll) {
+        run.writesApproved = true;
+        return true;
+      }
       let oldContent: string | undefined;
       if (exists) {
         try {
@@ -264,6 +273,7 @@ export class AgentManager {
         truncated: newClip.truncated || (oldClip?.truncated ?? false),
       };
       const outcome = await this.requestApproval(run, runId, req.harness, { tool, changes: [change] });
+      if (outcome.approved) run.writesApproved = true;
       return outcome.approved;
     };
 
@@ -281,14 +291,19 @@ export class AgentManager {
         });
         return { approved: false, scope: 'once' };
       }
-      if (run.autoApproveAll) return { approved: true, scope: 'session' };
+      if (run.autoApproveAll) {
+        run.writesApproved = true;
+        return { approved: true, scope: 'session' };
+      }
       const changes = ask.changes.map((c) => clipChange(c));
-      return this.requestApproval(run, runId, req.harness, {
+      const outcome = await this.requestApproval(run, runId, req.harness, {
         tool: ask.tool,
         changes,
         ...(ask.command ? { command: ask.command } : {}),
         ...(ask.reason ? { reason: ask.reason } : {}),
       });
+      if (outcome.approved) run.writesApproved = true;
+      return outcome;
     };
 
     const toolset = createToolset({
@@ -341,6 +356,32 @@ export class AgentManager {
       } else {
         emitStatus('completed');
         this.sessions.finish(runId, 'completed', undefined, 'completed');
+        // V3 (ADR 0030): after a run's writes land, run the verification
+        // pipeline + the run's success criteria. On a rollback-on-fail failure
+        // the host restores the last snapshot and the report's `rolledBack`
+        // flag is set; the report is pushed to the Visual QA panel and
+        // recorded on the session audit spine. Best-effort: a closed preview
+        // surfaces as an errored check, not a thrown run.
+        if (this.verification && run.writesApproved) {
+          try {
+            const report = await this.verification.verifyAfterRun(runId, req.successCriteria);
+            if (report && report.rolledBack) {
+              forward({
+                type: 'log',
+                runId,
+                level: 'error',
+                text: `Verification failed and rolled back: ${report.summary}`,
+              });
+            }
+          } catch (err) {
+            forward({
+              type: 'log',
+              runId,
+              level: 'warn',
+              text: `Verification skipped: ${(err as Error).message}`,
+            });
+          }
+        }
       }
     } catch (err) {
       if (run.controller.signal.aborted) {

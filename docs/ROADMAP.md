@@ -292,10 +292,10 @@ stages `V0`–`V8`, each delivering a finished feature or QoL update.
 
 | Vision Stage | Theme | Depends on | Status |
 | :--- | :--- | :--- | :----: |
-| V0 | Preview Event Bus & Audit Spine | — | Planned |
-| V1 | Scoped Approval & Guardrails | V0 | Planned |
-| V2 | Automation Engine & Playbooks | V0, V1 | Planned |
-| V3 | Verification Pipeline & Visual Regression | V0, V2 | Planned |
+| V0 | Preview Event Bus & Audit Spine | — | Shipped |
+| V1 | Scoped Approval & Guardrails | V0 | Shipped |
+| V2 | Automation Engine & Playbooks | V0, V1 | Shipped |
+| V3 | Verification Pipeline & Visual Regression | V0, V2 | Shipped |
 | V4 | Project Memory & Dynamic Context | V0, V2 | Planned |
 | V5 | Supervisor Orchestration & Eval Harness | V2, V4 | Planned |
 | V6 | Agent UX & Performance Profiler | V0, V3, V4 | Planned |

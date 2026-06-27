@@ -19,6 +19,7 @@ import { ToolBridgeServer, dispatchTool } from './tool-bridge.js';
 import { McpEndpoint } from './mcp-endpoint.js';
 import { SessionStore } from './session-store.js';
 import { AutomationHost } from './automation.js';
+import { VerificationHost } from './verification.js';
 import { createToolset } from './agent/tools.js';
 import { hfDeviceCode, hfDisconnect, hfPollToken, hfStatus } from './hf-oauth.js';
 
@@ -93,6 +94,7 @@ let toolBridge: ToolBridgeServer;
 let mcpEndpoint: McpEndpoint;
 let sessions: SessionStore;
 let automation: AutomationHost;
+let verification: VerificationHost;
 
 /** Decode a `data:…;base64,…` URL into raw bytes. */
 function dataUrlToBuffer(dataUrl: string): Buffer {
@@ -342,6 +344,14 @@ function registerIpc(): void {
   handle('automation:delete', (req) => automation.delete(req));
   handle('automation:run', (req) => automation.run(req));
   handle('automation:enable', (req) => automation.enable(req));
+
+  // V3 verification pipeline (ADR 0030): run checks against the live preview,
+  // capture / list baselines, and read the most recent report. The host owns
+  // the pipeline + per-project baselines + auto-rollback-on-fail.
+  handle('verification:run', (req) => verification.run(req));
+  handle('verification:baseline-set', (req) => verification.setBaseline(req.label));
+  handle('verification:baseline-list', () => verification.listBaselines());
+  handle('verification:report-get', () => verification.getReport());
 }
 
 function createWindow(): void {
@@ -431,6 +441,25 @@ app.whenReady().then(async () => {
     console.error('[main] MCP endpoint failed to start:', err);
   }
   sessions = new SessionStore();
+  // V3 (ADR 0030): the verification host. Owns the pipeline + per-project
+  // baselines; AgentManager calls `verifyAfterRun` after a run's writes land,
+  // and the `verification:*` IPC handlers below expose run/baseline/report to
+  // the Visual QA panel. Rollback restores the last snapshot via `project`.
+  verification = new VerificationHost(
+    project,
+    preview,
+    sessions,
+    (report) => send('verification:report', report),
+    async () => {
+      // After a rollback the on-disk tree changed underneath the watcher;
+      // reactivating the active project re-reads it so the UI stays in sync.
+      try {
+        await project.reactivateActive();
+      } catch (err) {
+        console.warn('[main] post-rollback reactivate failed:', err);
+      }
+    },
+  );
   agents = new AgentManager(
     project,
     preview,
@@ -440,6 +469,7 @@ app.whenReady().then(async () => {
     (event) => send('agent:event', event),
     (req) => send('agent:approval-request', req),
     () => mcpEndpoint.serverConfig(),
+    verification,
   );
   // V2 (ADR 0029): the automation engine. Subscribes to V0 preview events +
   // the file watcher + a scheduler; fires matching automations through the

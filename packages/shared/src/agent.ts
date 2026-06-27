@@ -211,6 +211,12 @@ export interface AgentStartRequest {
    * `'custom'`. Absent otherwise (the tier's canonical scope applies).
    */
   scope?: import('./scope.js').Scope;
+  /**
+   * V3 (ADR 0030): success criteria evaluated by the verification pipeline after
+   * the run's writes land. Set by the automation host from the automation's
+   * `successCriteria`; absent for a plain manual chat.
+   */
+  successCriteria?: import('./automation.js').SuccessCriteria;
 }
 
 export interface AgentStartResult {

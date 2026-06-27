@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react';
 
 // Keep workspace packages bundled (they ship as TS source, not built JS) while
 // still externalizing real node_modules deps like chokidar/electron.
-const keepBundled = { exclude: ['@triangle/shared', '@triangle/preview-runtime', '@triangle/automation-engine'] };
+const keepBundled = { exclude: ['@triangle/shared', '@triangle/preview-runtime', '@triangle/automation-engine', '@triangle/verification'] };
 
 /**
  * A Vite plugin that copies the Three.js runtime files (`three.core.js` +

@@ -37,13 +37,17 @@ export interface ContextBundle {
 }
 
 /**
- * V0 audit spine — verification result placeholder. V3's verification pipeline
- * fills this with structured check results; V0 leaves it absent so the field
- * exists in the schema.
+ * V0 audit spine — verification result. V0 left this as a placeholder; V3
+ * (ADR 0030) fills it with the structured {@link VerificationReport} from the
+ * verification pipeline, plus the epoch ms the verification ran.
  */
 export interface VerificationRecord {
   passed: boolean;
   summary: string;
+  /** V3 (ADR 0030): the full structured report, when available. */
+  report?: import('./verification.js').VerificationReport;
+  /** V3: epoch ms when verification ran. */
+  ts?: number;
 }
 
 /** Why a run stopped (complements the terminal {@link SessionStatus}). */

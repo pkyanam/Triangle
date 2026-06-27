@@ -15,19 +15,20 @@ import { Inspector } from '../components/Inspector.js';
 import { AssetBrowser } from '../components/AssetBrowser.js';
 import { PerformancePanel } from '../components/PerformancePanel.js';
 import { AutomationsPanel } from '../components/AutomationsPanel.js';
+import { VisualQAPanel } from '../components/VisualQAPanel.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
 /**
- * localStorage key prefix for the persisted dockview layout. Bumped to `v5`
- * (ADR 0029) so saved layouts fall back to the default that includes the
- * Automations panel in the right rail.
+ * localStorage key prefix for the persisted dockview layout. Bumped to `v6`
+ * (ADR 0030) so saved layouts fall back to the default that includes the
+ * Visual QA panel in the right rail.
  */
-const LAYOUT_KEY_PREFIX = 'triangle.layout.v5';
+const LAYOUT_KEY_PREFIX = 'triangle.layout.v6';
 const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
-export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance', 'automations'] as const;
+export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance', 'automations', 'visualqa'] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 export type PanelsOpen = Record<PanelId, boolean>;
 
@@ -55,6 +56,7 @@ const WIDTHS: Record<PanelId, number> = {
   inspector: 320,
   performance: 300,
   automations: 360,
+  visualqa: 360,
 };
 
 const MIN_WIDTHS: Record<PanelId, number> = {
@@ -67,6 +69,7 @@ const MIN_WIDTHS: Record<PanelId, number> = {
   inspector: 260,
   performance: 240,
   automations: 280,
+  visualqa: 280,
 };
 
 // --- Panel components: rendered by dockview, read live state from context. ---
@@ -176,6 +179,18 @@ function AutomationsDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
   );
 }
 
+function VisualQADockPanel(_props: IDockviewPanelProps): React.JSX.Element {
+  return (
+    <div className="tpanel">
+      <ErrorBoundary title="Visual QA panel failed">
+        <div className="tpanel__body">
+          <VisualQAPanel />
+        </div>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
 const COMPONENTS = {
   explorer: ExplorerPanel,
   assets: AssetsPanel,
@@ -186,6 +201,7 @@ const COMPONENTS = {
   inspector: InspectorPanel,
   performance: PerformanceDockPanel,
   automations: AutomationsDockPanel,
+  visualqa: VisualQADockPanel,
 };
 
 const TITLES: Record<string, string> = {
@@ -198,6 +214,7 @@ const TITLES: Record<string, string> = {
   inspector: 'Inspector',
   performance: 'Performance',
   automations: 'Automations',
+  visualqa: 'Visual QA',
 };
 
 /** Build the new engine default layout: left rail, hero viewport, right rail. */
@@ -252,6 +269,13 @@ function buildDefaultLayout(api: DockviewApi): void {
     id: 'automations',
     component: 'automations',
     title: TITLES.automations,
+    position: { referencePanel: 'inspector', direction: 'within' },
+  });
+  // V3 (ADR 0030): Visual QA sits as a tab alongside the Automations panel.
+  api.addPanel({
+    id: 'visualqa',
+    component: 'visualqa',
+    title: TITLES.visualqa,
     position: { referencePanel: 'inspector', direction: 'within' },
   });
   api.getPanel('inspector')?.api.setActive();

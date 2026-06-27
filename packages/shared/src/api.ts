@@ -22,7 +22,13 @@ import type {
   AutomationRunResult,
   AutomationTriggeredEvent,
   NewAutomation,
+  SuccessCriteria,
 } from './automation.js';
+import type {
+  Baseline,
+  VerificationCheckSpec,
+  VerificationReport,
+} from './verification.js';
 
 /** Unsubscribe handle returned by event subscriptions. */
 export type Unsubscribe = () => void;
@@ -169,5 +175,29 @@ export interface TriangleApi {
     enable: (id: string, enabled: boolean) => Promise<IpcResponse<'automation:enable'>>;
     /** Subscribe to `automation:triggered` push events. */
     onTriggered: (cb: (event: AutomationTriggeredEvent) => void) => Unsubscribe;
+  };
+  /**
+   * V3 verification pipeline (ADR 0030): runs shader-compile + perf-delta +
+   * scene-integrity + visual-regression checks against the live preview,
+   * compares against a per-project baseline, and (on a rollback-on-fail check
+   * failing) auto-restores the last verified state. Reports are pushed over
+   * `onReport` and recorded on the session audit spine.
+   */
+  verification: {
+    /** Run the pipeline (optionally with a batch to apply first). */
+    run: (req: {
+      checks?: VerificationCheckSpec[];
+      changes?: { path: string; kind: 'create' | 'update' | 'delete'; newContent?: string }[];
+      criteria?: SuccessCriteria;
+      baselineId?: string;
+    }) => Promise<IpcResponse<'verification:run'>>;
+    /** Capture the current state as a per-project baseline. */
+    setBaseline: (label?: string) => Promise<IpcResponse<'verification:baseline-set'>>;
+    /** List per-project baselines (newest first). */
+    listBaselines: () => Promise<Baseline[]>;
+    /** Read the most recent verification report for the active project. */
+    getReport: () => Promise<VerificationReport | null>;
+    /** Subscribe to `verification:report` push events. */
+    onReport: (cb: (report: VerificationReport) => void) => Unsubscribe;
   };
 }

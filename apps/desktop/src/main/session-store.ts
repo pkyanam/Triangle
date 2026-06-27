@@ -11,6 +11,7 @@ import type {
   SessionTranscriptEntry,
   SessionTrigger,
   StopReason,
+  VerificationRecord,
 } from '@triangle/shared';
 
 /**
@@ -111,6 +112,19 @@ export class SessionStore {
     }
     record.entries.push(entry);
     record.eventCount = record.entries.length;
+    this.scheduleWrite(record);
+  }
+
+  /**
+   * V3 (ADR 0030): attach a verification result to an in-flight (or just-finished)
+   * session record. Called by the `VerificationHost` after the pipeline runs so
+   * the report is visible in the session transcript and the Visual QA panel.
+   * No-op when the run is unknown (already finished + evicted, or never began).
+   */
+  setVerification(id: string, verification: VerificationRecord): void {
+    const record = this.active.get(id);
+    if (!record) return;
+    record.verification = verification;
     this.scheduleWrite(record);
   }
 

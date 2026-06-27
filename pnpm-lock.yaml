@@ -69,6 +69,9 @@ importers:
       '@triangle/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@triangle/verification':
+        specifier: workspace:*
+        version: link:../../packages/verification
       '@types/node':
         specifier: 24.10.1
         version: 24.10.1
@@ -199,6 +202,22 @@ importers:
 
   packages/shared:
     devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/verification:
+    dependencies:
+      '@triangle/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
       typescript:
         specifier: 5.9.3
         version: 5.9.3

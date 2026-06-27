@@ -38,6 +38,7 @@
     "@triangle/preview-runtime": "workspace:*",
     "@triangle/robotics": "workspace:*",
     "@triangle/shared": "workspace:*",
+    "@triangle/verification": "workspace:*",
     "@types/node": "24.10.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",

@@ -8,3 +8,4 @@ export * from './endpoint.js';
 export * from './api.js';
 export * from './scope.js';
 export * from './automation.js';
+export * from './verification.js';

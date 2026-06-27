@@ -21,6 +21,11 @@ import type {
 import type { McpEndpointInfo } from './endpoint.js';
 import type { PreviewEvent, PreviewRequest, PreviewResult } from './preview.js';
 import type { Automation, AutomationPatch, AutomationRunResult, AutomationTriggeredEvent, NewAutomation } from './automation.js';
+import type {
+  Baseline,
+  VerificationCheckSpec,
+  VerificationReport,
+} from './verification.js';
 
 /** Request/response channels invoked from the renderer. */
 export interface IpcInvokeChannels {
@@ -329,6 +334,45 @@ export interface IpcInvokeChannels {
     request: { id: string; enabled: boolean };
     response: { ok: boolean; automation?: Automation; error?: string };
   };
+  /**
+   * V3 verification pipeline (ADR 0030). Run a configured set of checks against
+   * the live preview, compare against the active baseline, and return the
+   * report. Optionally supply a batch of `ApprovalFileChange` to apply first
+   * (incremental apply + verify + rollback): on a rollback-on-fail check
+   * failing, the host restores the last verified state and the report's
+   * `rolledBack` flag is set.
+   */
+  'verification:run': {
+    request: {
+      /** Checks to run; defaults to {@link DEFAULT_CHECKS}. */
+      checks?: VerificationCheckSpec[];
+      /** Optional batch to apply before verifying (incremental apply+verify+rollback). */
+      changes?: { path: string; kind: 'create' | 'update' | 'delete'; newContent?: string }[];
+      /** Success criteria to evaluate against the run's metrics. */
+      criteria?: import('./automation.js').SuccessCriteria;
+      /** Baseline id to compare against; defaults to the active baseline. */
+      baselineId?: string;
+    };
+    response: { ok: boolean; report?: VerificationReport; error?: string };
+  };
+  /**
+   * Capture the current screenshot pHash + perf snapshot + scene signature and
+   * store it as a per-project baseline under `.triangle/baselines/`.
+   */
+  'verification:baseline-set': {
+    request: { label?: string };
+    response: { ok: boolean; baseline?: Baseline; error?: string };
+  };
+  /** List per-project baselines (newest first). */
+  'verification:baseline-list': {
+    request: void;
+    response: Baseline[];
+  };
+  /** Read the most recent verification report for the active project. */
+  'verification:report-get': {
+    request: void;
+    response: VerificationReport | null;
+  };
 }
 
 /** Events pushed from main to renderer. */
@@ -345,6 +389,8 @@ export interface IpcEventChannels {
   'preview:request': PreviewRequest;
   /** V2 (ADR 0029): an automation fired and started an agent run. */
   'automation:triggered': AutomationTriggeredEvent;
+  /** V3 (ADR 0030): a verification run completed (report pushed to the Visual QA panel). */
+  'verification:report': VerificationReport;
 }
 
 export type IpcInvokeChannel = keyof IpcInvokeChannels;
@@ -401,6 +447,10 @@ export const INVOKE_CHANNELS = [
   'automation:delete',
   'automation:run',
   'automation:enable',
+  'verification:run',
+  'verification:baseline-set',
+  'verification:baseline-list',
+  'verification:report-get',
 ] as const satisfies readonly IpcInvokeChannel[];
 
 export const EVENT_CHANNELS = [
@@ -410,4 +460,5 @@ export const EVENT_CHANNELS = [
   'agent:approval-request',
   'preview:request',
   'automation:triggered',
+  'verification:report',
 ] as const satisfies readonly IpcEventChannel[];

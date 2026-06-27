@@ -11,6 +11,7 @@
  */
 import type { PerfMetric } from './preview.js';
 import type { PolicyTier, Scope } from './scope.js';
+import type { SuccessPredicate } from './verification.js';
 
 /**
  * What fires an automation. `command` is the manual / "run now" trigger; the
@@ -55,10 +56,18 @@ export interface ConditionPredicate {
 /** A condition is an AND of predicates. Absent condition = always true. */
 export type AutomationCondition = ConditionPredicate[];
 
-/** A human-readable success criterion recorded on the audit spine (evaluated by V3). */
+/**
+ * A success criterion recorded on the audit spine. V2 left this as a free-text
+ * description; V3 (ADR 0030) extends it with an optional structured
+ * {@link SuccessPredicate} the verification pipeline evaluates against the
+ * run's metrics ("FPS >= 50 AND perceptual difference < 5%"). When `predicate`
+ * is absent the pipeline records the description only.
+ */
 export interface SuccessCriteria {
   /** Free-text description, e.g. "no shader-error event for 5s after write". */
   description: string;
+  /** Optional structured predicate (V3, ADR 0030) evaluated by the verification pipeline. */
+  predicate?: SuccessPredicate;
 }
 
 /**
