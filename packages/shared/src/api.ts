@@ -16,6 +16,13 @@ import type {
 } from './agent.js';
 import type { McpEndpointInfo } from './endpoint.js';
 import type { PreviewEvent, PreviewRequest, PreviewResult } from './preview.js';
+import type {
+  Automation,
+  AutomationPatch,
+  AutomationRunResult,
+  AutomationTriggeredEvent,
+  NewAutomation,
+} from './automation.js';
 
 /** Unsubscribe handle returned by event subscriptions. */
 export type Unsubscribe = () => void;
@@ -141,5 +148,26 @@ export interface TriangleApi {
     pollToken: (req: IpcRequest<'hf:poll-token'>) => Promise<IpcResponse<'hf:poll-token'>>;
     disconnect: () => Promise<IpcResponse<'hf:disconnect'>>;
     status: () => Promise<IpcResponse<'hf:status'>>;
+  };
+  /**
+   * V2 automation engine (ADR 0029): named, reusable automations with triggers,
+   * conditions, scoped plans, and success criteria. Built-in playbooks ship in
+   * `templates/playbooks/`; user automations persist per-project.
+   */
+  automation: {
+    /** List all automations (built-in + user) for the active project. */
+    list: () => Promise<Automation[]>;
+    /** Create a user automation (id assigned by main). */
+    create: (automation: NewAutomation) => Promise<IpcResponse<'automation:create'>>;
+    /** Update a user automation (built-ins reject plan/scope changes). */
+    update: (id: string, patch: AutomationPatch) => Promise<IpcResponse<'automation:update'>>;
+    /** Delete a user automation (built-ins are not deletable). */
+    delete: (id: string) => Promise<IpcResponse<'automation:delete'>>;
+    /** Manually fire an automation by id (the `command` trigger path). */
+    run: (id: string) => Promise<AutomationRunResult>;
+    /** Enable or disable an automation. */
+    enable: (id: string, enabled: boolean) => Promise<IpcResponse<'automation:enable'>>;
+    /** Subscribe to `automation:triggered` push events. */
+    onTriggered: (cb: (event: AutomationTriggeredEvent) => void) => Unsubscribe;
   };
 }

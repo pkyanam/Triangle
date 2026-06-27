@@ -194,9 +194,12 @@ function useSceneSummary(): SceneSummary | null {
     const off = onSceneChanged(() => {
       if (mounted) refresh();
     });
+    // Safety-net poll for objects an author module adds during its update loop
+    // (those don't fire onSceneChanged). 2.5s and skipped when the tab is hidden
+    // so we don't traverse a large scene graph every second while idle.
     const interval = window.setInterval(() => {
-      if (mounted) refresh();
-    }, 1000);
+      if (mounted && !document.hidden) refresh();
+    }, 2500);
     return () => {
       mounted = false;
       off();

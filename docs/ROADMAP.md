@@ -283,6 +283,30 @@ or main-process changes.
 See [`STAGE-8.md`](STAGE-8.md) and
 [ADR `0026`](adr/0026-webgpu-renderer-migration.md).
 
+## Vision Stages (V0–V8) — Post-Prototype Evolution
+
+The shipped roadmap (Stages 0–8) delivered the foundation. The post-prototype
+vision — Automation Engineering, verification, memory, orchestration, and the
+ecosystem layer — is laid out in [`VISION-PRD.md`](VISION-PRD.md) as vision
+stages `V0`–`V8`, each delivering a finished feature or QoL update.
+
+| Vision Stage | Theme | Depends on | Status |
+| :--- | :--- | :--- | :----: |
+| V0 | Preview Event Bus & Audit Spine | — | Planned |
+| V1 | Scoped Approval & Guardrails | V0 | Planned |
+| V2 | Automation Engine & Playbooks | V0, V1 | Planned |
+| V3 | Verification Pipeline & Visual Regression | V0, V2 | Planned |
+| V4 | Project Memory & Dynamic Context | V0, V2 | Planned |
+| V5 | Supervisor Orchestration & Eval Harness | V2, V4 | Planned |
+| V6 | Agent UX & Performance Profiler | V0, V3, V4 | Planned |
+| V7 | Git Integration & Headless/CI Mode | V3 | Planned |
+| V8 | Generative & Ecosystem | V2, V3 | Planned |
+
+The vision stages are dependency-ordered: V0 (preview event bus) and V1
+(scoped approval) are prerequisites for V2 (automations) — without structured
+events there is nothing to trigger on, and without scopes automations are
+unsafe to auto-approve.
+
 ## Stages 4–6
 
 See the PRD for full detail. Highlights: shader compilation feedback + screenshot/scene

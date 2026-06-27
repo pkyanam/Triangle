@@ -6,10 +6,11 @@ function fakeClient(
   expectedSpace: string,
   expectedRoute: string,
   response: unknown,
-): (space: string, options?: { token?: string }) => Promise<{ predict: (route: string, payload: unknown[]) => Promise<{ data: unknown }> }> {
+): (space: string, options?: { token?: string }) => Promise<{ config: { root: string }; predict: (route: string, payload: unknown[]) => Promise<{ data: unknown }> }> {
   return async (space) => {
     assert.equal(space, expectedSpace);
     return {
+      config: { root: `https://${space.replace('/', '-')}.hf.space` },
       predict: async (route, payload) => {
         assert.equal(route, expectedRoute);
         assert.ok(Array.isArray(payload));
@@ -80,6 +81,21 @@ test('generate3dAsset detects obj format from extension', async () => {
   });
   assert.equal(result.format, 'obj');
   assert.equal(result.modelUrl, 'https://example.com/mesh.obj');
+});
+
+test('generate3dAsset constructs URL from relative path', async () => {
+  const client = new HuggingFaceClient({
+    clientFactory: fakeClient('tencent/Hunyuan3D-2', '/shape_generation', [
+      { path: '/tmp/gradio_cache/abc/white_mesh.glb', name: 'white_mesh.glb' },
+    ]),
+  });
+  const result = await client.generate3dAsset({
+    prompt: 'a cube',
+    image: 'data:image/png;base64,abc',
+    provider: 'hunyuan3d',
+  });
+  assert.equal(result.modelUrl, 'https://tencent-Hunyuan3D-2.hf.space/gradio_api/file=/tmp/gradio_cache/abc/white_mesh.glb');
+  assert.equal(result.format, 'glb');
 });
 
 test('generate3dAsset rejects text-only for image-only providers', async () => {

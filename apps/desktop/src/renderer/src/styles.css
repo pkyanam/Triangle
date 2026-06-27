@@ -4094,3 +4094,174 @@ button {
     animation: none;
   }
 }
+
+/* ---------- Automations panel (ADR 0029) ---------- */
+.auto__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 4px 10px;
+}
+.auto__title {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.auto__empty {
+  padding: 24px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.auto__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.auto__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+}
+.auto__row--off {
+  opacity: 0.55;
+}
+.auto__row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.auto__row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+}
+.auto__row-name svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.auto__badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-3, var(--border));
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.auto__row-sub {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.auto__row-desc {
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auto__row-meta {
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.auto__row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.auto__toggle {
+  display: inline-flex;
+  margin-right: 4px;
+}
+.auto__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+}
+.auto__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.auto__field > span {
+  font-weight: 500;
+}
+.auto__field-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 90px;
+  gap: 8px;
+}
+.auto__textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+.auto__form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 4px;
+}
+.auto__audit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+.auto__audit-meta {
+  font-size: 11px;
+  color: var(--muted);
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+.auto__audit-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.auto__entry {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, var(--surface));
+}
+.auto__entry-kind {
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  flex-shrink: 0;
+  width: 64px;
+}
+.auto__entry-text {
+  color: var(--text);
+  word-break: break-word;
+}

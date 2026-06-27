@@ -14,19 +14,20 @@ import { Outliner } from '../components/Outliner.js';
 import { Inspector } from '../components/Inspector.js';
 import { AssetBrowser } from '../components/AssetBrowser.js';
 import { PerformancePanel } from '../components/PerformancePanel.js';
+import { AutomationsPanel } from '../components/AutomationsPanel.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
 /**
- * localStorage key prefix for the persisted dockview layout. Bumped to `v4`
- * (ADR 0022) so saved layouts fall back to the engine-first default where the
- * viewport is the hero and the Inspector fronts the right rail.
+ * localStorage key prefix for the persisted dockview layout. Bumped to `v5`
+ * (ADR 0029) so saved layouts fall back to the default that includes the
+ * Automations panel in the right rail.
  */
-const LAYOUT_KEY_PREFIX = 'triangle.layout.v4';
+const LAYOUT_KEY_PREFIX = 'triangle.layout.v5';
 const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
-export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance'] as const;
+export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance', 'automations'] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 export type PanelsOpen = Record<PanelId, boolean>;
 
@@ -53,6 +54,7 @@ const WIDTHS: Record<PanelId, number> = {
   outliner: 230,
   inspector: 320,
   performance: 300,
+  automations: 360,
 };
 
 const MIN_WIDTHS: Record<PanelId, number> = {
@@ -64,6 +66,7 @@ const MIN_WIDTHS: Record<PanelId, number> = {
   outliner: 170,
   inspector: 260,
   performance: 240,
+  automations: 280,
 };
 
 // --- Panel components: rendered by dockview, read live state from context. ---
@@ -161,6 +164,18 @@ function PerformanceDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
   );
 }
 
+function AutomationsDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
+  return (
+    <div className="tpanel">
+      <ErrorBoundary title="Automations panel failed">
+        <div className="tpanel__body">
+          <AutomationsPanel />
+        </div>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
 const COMPONENTS = {
   explorer: ExplorerPanel,
   assets: AssetsPanel,
@@ -170,6 +185,7 @@ const COMPONENTS = {
   outliner: OutlinerPanel,
   inspector: InspectorPanel,
   performance: PerformanceDockPanel,
+  automations: AutomationsDockPanel,
 };
 
 const TITLES: Record<string, string> = {
@@ -181,6 +197,7 @@ const TITLES: Record<string, string> = {
   outliner: 'Outliner',
   inspector: 'Inspector',
   performance: 'Performance',
+  automations: 'Automations',
 };
 
 /** Build the new engine default layout: left rail, hero viewport, right rail. */
@@ -228,6 +245,13 @@ function buildDefaultLayout(api: DockviewApi): void {
     id: 'agent',
     component: 'agent',
     title: TITLES.agent,
+    position: { referencePanel: 'inspector', direction: 'within' },
+  });
+  // V2 (ADR 0029): Automations sits as a tab alongside the Agent in the right rail.
+  api.addPanel({
+    id: 'automations',
+    component: 'automations',
+    title: TITLES.automations,
     position: { referencePanel: 'inspector', direction: 'within' },
   });
   api.getPanel('inspector')?.api.setActive();

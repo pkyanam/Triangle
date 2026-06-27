@@ -321,9 +321,21 @@ export class ProjectManager {
       fs.readFile(path.join(dir, manifest.entry), 'utf8'),
       collectTextAssets(dir),
     ]);
+    // The WebGPU + TSL builds are optional (absent in older checkouts / dev
+    // fallbacks). When present they enable node-material/TSL/compute templates
+    // in the standalone export; when absent the export falls back to the legacy
+    // WebGLRenderer + core three path. See ADR 0026.
+    const threeWebGPUSource = runtime.threeWebGPU
+      ? await fs.readFile(runtime.threeWebGPU, 'utf8').catch(() => undefined)
+      : undefined;
+    const threeTSLSource = runtime.threeTSL
+      ? await fs.readFile(runtime.threeTSL, 'utf8').catch(() => undefined)
+      : undefined;
     const html = buildStandaloneHtml({
       threeCoreSource,
       threeModuleSource,
+      threeWebGPUSource,
+      threeTSLSource,
       orbitControlsSource,
       entrySource,
       manifest,

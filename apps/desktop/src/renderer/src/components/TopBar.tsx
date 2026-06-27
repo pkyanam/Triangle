@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bot, Boxes, Code2, FolderTree, Gauge, ListTree, Monitor, Play, Search, Square, View } from 'lucide-react';
+import { Bot, Boxes, Code2, FolderTree, Gauge, ListTree, Monitor, Play, Search, Square, View, Workflow } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { ViewMode } from '@triangle/shared';
 import type { PanelId, PanelsOpen } from '../workspace/Workspace.js';
@@ -30,6 +30,7 @@ export const PANEL_MENU: { id: PanelId; label: string; icon: ComponentType<{ siz
   { id: 'inspector', label: 'Inspector', icon: Search },
   { id: 'agent', label: 'Agent', icon: Bot },
   { id: 'performance', label: 'Performance', icon: Gauge },
+  { id: 'automations', label: 'Automations', icon: Workflow },
 ];
 
 export function TopBar({

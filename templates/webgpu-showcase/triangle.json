@@ -1,0 +1,6 @@
+{
+  "name": "WebGPU Showcase",
+  "version": 1,
+  "description": "A multi-scene WebGPU showcase: 100k GPU-computed particles, a compute-deformed ocean mesh, and an Eulerian GPU fluid sim — all written in TSL with storage buffers and compute shaders. Requires WebGPU; falls back to a friendly overlay on WebGL-only browsers.",
+  "entry": "src/main.js"
+}

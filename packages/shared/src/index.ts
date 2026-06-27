@@ -7,3 +7,4 @@ export * from './session.js';
 export * from './endpoint.js';
 export * from './api.js';
 export * from './scope.js';
+export * from './automation.js';

@@ -39,24 +39,38 @@ const HTML_IGNORE = new Set(['node_modules', '.git', '.triangle', '.DS_Store']);
  *      fallback that reads three straight from the pnpm workspace.
  *
  * Returns absolute paths to `three.core.js` (the core build — self-contained,
- * no relative imports) + `three.module.js` (the full build — adds WebGLRenderer,
- * but imports from `./three.core.js`) + `OrbitControls.js` (imports from
- * `'three'`), or `null` if any is missing. The HTML export strips all ES module
- * syntax and concatenates the three files into one inline `<script>` block.
+ * no relative imports) + `three.module.js` (the legacy full build — adds
+ * WebGLRenderer, imports from `./three.core.js`) + `three.webgpu.js` (the
+ * WebGPU build — adds WebGPURenderer, node materials, StorageBufferAttribute,
+ * imports from `./three.core.js`) + `three.tsl.js` (flat TSL re-export, imports
+ * from `three/webgpu`) + `OrbitControls.js` (imports from `'three'`), or `null`
+ * if any required file is missing. The WebGPU + TSL builds are optional in dev
+ * fallback #3 (they may be absent in older checkouts) but required for the
+ * build-time copies so node-material/TSL templates export correctly. See ADR 0026.
  */
 export function resolveRuntimeFiles(
   resourcesPath: string,
   appPath: string,
   repoRoot: string,
-): { threeCore: string; threeModule: string; orbitControls: string } | null {
+): {
+  threeCore: string;
+  threeModule: string;
+  threeWebGPU: string;
+  threeTSL: string;
+  orbitControls: string;
+} | null {
   const rel = {
     threeCore: path.join('build', 'three.core.js'),
     threeModule: path.join('build', 'three.module.js'),
+    threeWebGPU: path.join('build', 'three.webgpu.js'),
+    threeTSL: path.join('build', 'three.tsl.js'),
     orbitControls: path.join('examples', 'jsm', 'controls', 'OrbitControls.js'),
   };
   const flatRel = {
     threeCore: 'three.core.js',
     threeModule: 'three.module.js',
+    threeWebGPU: 'three.webgpu.js',
+    threeTSL: 'three.tsl.js',
     orbitControls: 'OrbitControls.js',
   };
   const bases = [
@@ -67,24 +81,34 @@ export function resolveRuntimeFiles(
     // Dev-only fallback: read three straight from the pnpm workspace.
     path.join(repoRoot, 'packages', 'preview-runtime', 'node_modules', 'three'),
   ];
+  const required = ['threeCore', 'threeModule', 'orbitControls'] as const;
+  const optional = ['threeWebGPU', 'threeTSL'] as const;
   for (const base of bases) {
     // The build-time copy flattens the files; the dev fallback keeps three's
     // build/examples/jsm/controls/ layout. Try both shapes per base.
-    const flat = {
-      threeCore: path.join(base, flatRel.threeCore),
-      threeModule: path.join(base, flatRel.threeModule),
-      orbitControls: path.join(base, flatRel.orbitControls),
-    };
-    if (existsSync(flat.threeCore) && existsSync(flat.threeModule) && existsSync(flat.orbitControls)) {
-      return flat;
+    const flat = Object.fromEntries(
+      [...required, ...optional].map((k) => [k, path.join(base, flatRel[k])]),
+    ) as Record<(typeof required | typeof optional)[number], string>;
+    if (required.every((k) => existsSync(flat[k]))) {
+      return {
+        threeCore: flat.threeCore,
+        threeModule: flat.threeModule,
+        threeWebGPU: flat.threeWebGPU,
+        threeTSL: flat.threeTSL,
+        orbitControls: flat.orbitControls,
+      };
     }
-    const nested = {
-      threeCore: path.join(base, rel.threeCore),
-      threeModule: path.join(base, rel.threeModule),
-      orbitControls: path.join(base, rel.orbitControls),
-    };
-    if (existsSync(nested.threeCore) && existsSync(nested.threeModule) && existsSync(nested.orbitControls)) {
-      return nested;
+    const nested = Object.fromEntries(
+      [...required, ...optional].map((k) => [k, path.join(base, rel[k])]),
+    ) as Record<(typeof required | typeof optional)[number], string>;
+    if (required.every((k) => existsSync(nested[k]))) {
+      return {
+        threeCore: nested.threeCore,
+        threeModule: nested.threeModule,
+        threeWebGPU: nested.threeWebGPU,
+        threeTSL: nested.threeTSL,
+        orbitControls: nested.orbitControls,
+      };
     }
   }
   return null;
@@ -122,12 +146,22 @@ function escapeForHtml(s: string): string {
 }
 
 /**
- * Rewrite `from './three.core.js'` to `from 'three/core'` in three.module.js
- * so it can be resolved via an import map (relative specifiers can't resolve
- * from data: URLs — bare specifiers can).
+ * Rewrite `from './three.core.js'` to `from 'three/core'` in three.module.js /
+ * three.webgpu.js so they can be resolved via an import map (relative
+ * specifiers can't resolve from data: URLs — bare specifiers can).
  */
 function rewriteRelativeImports(source: string): string {
   return source.replace(/from ['"]\.\/three\.core\.js['"]/g, "from 'three/core'");
+}
+
+/**
+ * The WebGPU build ships a dev-only side-effect import of an external URL
+ * (`https://greggman.github.io/...`) that would break a standalone `file://`
+ * page (no network / CORS). Strip that bare import line. It is a no-op guard
+ * for redundant WebGPU state setting, not a functional dependency.
+ */
+function stripExternalImports(source: string): string {
+  return source.replace(/^\s*import\s+['"]https?:\/\/[^'"]+['"];?\s*$/gm, '');
 }
 
 /**
@@ -142,24 +176,51 @@ function rewriteRelativeImports(source: string): string {
 export function buildStandaloneHtml(opts: {
   threeCoreSource: string;
   threeModuleSource: string;
+  /** Optional WebGPU build (`three.webgpu.js`). When present, the standalone page uses `WebGPURenderer` and injects the WebGPU+TSL namespace, mirroring the in-app runtime. */
+  threeWebGPUSource?: string;
+  /** Optional flat TSL re-export (`three.tsl.js`). Required together with `threeWebGPUSource` for the full TSL surface. */
+  threeTSLSource?: string;
   orbitControlsSource: string;
   entrySource: string;
   manifest: ProjectManifest;
   assets?: Record<string, string>;
 }): string {
-  const { threeCoreSource, threeModuleSource, orbitControlsSource, entrySource, manifest, assets = {} } = opts;
+  const {
+    threeCoreSource,
+    threeModuleSource,
+    threeWebGPUSource,
+    threeTSLSource,
+    orbitControlsSource,
+    entrySource,
+    manifest,
+    assets = {},
+  } = opts;
   const title = escapeForHtml(manifest.name || 'Triangle Project');
 
-  // Rewrite three.module.js's relative import from './three.core.js' to a bare
-  // specifier 'three/core' so it can be resolved via an import map (relative
-  // specifiers can't resolve from data: URLs — bare specifiers can).
+  // When the WebGPU + TSL builds are available, the standalone page mirrors the
+  // in-app runtime: a WebGPURenderer (which auto-falls back to a WebGL2 backend
+  // when WebGPU is unavailable) and the WebGPU+TSL namespace injected as `THREE`
+  // so node-material/TSL/compute templates work. Otherwise it falls back to the
+  // legacy WebGLRenderer + core `three` namespace (the original Stage 5.5 path).
+  const hasWebGPU = Boolean(threeWebGPUSource && threeTSLSource);
+
+  // Rewrite relative `./three.core.js` imports to the bare specifier 'three/core'
+  // so they resolve via the import map (relative specifiers can't resolve from
+  // data: URLs). Strip the WebGPU build's dev-only external URL import.
   const threeModuleRewritten = rewriteRelativeImports(threeModuleSource);
+  const threeWebGPURewritten = threeWebGPUSource
+    ? stripExternalImports(rewriteRelativeImports(threeWebGPUSource))
+    : '';
 
   // Encode each runtime file as a data: URL. Import maps with data: URLs work
   // from file:// pages (unlike blob: URLs, which Chrome blocks with "unique
   // security origin" policy).
   const coreDataUrl = 'data:text/javascript,' + encodeURIComponent(threeCoreSource);
   const moduleDataUrl = 'data:text/javascript,' + encodeURIComponent(threeModuleRewritten);
+  const webgpuDataUrl = threeWebGPURewritten
+    ? 'data:text/javascript,' + encodeURIComponent(threeWebGPURewritten)
+    : '';
+  const tslDataUrl = threeTSLSource ? 'data:text/javascript,' + encodeURIComponent(threeTSLSource) : '';
   const ocDataUrl = 'data:text/javascript,' + encodeURIComponent(orbitControlsSource);
   const entryDataUrl = 'data:text/javascript,' + encodeURIComponent(entrySource);
 
@@ -170,27 +231,47 @@ export function buildStandaloneHtml(opts: {
   // substitute for the dev server's static serving.)
   const assetsJson = JSON.stringify(assets);
 
-  // The import map maps bare specifiers to the data: URLs. The entry imports
-  // 'three' and optionally 'three/addons/controls/OrbitControls.js'; three.module.js
-  // imports 'three/core' (rewritten from './three.core.js').
-  const importMap = JSON.stringify({
-    imports: {
-      'three': moduleDataUrl,
-      'three/core': coreDataUrl,
-      'three/addons/controls/OrbitControls.js': ocDataUrl,
-    },
-  });
+  // The import map maps bare specifiers to the data: URLs. OrbitControls imports
+  // 'three'; three.module.js / three.webgpu.js import 'three/core' (rewritten);
+  // three.tsl.js imports 'three/webgpu'. The webgpu/tsl entries are only mapped
+  // when those builds are available so the legacy path stays minimal.
+  const imports: Record<string, string> = {
+    'three': moduleDataUrl,
+    'three/core': coreDataUrl,
+    'three/addons/controls/OrbitControls.js': ocDataUrl,
+  };
+  if (hasWebGPU) {
+    imports['three/webgpu'] = webgpuDataUrl;
+    imports['three/tsl'] = tslDataUrl;
+  }
+  const importMap = JSON.stringify({ imports });
 
   // The bootstrap mirrors PreviewRuntime's defaults (runtime.ts):
-  //   - WebGLRenderer(antialias, preserveDrawingBuffer, high-performance)
   //   - PerspectiveCamera(60), position (3, 2.5, 4)
   //   - OrbitControls with damping
   //   - AmbientLight(0.5) + DirectionalLight(1.2) at (5, 8, 6)
   //   - GridHelper(20, 20, ...)
   //   - Timer-driven update loop with delta/elapsed
   //   - ResizeObserver-style window resize handling
+  // With the WebGPU build present it uses WebGPURenderer (async init, auto
+  // WebGL2 fallback) and injects the WebGPU+TSL namespace as `THREE`; otherwise
+  // it uses the legacy WebGLRenderer + core `three`.
+  const rendererBoot = hasWebGPU
+    ? `
+const THREE = { ...THREEWebGPU, ...TSL, TSL: THREEWebGPU.TSL };
+const renderer = new THREEWebGPU.WebGPURenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x14161a, 1);
+await renderer.init(); // resolves once the WebGPU (or WebGL2 fallback) backend is ready
+`
+    : `
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x14161a, 1);
+`;
+
   const moduleScript = `
-import * as THREE from 'three';
+${hasWebGPU ? "import * as THREEWebGPU from 'three/webgpu';\nimport * as TSL from 'three/tsl';" : "import * as THREE from 'three';"}
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 globalThis.__triangleAssets = ${assetsJson};
@@ -198,15 +279,7 @@ globalThis.__triangleAssets = ${assetsJson};
 const __entry = await import(${JSON.stringify(entryDataUrl)});
 
 const canvas = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: true,
-  preserveDrawingBuffer: true,
-  powerPreference: 'high-performance',
-});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x14161a, 1);
-
+${rendererBoot}
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
 camera.position.set(3, 2.5, 4);

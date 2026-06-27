@@ -1,0 +1,14 @@
+{
+  "id": "builtin-shader-error-auto-fixer",
+  "name": "Shader Error Auto-Fixer",
+  "description": "Fires when a shader fails to compile. Reads the failing shader, fixes the compile error, and validates the fix with triangle_validate_shader.",
+  "trigger": { "kind": "preview-event", "eventType": "shader-error" },
+  "plan": "A shader failed to compile. Read the failing shader source (the error context names the source path), diagnose the compile error from the diagnostics, apply the minimal fix, then validate the corrected shader with the triangle_validate_shader tool. Do not touch files outside src/. Report what you changed.",
+  "scope": { "mode": "allow", "paths": ["src/**", "*.glsl", "*.wgsl", "*.js", "*.ts"] },
+  "policyTier": "source",
+  "successCriteria": {
+    "description": "No shader-error event for 5s after the fix is written."
+  },
+  "enabled": true,
+  "builtIn": true
+}

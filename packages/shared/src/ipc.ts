@@ -20,6 +20,7 @@ import type {
 } from './agent.js';
 import type { McpEndpointInfo } from './endpoint.js';
 import type { PreviewEvent, PreviewRequest, PreviewResult } from './preview.js';
+import type { Automation, AutomationPatch, AutomationRunResult, AutomationTriggeredEvent, NewAutomation } from './automation.js';
 
 /** Request/response channels invoked from the renderer. */
 export interface IpcInvokeChannels {
@@ -295,6 +296,39 @@ export interface IpcInvokeChannels {
     request: void;
     response: { connected: boolean; username?: string; expiresAt?: number; scopes?: string };
   };
+  /**
+   * V2 automation engine (ADR 0029). List all automations (built-in + user)
+   * for the active project, with their enabled state.
+   */
+  'automation:list': {
+    request: void;
+    response: Automation[];
+  };
+  /** Create a user automation from a template or scratch (id assigned by main). */
+  'automation:create': {
+    request: { automation: NewAutomation };
+    response: { ok: boolean; automation?: Automation; error?: string };
+  };
+  /** Update a user automation (built-ins reject plan/scope changes). */
+  'automation:update': {
+    request: { id: string; patch: AutomationPatch };
+    response: { ok: boolean; automation?: Automation; error?: string };
+  };
+  /** Delete a user automation (built-ins are not deletable). */
+  'automation:delete': {
+    request: { id: string };
+    response: { ok: boolean; error?: string };
+  };
+  /** Manually fire an automation by id (the `command` trigger path). */
+  'automation:run': {
+    request: { id: string };
+    response: AutomationRunResult;
+  };
+  /** Enable or disable an automation (stops event-driven firing when disabled). */
+  'automation:enable': {
+    request: { id: string; enabled: boolean };
+    response: { ok: boolean; automation?: Automation; error?: string };
+  };
 }
 
 /** Events pushed from main to renderer. */
@@ -309,6 +343,8 @@ export interface IpcEventChannels {
   'agent:approval-request': ApprovalRequest;
   /** A request from main for the active preview runtime to service (Stage 3). */
   'preview:request': PreviewRequest;
+  /** V2 (ADR 0029): an automation fired and started an agent run. */
+  'automation:triggered': AutomationTriggeredEvent;
 }
 
 export type IpcInvokeChannel = keyof IpcInvokeChannels;
@@ -359,6 +395,12 @@ export const INVOKE_CHANNELS = [
   'hf:poll-token',
   'hf:disconnect',
   'hf:status',
+  'automation:list',
+  'automation:create',
+  'automation:update',
+  'automation:delete',
+  'automation:run',
+  'automation:enable',
 ] as const satisfies readonly IpcInvokeChannel[];
 
 export const EVENT_CHANNELS = [
@@ -367,4 +409,5 @@ export const EVENT_CHANNELS = [
   'agent:event',
   'agent:approval-request',
   'preview:request',
+  'automation:triggered',
 ] as const satisfies readonly IpcEventChannel[];

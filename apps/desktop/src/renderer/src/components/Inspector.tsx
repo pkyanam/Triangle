@@ -19,6 +19,15 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
   const pending = useRef<Map<string, SceneEdit>>(new Map());
   const [pendingCount, setPendingCount] = useState(0);
   const [applying, setApplying] = useState(false);
+  // Coalesce detail refreshes during scrub drags so we don't traverse + serialize
+  // the live object on every pointermove (the edit itself is already applied).
+  const refreshTimer = useRef<number | undefined>(undefined);
+  const scheduleRefresh = useCallback((uuid: string) => {
+    window.clearTimeout(refreshTimer.current);
+    refreshTimer.current = window.setTimeout(() => {
+      setDetail(describeActiveObject(uuid));
+    }, 80);
+  }, []);
 
   useEffect(() => {
     pending.current = new Map();
@@ -32,10 +41,9 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
 
   const applyEdit = (edit: SceneEdit) => {
     applyActiveSceneEdit(edit);
-    const d = selectedUuid ? describeActiveObject(selectedUuid) : null;
-    if (selectedUuid) setDetail(d);
+    if (selectedUuid) scheduleRefresh(selectedUuid);
     // Record for persistence, retargeted by name (stable across reloads).
-    const name = d?.name ?? detail?.name;
+    const name = detail?.name;
     if (name) {
       pending.current.set(edit.op, { ...edit, target: name });
       setPendingCount(pending.current.size);

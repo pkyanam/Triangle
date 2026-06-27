@@ -18,6 +18,7 @@ import { PreviewBridge } from './preview-bridge.js';
 import { ToolBridgeServer, dispatchTool } from './tool-bridge.js';
 import { McpEndpoint } from './mcp-endpoint.js';
 import { SessionStore } from './session-store.js';
+import { AutomationHost } from './automation.js';
 import { createToolset } from './agent/tools.js';
 import { hfDeviceCode, hfDisconnect, hfPollToken, hfStatus } from './hf-oauth.js';
 
@@ -91,6 +92,7 @@ let preview: PreviewBridge;
 let toolBridge: ToolBridgeServer;
 let mcpEndpoint: McpEndpoint;
 let sessions: SessionStore;
+let automation: AutomationHost;
 
 /** Decode a `data:…;base64,…` URL into raw bytes. */
 function dataUrlToBuffer(dataUrl: string): Buffer {
@@ -111,6 +113,16 @@ function send<C extends IpcEventChannel>(channel: C, payload: IpcEventPayload<C>
   mainWindow?.webContents.send(channel, payload);
 }
 
+/**
+ * Push `project:changed` to the renderer and re-hydrate the automation engine
+ * for the new active project (V2, ADR 0029). Called wherever the active project
+ * changes (create/open/import/restore).
+ */
+function notifyProjectChanged(info: IpcEventPayload<'project:changed'>): void {
+  send('project:changed', info);
+  void automation?.reloadForProject();
+}
+
 function registerIpc(): void {
   handle('app:info', () => ({
     name: app.getName(),
@@ -125,12 +137,12 @@ function registerIpc(): void {
   handle('project:list', () => project.listProjects());
   handle('project:create', async (req) => {
     const info = await project.createProject(req.name, req.templateId);
-    send('project:changed', info);
+    notifyProjectChanged(info);
     return info;
   });
   handle('project:open', async (req) => {
     const info = await project.openProject(req.id);
-    send('project:changed', info);
+    notifyProjectChanged(info);
     return info;
   });
   handle('project:export', async (req) => {
@@ -176,7 +188,7 @@ function registerIpc(): void {
       if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true };
       const bytes = new Uint8Array(await fsp.readFile(result.filePaths[0]));
       const info = await project.importProjectFromZip(bytes);
-      send('project:changed', info);
+      notifyProjectChanged(info);
       return { ok: true, info };
     } catch (err) {
       return { ok: false, error: (err as Error).message };
@@ -191,7 +203,7 @@ function registerIpc(): void {
       });
       if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true };
       const info = await project.importProjectFromDir(result.filePaths[0]);
-      send('project:changed', info);
+      notifyProjectChanged(info);
       return { ok: true, info };
     } catch (err) {
       return { ok: false, error: (err as Error).message };
@@ -265,7 +277,7 @@ function registerIpc(): void {
     try {
       await project.restoreSnapshot(req.id);
       const info = await project.reactivateActive();
-      send('project:changed', info);
+      notifyProjectChanged(info);
       return { ok: true };
     } catch (err) {
       return { ok: false, error: (err as Error).message };
@@ -277,9 +289,12 @@ function registerIpc(): void {
   handle('preview:result', (req) => preview.resolve(req));
   // V0 preview event bus (ADR 0027): the renderer's preview runtime pushes
   // structured events (shader-error, runtime-exception, perf-threshold, …) to
-  // main. The future automation engine (V2) subscribes here; for now main
-  // acknowledges so the event is observable/auditable without a consumer.
-  handle('preview:event', () => ({ ok: true }));
+  // main. V2 (ADR 0029) routes these into the AutomationEngine so event-driven
+  // automations (e.g. the Shader Error Auto-Fixer) fire on a matching trigger.
+  handle('preview:event', (req) => {
+    automation?.onPreviewEvent(req);
+    return { ok: true };
+  });
   handle('preview:save-capture', (req) => project.saveCapture(dataUrlToBuffer(req.dataUrl)));
 
   // Stage 6: manual tool runner for integration testing from the UI.
@@ -318,6 +333,15 @@ function registerIpc(): void {
   handle('hf:poll-token', (req) => hfPollToken(req));
   handle('hf:disconnect', () => hfDisconnect());
   handle('hf:status', () => hfStatus());
+
+  // V2 automation engine (ADR 0029): built-in playbooks + user automations,
+  // event-driven or manual firing, scoped through V1's approval gate.
+  handle('automation:list', () => automation.list());
+  handle('automation:create', (req) => automation.create(req));
+  handle('automation:update', (req) => automation.update(req));
+  handle('automation:delete', (req) => automation.delete(req));
+  handle('automation:run', (req) => automation.run(req));
+  handle('automation:enable', (req) => automation.enable(req));
 }
 
 function createWindow(): void {
@@ -371,7 +395,13 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  project = new ProjectManager((event) => send('project:file-changed', event));
+  // File-change callback: push to the renderer AND (once instantiated) the V2
+  // automation engine so file-change triggers fire. The host is created after
+  // `agents` below; the optional chaining keeps the callback safe until then.
+  project = new ProjectManager((event) => {
+    send('project:file-changed', event);
+    automation?.onFileChange(event);
+  });
   try {
     await project.ensureProject();
   } catch (err) {
@@ -411,6 +441,15 @@ app.whenReady().then(async () => {
     (req) => send('agent:approval-request', req),
     () => mcpEndpoint.serverConfig(),
   );
+  // V2 (ADR 0029): the automation engine. Subscribes to V0 preview events +
+  // the file watcher + a scheduler; fires matching automations through the
+  // scoped approval gate. `automation:triggered` is pushed to the renderer.
+  automation = new AutomationHost(project, agents, (event) => send('automation:triggered', event));
+  try {
+    await automation.init();
+  } catch (err) {
+    console.error('[main] automation engine failed to initialize:', err);
+  }
 
   registerIpc();
   createWindow();
@@ -426,6 +465,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   agents?.disposeAll();
+  automation?.dispose();
   preview?.disposeAll();
   mcpEndpoint?.stop();
   toolBridge?.stop();

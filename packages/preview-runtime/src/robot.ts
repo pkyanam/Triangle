@@ -102,7 +102,11 @@ export function applyJoint(handle: RobotJointHandle, value: number): void {
   if (handle.type === 'prismatic') {
     handle.child.position.copy(handle.basePos).addScaledVector(handle.axis, value);
   } else {
-    const q = new THREE.Quaternion().setFromAxisAngle(handle.axis, value);
-    handle.child.quaternion.copy(handle.baseQuat).multiply(q);
+    // Reuse a module-level temp to avoid allocating a Quaternion per call —
+    // joints are typically driven every frame from the Joint Inspector slider.
+    tempQuat.setFromAxisAngle(handle.axis, value);
+    handle.child.quaternion.copy(handle.baseQuat).multiply(tempQuat);
   }
 }
+
+const tempQuat = new THREE.Quaternion();

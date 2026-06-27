@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AgentEvent,
   ApprovalRequest,
+  AutomationTriggeredEvent,
   FileChangeEvent,
   PreviewRequest,
   ProjectInfo,
@@ -86,6 +87,15 @@ const api: TriangleApi = {
     pollToken: (req) => ipcRenderer.invoke('hf:poll-token', req),
     disconnect: () => ipcRenderer.invoke('hf:disconnect'),
     status: () => ipcRenderer.invoke('hf:status'),
+  },
+  automation: {
+    list: () => ipcRenderer.invoke('automation:list'),
+    create: (automation) => ipcRenderer.invoke('automation:create', { automation }),
+    update: (id, patch) => ipcRenderer.invoke('automation:update', { id, patch }),
+    delete: (id) => ipcRenderer.invoke('automation:delete', { id }),
+    run: (id) => ipcRenderer.invoke('automation:run', { id }),
+    enable: (id, enabled) => ipcRenderer.invoke('automation:enable', { id, enabled }),
+    onTriggered: (cb) => subscribe<AutomationTriggeredEvent>('automation:triggered', cb),
   },
 };
 

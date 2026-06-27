@@ -37,6 +37,14 @@ export interface TriangleRendererInfo {
  */
 export interface TriangleRenderer {
   render(scene: THREE.Scene, camera: THREE.Camera): void;
+  /**
+   * Dispatch a compute node (WebGPU only). Author modules call this from their
+   * `update` hook to run TSL compute kernels (storage-buffer particle updates,
+   * fluid solves, mesh deformation, …). Absent on the legacy WebGLRenderer, so
+   * callers must guard with `renderer.compute?.(node)` or feature-detect WebGPU.
+   * See ADR 0026.
+   */
+  compute?(computeNode: unknown, dispatchSize?: number | number[]): void;
   setSize(width: number, height: number, updateStyle?: boolean): void;
   getSize(target: THREE.Vector2): THREE.Vector2;
   setPixelRatio(value?: number): void;

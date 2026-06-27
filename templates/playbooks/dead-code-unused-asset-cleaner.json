@@ -1,0 +1,14 @@
+{
+  "id": "builtin-dead-code-unused-asset-cleaner",
+  "name": "Dead Code / Unused Asset Cleaner",
+  "description": "Fires manually (command). Scans imports vs. assets, lists unused code and assets, and proposes deletions. Reads project-wide; edits only src/.",
+  "trigger": { "kind": "command", "name": "clean-unused" },
+  "plan": "Find and remove unused code and assets. Scan the project's import graph against the files in src/ and assets/, list every module and asset that is never imported or referenced, and propose the deletions. Apply the deletions to src/ only (do not delete binary assets without explicit confirmation). After deletion, verify no imports are broken by reading the entry module and its transitive imports.",
+  "scope": { "mode": "allow", "paths": ["src/**", "*.js", "*.ts", "*.glsl", "*.wgsl", "*.json"] },
+  "policyTier": "source",
+  "successCriteria": {
+    "description": "No broken imports after the deletions are applied."
+  },
+  "enabled": false,
+  "builtIn": true
+}

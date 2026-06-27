@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewStatus, ProjectInfo } from '@triangle/shared';
 import { TopBar, PANEL_MENU } from './components/TopBar.js';
 import { Console } from './components/Console.js';
@@ -49,6 +49,7 @@ export function App(): React.JSX.Element {
     outliner: true,
     inspector: true,
     performance: false,
+    automations: false,
   });
   const workspaceRef = useRef<WorkspaceHandle>(null);
 
@@ -183,19 +184,36 @@ export function App(): React.JSX.Element {
   const projectName = project?.manifest.name ?? 'Loading…';
   const entry = project?.manifest.entry ?? '—';
 
-  const workspaceState: WorkspaceState = {
-    project,
-    projectName,
-    entrySource,
-    selectedPath,
-    selectedContent,
-    openFile,
-    saveFile,
-    onStatus: setStatus,
-    onStats: () => undefined,
-    selectedObject,
-    setSelectedObject,
-  };
+  // Memoized so dockview panels only re-render when one of these values
+  // actually changes — not on every App render (e.g. status updates from
+  // the preview would otherwise re-render every panel including Monaco).
+  const onStatsNoop = useCallback(() => undefined, []);
+  const workspaceState: WorkspaceState = useMemo(
+    () => ({
+      project,
+      projectName,
+      entrySource,
+      selectedPath,
+      selectedContent,
+      openFile,
+      saveFile,
+      onStatus: setStatus,
+      onStats: onStatsNoop,
+      selectedObject,
+      setSelectedObject,
+    }),
+    [
+      project,
+      projectName,
+      entrySource,
+      selectedPath,
+      selectedContent,
+      openFile,
+      saveFile,
+      onStatsNoop,
+      selectedObject,
+    ],
+  );
 
   return (
     <div className={`app${playing ? ' app--playing' : ''}`}>

@@ -153,7 +153,9 @@ tools from its own config.
 | 7 | Engine-credibility UI overhaul (gizmo, asset browser, menu bar, settings hub) | ✅ Done |
 | 8 | WebGPU renderer migration (feature detection, GLSL fallback, offscreen shader validation) | ✅ Done |
 
-The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). Stage write-ups:
+The full roadmap lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). The post-prototype
+vision — Automation Engineering, verification, memory, orchestration — is laid out
+in [`docs/VISION-PRD.md`](docs/VISION-PRD.md) as vision stages `V0`–`V8`. Stage write-ups:
 [Stage 1](docs/STAGE-1.md) · [Stage 2](docs/STAGE-2.md) ·
 [Stage 2.5](docs/STAGE-2.5-visual-overhaul.md) · [Stage 3](docs/STAGE-3.md) ·
 [Stage 4](docs/STAGE-4.md) · [Stage 4.5](docs/STAGE-4.5-devin-acp.md) ·

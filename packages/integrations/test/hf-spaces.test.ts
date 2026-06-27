@@ -6,10 +6,11 @@ function fakeClient(
   expectedSpace?: string,
   expectedRoute?: string,
   response: unknown = [],
-): (space: string, options?: { token?: string }) => Promise<{ predict: (route: string, payload: unknown[]) => Promise<{ data: unknown }> }> {
+): (space: string, options?: { token?: string }) => Promise<{ config: { root: string }; predict: (route: string, payload: unknown[]) => Promise<{ data: unknown }> }> {
   return async (space, options) => {
     if (expectedSpace) assert.equal(space, expectedSpace);
     return {
+      config: { root: `https://${space.replace('/', '-')}.hf.space` },
       predict: async (route, _payload) => {
         if (expectedRoute) assert.equal(route, expectedRoute);
         if (expectedSpace) assert.equal(options?.token, 'hf_token');
@@ -49,7 +50,7 @@ test('call returns data and status', async () => {
   });
   assert.deepEqual(result.data, ['hello']);
   assert.equal(result.status, 'complete');
-  assert.ok(result.url.includes('tencent/Hunyuan3D-2'));
+  assert.equal(result.url, 'https://tencent-Hunyuan3D-2.hf.space');
 });
 
 test('call passes the auth token to the client factory', async () => {
@@ -58,7 +59,7 @@ test('call passes the auth token to the client factory', async () => {
     token: 'hf_oauth_abc',
     clientFactory: async (_space, options) => {
       token = options?.token;
-      return { predict: async () => ({ data: [] }) };
+      return { config: { root: 'https://foo-bar.hf.space' }, predict: async () => ({ data: [] }) };
     },
   });
   await client.call({ space: 'foo/bar' });

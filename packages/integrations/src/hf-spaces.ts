@@ -18,9 +18,10 @@ export interface HFSpacesConfig {
   fetch?: typeof fetch;
   /**
    * Override the Gradio client factory for testing. Receives the space name and
-   * options, and must return a connected Gradio app with a `predict` method.
+   * options, and must return a connected Gradio app with a `predict` method and
+   * a `config.root` URL.
    */
-  clientFactory?: (space: string, options?: { token?: string }) => Promise<{ predict: (route: string, payload: unknown[]) => Promise<{ data: unknown }> }>;
+  clientFactory?: (space: string, options?: { token?: string }) => Promise<{ config?: { root?: string; root_url?: string }; predict: (route: string, payload: unknown[]) => Promise<{ data: unknown }> }>;
 }
 
 export interface HFSpaceCallOptions {
@@ -84,10 +85,18 @@ export class HuggingFaceSpacesClient {
         ? await this.clientFactory(space, { ...(token ? { token } : {}) })
         : await client(space, { ...(token ? { token } : {}) });
       const result = await app.predict(route, payload as unknown[]);
+      // Use the Gradio client's resolved root URL (e.g.
+      // `https://{owner}-{space}.hf.space/`) — NOT `https://huggingface.co/spaces/{space}`,
+      // which is the Spaces web page and does not serve the Gradio file API.
+      // `config.root` is the base URL for `/gradio_api/file=...` downloads.
+      const root = app.config?.root ?? app.config?.root_url;
+      if (!root) {
+        throw new Error(`Could not resolve Gradio Space root URL for "${space}".`);
+      }
       return {
         data: result.data,
         status: 'complete',
-        url: `https://huggingface.co/spaces/${space}`,
+        url: root,
       };
     } catch (err) {
       const message = (err as Error).message ?? String(err);

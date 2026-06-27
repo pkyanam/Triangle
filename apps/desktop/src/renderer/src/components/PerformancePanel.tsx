@@ -14,7 +14,6 @@ export function PerformancePanel(): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<PerformanceSnapshot | null>(null);
   const fpsRef = useRef<number[]>([]);
   const frameRef = useRef<number[]>([]);
-  const [, force] = useState(0);
 
   useEffect(() => {
     return subscribeStats((s) => {
@@ -25,7 +24,8 @@ export function PerformancePanel(): React.JSX.Element {
       const frameHist = frameRef.current;
       frameHist.push(s.fps > 0 ? 1000 / s.fps : 0);
       if (frameHist.length > HISTORY) frameHist.shift();
-      force((n) => n + 1);
+      // No separate force-update needed: setStats triggers the re-render that
+      // makes the useMemo below recompute from the mutated refs.
     });
   }, []);
 

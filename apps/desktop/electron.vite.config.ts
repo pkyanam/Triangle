@@ -6,14 +6,18 @@ import react from '@vitejs/plugin-react';
 
 // Keep workspace packages bundled (they ship as TS source, not built JS) while
 // still externalizing real node_modules deps like chokidar/electron.
-const keepBundled = { exclude: ['@triangle/shared', '@triangle/preview-runtime'] };
+const keepBundled = { exclude: ['@triangle/shared', '@triangle/preview-runtime', '@triangle/automation-engine'] };
 
 /**
  * A Vite plugin that copies the Three.js runtime files (`three.core.js` +
- * `OrbitControls.js`) into `out/main/runtime/` after the main bundle is written.
- * The standalone-HTML export (Stage 5.5, ADR 0018) inlines these into each
- * exported `index.html`. They ship inside `app.asar` via the `out` files glob
- * in packaged builds and are read transparently by Electron's asar-aware fs.
+ * `three.module.js` + `three.webgpu.js` + `three.tsl.js` + `OrbitControls.js`)
+ * into `out/main/runtime/` after the main bundle is written. The standalone-HTML
+ * export (Stage 5.5, ADR 0018) inlines these into each exported `index.html`.
+ * The WebGPU + TSL builds are included so author modules that use node
+ * materials / TSL / compute shaders (e.g. the webgpu-showcase template) export
+ * to standalone HTML with the same `THREE` surface the in-app runtime injects.
+ * They ship inside `app.asar` via the `out` files glob in packaged builds and
+ * are read transparently by Electron's asar-aware fs. See ADR 0026.
  */
 function copyRuntime(): import('vite').Plugin {
   const repoRoot = resolve(__dirname, '..', '..');
@@ -27,6 +31,14 @@ function copyRuntime(): import('vite').Plugin {
     {
       src: resolve(threePkg, 'build', 'three.module.js'),
       dest: resolve(dest, 'three.module.js'),
+    },
+    {
+      src: resolve(threePkg, 'build', 'three.webgpu.js'),
+      dest: resolve(dest, 'three.webgpu.js'),
+    },
+    {
+      src: resolve(threePkg, 'build', 'three.tsl.js'),
+      dest: resolve(dest, 'three.tsl.js'),
     },
     {
       src: resolve(threePkg, 'examples', 'jsm', 'controls', 'OrbitControls.js'),

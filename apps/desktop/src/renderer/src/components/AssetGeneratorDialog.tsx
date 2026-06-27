@@ -380,10 +380,16 @@ function GlbPreview({ url }: { url: string }): React.JSX.Element {
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z) || 1;
+        // Center the model inside a wrapper group, then scale the group. Scaling
+        // the group (rather than the model) scales around the group's origin, so
+        // the model's bounding-box centre stays at the world origin that the
+        // camera and OrbitControls target. Scaling the model directly would
+        // shift the centre to center * (scale - 1), leaving it off-centre.
         root.position.sub(center);
-        const scale = 1.6 / maxDim;
-        root.scale.setScalar(scale);
-        scene.add(root);
+        const group = new THREE.Group();
+        group.add(root);
+        group.scale.setScalar(1.6 / maxDim);
+        scene.add(group);
       },
       undefined,
       () => {
