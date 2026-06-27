@@ -180,13 +180,16 @@ triangle/
 │   ├── shared/             # Shared TS types: IPC contract + agent tool schemas
 │   ├── preview-runtime/    # Framework-agnostic Three.js preview engine
 │   ├── integrations/       # Third-party API clients (Hugging Face, …)
-│   ├── automation-engine/  # Trigger/condition/action automation engine (V2)
+│   ├── automation-engine/  # Trigger/condition/action automation engine (V2) + supervisor (V5)
 │   ├── verification/       # Verification pipeline + visual regression (V3)
 │   ├── memory/             # Project memory: SQLite + TF-IDF recall (V4)
+│   ├── eval/               # Standardized eval harness (V5)
 │   └── robotics/           # URDF/joint/sensor types + Rapier snippet generator
 ├── templates/              # Project template gallery (new-project sources)
 │   ├── starter/            # Fresnel torus-knot + instanced particles
-│   └── raymarch/           # Full-screen ray-marched SDF (shader-focused)
+│   ├── raymarch/           # Full-screen ray-marched SDF (shader-focused)
+│   ├── evals/              # Built-in eval suites (V5)
+│   └── supervisor/         # Built-in supervisor rules (V5)
 └── docs/                   # ADRs, roadmap, and stage notes
 ```
 

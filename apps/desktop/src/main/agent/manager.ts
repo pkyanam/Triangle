@@ -23,6 +23,7 @@ import type { SessionStore } from '../session-store.js';
 import type { VerificationHost } from '../verification.js';
 import type { MemoryHost } from '../memory.js';
 import { buildTriangleSystemPrompt } from './system-prompt.js';
+import { RunLockManager } from './locks.js';
 import { createToolset, type ApprovalGate } from './tools.js';
 import type { AgentHarness, ApprovalAsk, ApprovalOutcome } from './harness.js';
 import { mockHarness } from './mock.js';
@@ -105,6 +106,8 @@ interface ActiveRun {
   scope: Scope;
   /** V3 (ADR 0030): set true once any write is approved, gating post-run verification. */
   writesApproved: boolean;
+  /** V5 (ADR 0032): object locks held by this run (released on cleanup). */
+  objectLocks: string[];
 }
 
 /** Summarise a batch of file changes for the session-history approval entry. */
@@ -126,6 +129,10 @@ export class AgentManager {
     { resolve: (outcome: ApprovalOutcome) => void; runId: string }
   >();
   private approvalCounter = 0;
+  /** V5 (ADR 0032): object-level lock + queue manager for concurrent runs. */
+  private readonly locks = new RunLockManager<AgentStartRequest>();
+  /** V5 (ADR 0032): resolve callbacks for queued runs, keyed by run id. */
+  private readonly queuedResolvers = new Map<string, (result: AgentStartResult) => void>();
 
   constructor(
     private readonly project: ProjectManager,
@@ -194,8 +201,46 @@ export class AgentManager {
     if (!instance || !model) {
       return { runId: req.runId, accepted: false, reason: 'No provider instance or model selected.' };
     }
-    const runConfig = buildRunConfig(baseConfig, instance, model);
 
+    // V5 (ADR 0032): object-level lock acquisition. When the request carries
+    // `objectLocks`, try to acquire them; if any are already held by an active
+    // run, queue the run — it starts automatically once the conflicting run
+    // releases its locks. Runs without `objectLocks` bypass locking entirely
+    // (backward-compatible).
+    const locks = req.objectLocks ?? [];
+    if (locks.length > 0 && !this.locks.tryAcquire(req.runId, locks)) {
+      const conflict = this.locks.findConflict(locks);
+      this.emitEvent({
+        type: 'log',
+        runId: req.runId,
+        level: 'info',
+        text: `Queued: waiting for run ${conflict} to release object locks (${locks.join(', ')}).`,
+      });
+      return new Promise<AgentStartResult>((resolve) => {
+        this.locks.enqueue(req, req.runId, locks);
+        this.queuedResolvers.set(req.runId, resolve);
+      });
+    }
+
+    this.commenceRun(req, harness, instance, model, baseConfig, locks);
+    return { runId: req.runId, accepted: true };
+  }
+
+  /**
+   * V5 (ADR 0032): actually start the run — build the config, register the
+   * active run, and kick off execution. Locks are already acquired (by
+   * {@link start} or {@link drainQueue}). Called directly when there's no
+   * conflict, or by {@link drainQueue} after a conflict clears.
+   */
+  private commenceRun(
+    req: AgentStartRequest,
+    harness: AgentHarness,
+    instance: ProviderInstance,
+    model: string,
+    baseConfig: TriangleConfig,
+    locks: string[],
+  ): void {
+    const runConfig = buildRunConfig(baseConfig, instance, model);
     const controller = new AbortController();
     // V1 (ADR 0028): resolve the scope from the request's policy tier (default
     // 'project' — preserves autoApproveWrites). A custom scope is used as-is.
@@ -207,11 +252,61 @@ export class AgentManager {
       autoApproveAll: req.autoApproveWrites,
       scope,
       writesApproved: false,
+      objectLocks: locks,
     };
     this.runs.set(req.runId, run);
 
     void this.execute(req, harness, runConfig, run, instance);
-    return { runId: req.runId, accepted: true };
+  }
+
+  /**
+   * V5 (ADR 0032): after a run releases its locks, drain the queue and start
+   * any runs whose locks are now acquirable. {@link RunLockManager.release}
+   * returns the list of now-commenced queued runs; for each, re-validate the
+   * harness/instance, commence the run, and resolve its queued start promise.
+   */
+  private drainQueue(commenced: Array<{ req: AgentStartRequest; runId: string; locks: string[] }>): void {
+    for (const queued of commenced) {
+      void this.startQueuedRun(queued);
+    }
+  }
+
+  /** Re-validate + commence a queued run, resolving its start promise. */
+  private async startQueuedRun(queued: {
+    req: AgentStartRequest;
+    runId: string;
+    locks: string[];
+  }): Promise<void> {
+    const { req, runId } = queued;
+    const resolve = this.queuedResolvers.get(runId);
+    this.queuedResolvers.delete(runId);
+    if (!resolve) return; // was cancelled while queued
+    const harness = this.harnesses[req.harness];
+    if (!harness) {
+      resolve({ runId, accepted: false, reason: `Harness '${req.harness}' is unavailable.` });
+      return;
+    }
+    try {
+      const baseConfig = loadConfig();
+      const { available, reason } = await harness.availability(baseConfig);
+      if (!available) {
+        resolve({ runId, accepted: false, reason: reason ?? 'Harness unavailable.' });
+        return;
+      }
+      const settings = await loadAgentSettings();
+      const instance = req.instanceId
+        ? settings.providerInstances.find((i) => i.id === req.instanceId)
+        : settings.providerInstances.find((i) => i.kind === req.harness && i.enabled);
+      const model = req.model ?? instance?.model;
+      if (!instance || !model) {
+        resolve({ runId, accepted: false, reason: 'No provider instance or model selected.' });
+        return;
+      }
+      this.commenceRun(req, harness, instance, model, baseConfig, queued.locks);
+      resolve({ runId, accepted: true });
+    } catch (err) {
+      resolve({ runId, accepted: false, reason: (err as Error).message });
+    }
   }
 
   private async execute(
@@ -457,6 +552,15 @@ export class AgentManager {
 
   /** Cancel a run and reject any approvals it's waiting on. */
   cancel(runId: string): { ok: boolean } {
+    // V5 (ADR 0032): a run may be queued waiting for object locks. Remove it
+    // from the queue and resolve its start promise as cancelled.
+    const queued = this.locks.cancelQueued(runId);
+    if (queued) {
+      const resolve = this.queuedResolvers.get(runId);
+      this.queuedResolvers.delete(runId);
+      resolve?.({ runId, accepted: false, reason: 'Cancelled while queued.' });
+      return { ok: true };
+    }
     const run = this.runs.get(runId);
     if (!run) return { ok: false };
     run.controller.abort();
@@ -519,6 +623,11 @@ export class AgentManager {
         this.pendingApprovals.get(approvalId)?.resolve(AgentManager.REJECTED);
         this.pendingApprovals.delete(approvalId);
       }
+      // V5 (ADR 0032): release this run's object locks, then drain the queue
+      // so any blocked runs can start. `release` returns the now-commenced
+      // queued runs (locks already re-acquired by the lock manager).
+      const commenced = this.locks.release(runId);
+      this.drainQueue(commenced);
     }
     this.runs.delete(runId);
   }
@@ -526,6 +635,12 @@ export class AgentManager {
   /** Abort everything (called on quit). */
   disposeAll(): void {
     for (const [runId] of this.runs) this.cancel(runId);
+    // V5 (ADR 0032): reject any queued runs so their start promises resolve.
+    for (const [runId, resolve] of this.queuedResolvers) {
+      this.locks.cancelQueued(runId);
+      resolve({ runId, accepted: false, reason: 'Shutting down.' });
+    }
+    this.queuedResolvers.clear();
   }
 }
 

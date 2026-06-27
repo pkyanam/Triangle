@@ -1,0 +1,18 @@
+{
+  "id": "builtin-post-processing",
+  "name": "Post-Processing",
+  "description": "Add a bloom post-processing pass to the scene. Success: no runtime exceptions + screenshot non-empty.",
+  "tasks": [
+    {
+      "id": "add-bloom-pass",
+      "name": "Add bloom post-processing pass",
+      "prompt": "Add a THREE.UnrealBloomPass post-processing pass to the scene in src/main.js. Use an EffectComposer with a RenderPass followed by the bloom pass. Choose reasonable bloom parameters (strength 0.8, radius 0.4, threshold 0.85). Call triangle_capture_screenshot to confirm the render is non-empty and triangle_describe_scene to confirm no runtime exceptions. Report what you changed.",
+      "setup": "A project with a basic Three.js scene in src/main.js (no existing post-processing).",
+      "successCriteria": {
+        "description": "No runtime exceptions after adding the pass and the screenshot is non-empty."
+      },
+      "maxTokens": 10000,
+      "timeoutMs": 150000
+    }
+  ]
+}

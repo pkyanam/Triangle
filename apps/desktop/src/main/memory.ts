@@ -177,6 +177,11 @@ export class MemoryHost {
     return this.memory?.listNotes() ?? [];
   }
 
+  /** V5 (ADR 0032): expose the underlying store so the eval host can index runs. */
+  getMemory(): ProjectMemory | null {
+    return this.memory;
+  }
+
   /** Delete a user note by id. */
   deleteNote(id: string): { ok: boolean } {
     if (!this.memory) return { ok: false };

@@ -27,6 +27,8 @@ import type {
   VerificationReport,
 } from './verification.js';
 import type { MemoryEntry, MemoryNote, Playbook } from './context.js';
+import type { EvalProgressEvent, EvalRun, EvalSuite } from './eval.js';
+import type { SupervisorConfig, SupervisorDecision, SupervisorRule } from './supervisor.js';
 
 /** Request/response channels invoked from the renderer. */
 export interface IpcInvokeChannels {
@@ -413,6 +415,46 @@ export interface IpcInvokeChannels {
     request: { id: string };
     response: Playbook | null;
   };
+  /** V5 (ADR 0032): list all eval suites (built-in + user). */
+  'eval:list-suites': {
+    request: void;
+    response: EvalSuite[];
+  };
+  /** V5 (ADR 0032): run an eval suite by id against a harness/model. */
+  'eval:run-suite': {
+    request: { suiteId: string; harness: string; model?: string; instanceId?: string };
+    response: EvalRun;
+  };
+  /** V5 (ADR 0032): list past eval runs (from session history). */
+  'eval:list-runs': {
+    request: void;
+    response: EvalRun[];
+  };
+  /** V5 (ADR 0032): list all supervisor rules (built-in + user). */
+  'supervisor:list-rules': {
+    request: void;
+    response: SupervisorRule[];
+  };
+  /** V5 (ADR 0032): get the supervisor config (enabled + enabled rule ids). */
+  'supervisor:get-config': {
+    request: void;
+    response: SupervisorConfig;
+  };
+  /** V5 (ADR 0032): update the supervisor config (enabled + enabled rule ids). */
+  'supervisor:set-config': {
+    request: Partial<SupervisorConfig>;
+    response: { ok: boolean; config: SupervisorConfig };
+  };
+  /** V5 (ADR 0032): enable/disable a single supervisor rule by id. */
+  'supervisor:set-rule-enabled': {
+    request: { id: string; enabled: boolean };
+    response: { ok: boolean; error?: string };
+  };
+  /** V5 (ADR 0032): list recent supervisor decisions. */
+  'supervisor:list-decisions': {
+    request: void;
+    response: SupervisorDecision[];
+  };
 }
 
 /** Events pushed from main to renderer. */
@@ -431,6 +473,10 @@ export interface IpcEventChannels {
   'automation:triggered': AutomationTriggeredEvent;
   /** V3 (ADR 0030): a verification run completed (report pushed to the Visual QA panel). */
   'verification:report': VerificationReport;
+  /** V5 (ADR 0032): live progress during an eval run (task started/finished). */
+  'eval:progress': EvalProgressEvent;
+  /** V5 (ADR 0032): a supervisor decision (acted or suppressed). */
+  'supervisor:decision': SupervisorDecision;
 }
 
 export type IpcInvokeChannel = keyof IpcInvokeChannels;

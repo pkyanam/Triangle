@@ -10,3 +10,5 @@ export * from './api.js';
 export * from './scope.js';
 export * from './automation.js';
 export * from './verification.js';
+export * from './eval.js';
+export * from './supervisor.js';

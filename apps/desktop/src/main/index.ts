@@ -21,6 +21,8 @@ import { SessionStore } from './session-store.js';
 import { AutomationHost } from './automation.js';
 import { VerificationHost } from './verification.js';
 import { MemoryHost } from './memory.js';
+import { EvalHost } from './eval.js';
+import { SupervisorHost } from './supervisor.js';
 import { createToolset } from './agent/tools.js';
 import { hfDeviceCode, hfDisconnect, hfPollToken, hfStatus } from './hf-oauth.js';
 
@@ -97,6 +99,8 @@ let sessions: SessionStore;
 let automation: AutomationHost;
 let verification: VerificationHost;
 let memory: MemoryHost;
+let evalHost: EvalHost;
+let supervisor: SupervisorHost;
 
 /** Decode a `data:…;base64,…` URL into raw bytes. */
 function dataUrlToBuffer(dataUrl: string): Buffer {
@@ -126,6 +130,8 @@ function notifyProjectChanged(info: IpcEventPayload<'project:changed'>): void {
   send('project:changed', info);
   void automation?.reloadForProject();
   void memory?.reloadForProject().catch((err) => console.warn('[main] memory reload failed:', err));
+  void evalHost?.reloadForProject().catch((err) => console.warn('[main] eval reload failed:', err));
+  void supervisor?.reloadForProject().catch((err) => console.warn('[main] supervisor reload failed:', err));
 }
 
 function registerIpc(): void {
@@ -298,6 +304,8 @@ function registerIpc(): void {
   // automations (e.g. the Shader Error Auto-Fixer) fire on a matching trigger.
   handle('preview:event', (req) => {
     automation?.onPreviewEvent(req);
+    // V5 (ADR 0032): route preview events to the supervisor (opt-in).
+    supervisor?.onPreviewEvent(req);
     return { ok: true };
   });
   handle('preview:save-capture', (req) => project.saveCapture(dataUrlToBuffer(req.dataUrl)));
@@ -367,6 +375,15 @@ function registerIpc(): void {
   handle('memory:delete-note', (req) => memory.deleteNote(req.id));
   handle('playbook:list', () => memory.listPlaybooks());
   handle('playbook:get', (req) => memory.getPlaybook(req.id));
+  // V5 (ADR 0032): eval harness + supervisor IPC handlers.
+  handle('eval:list-suites', () => evalHost.listSuites());
+  handle('eval:run-suite', (req) => evalHost.runSuite(req));
+  handle('eval:list-runs', () => evalHost.listRuns());
+  handle('supervisor:list-rules', () => supervisor.listRules());
+  handle('supervisor:get-config', () => supervisor.getConfig());
+  handle('supervisor:set-config', (req) => supervisor.setConfig(req));
+  handle('supervisor:set-rule-enabled', (req) => supervisor.setRuleEnabled(req));
+  handle('supervisor:list-decisions', () => supervisor.listDecisions());
 }
 
 function createWindow(): void {
@@ -505,6 +522,22 @@ app.whenReady().then(async () => {
     await automation.init();
   } catch (err) {
     console.error('[main] automation engine failed to initialize:', err);
+  }
+  // V5 (ADR 0032): the eval harness + supervisor. The eval host runs
+  // standardized suites against a harness/model and indexes results into
+  // project memory. The supervisor watches preview events and triggers agent
+  // runs (e.g. the Performance Optimizer on FPS drops); opt-in, off by default.
+  evalHost = new EvalHost(project, agents, memory, sessions, (event) => send('eval:progress', event));
+  try {
+    await evalHost.init();
+  } catch (err) {
+    console.error('[main] eval host failed to initialize:', err);
+  }
+  supervisor = new SupervisorHost(project, agents, memory, (decision) => send('supervisor:decision', decision));
+  try {
+    await supervisor.init();
+  } catch (err) {
+    console.error('[main] supervisor host failed to initialize:', err);
   }
 
   registerIpc();

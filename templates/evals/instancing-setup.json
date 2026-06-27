@@ -1,0 +1,18 @@
+{
+  "id": "builtin-instancing-setup",
+  "name": "Instancing Setup",
+  "description": "Convert N duplicated meshes to a single InstancedMesh. Success: scene integrity preserved (object count reduced) and perf improvement.",
+  "tasks": [
+    {
+      "id": "convert-duplicates-to-instanced",
+      "name": "Convert duplicated meshes to InstancedMesh",
+      "prompt": "The scene in src/main.js creates N duplicated Mesh instances of the same geometry+material in a loop. Convert them to a single THREE.InstancedMesh, preserving the per-instance transforms. Call triangle_describe_scene and triangle_performance_snapshot before and after to confirm the scene integrity (same visual) and the perf improvement (fewer draw calls). Report the before/after metrics.",
+      "setup": "A project with src/main.js creating 100+ duplicated Mesh instances of the same geometry+material.",
+      "successCriteria": {
+        "description": "Scene integrity preserved (same object count semantics) and draw calls reduced after conversion."
+      },
+      "maxTokens": 12000,
+      "timeoutMs": 180000
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "builtin-supervisor-perf-fps-drop",
+  "name": "Auto Performance Optimizer",
+  "description": "When FPS drops below 30, automatically invokes the Performance Optimizer playbook to diagnose and fix the bottleneck. Cooldown: 90s.",
+  "trigger": { "kind": "perf-threshold", "metric": "fps", "op": "<", "value": 30 },
+  "plan": "Performance dropped below 30 FPS. Call triangle_performance_snapshot and triangle_describe_scene to understand the current bottleneck. Propose and apply the single highest-impact optimization (e.g. instancing, draw-call merging, LOD, material simplification, frustum culling). Then call triangle_performance_snapshot again to confirm the improvement. Summarise the before/after metrics.",
+  "scope": { "mode": "allow", "paths": ["src/**", "*.js", "*.ts", "*.glsl", "*.wgsl", "*.json"] },
+  "policyTier": "source",
+  "successCriteria": {
+    "description": "FPS improvement of at least 10% after the optimization is applied."
+  },
+  "cooldownSeconds": 90,
+  "enabled": true,
+  "builtIn": true
+}

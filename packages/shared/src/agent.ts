@@ -217,6 +217,14 @@ export interface AgentStartRequest {
    * `successCriteria`; absent for a plain manual chat.
    */
   successCriteria?: import('./automation.js').SuccessCriteria;
+  /**
+   * V5 (ADR 0032): scene object names/uuids the run intends to edit. When
+   * present, `AgentManager` acquires object-level locks before starting the
+   * run; if any lock is already held by another run, the run is queued until
+   * the conflicting run releases its locks. Absent = no locking enforced
+   * (backward-compatible).
+   */
+  objectLocks?: string[];
 }
 
 export interface AgentStartResult {

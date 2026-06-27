@@ -1,0 +1,15 @@
+{
+  "id": "builtin-supervisor-shader-error",
+  "name": "Auto Shader Fixer",
+  "description": "When a shader fails to compile, automatically invokes the Shader Error Auto-Fixer playbook to diagnose and fix the compile error. Cooldown: 30s.",
+  "trigger": { "kind": "shader-error" },
+  "plan": "A shader failed to compile. Read the failing shader source (the error context names the source path), diagnose the compile error from the diagnostics, apply the minimal fix, then validate the corrected shader with the triangle_validate_shader tool. Do not touch files outside src/. Report what you changed.",
+  "scope": { "mode": "allow", "paths": ["src/**", "*.glsl", "*.wgsl", "*.js", "*.ts"] },
+  "policyTier": "source",
+  "successCriteria": {
+    "description": "No shader-error event for 5s after the fix is written."
+  },
+  "cooldownSeconds": 30,
+  "enabled": false,
+  "builtIn": true
+}

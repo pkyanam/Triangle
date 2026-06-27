@@ -1,0 +1,18 @@
+{
+  "id": "builtin-shader-fix",
+  "name": "Shader Fix",
+  "description": "Fix a deliberately broken fragment shader. Success: no shader-error events for 5s after the fix is written.",
+  "tasks": [
+    {
+      "id": "fix-broken-frag",
+      "name": "Fix broken fragment shader",
+      "prompt": "The fragment shader in src/shaders/broken.frag has a compile error. Read the shader, diagnose the compile error from the diagnostics, apply the minimal fix, then validate the corrected shader with the triangle_validate_shader tool. Do not touch files outside src/. Report what you changed.",
+      "setup": "A project with a deliberately broken fragment shader in src/shaders/broken.frag (undeclared identifier / type mismatch).",
+      "successCriteria": {
+        "description": "No shader-error event for 5s after the fix is written."
+      },
+      "maxTokens": 8000,
+      "timeoutMs": 120000
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "name": "@triangle/automation-engine",
+  "name": "@triangle/eval",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,11 @@
   "dependencies": {
     "@triangle/shared": "workspace:*"
   },
+  "peerDependencies": {
+    "@triangle/memory": "workspace:*"
+  },
   "devDependencies": {
+    "@triangle/memory": "workspace:*",
     "@types/node": "24.10.1",
     "tsx": "^4.22.4",
     "typescript": "5.9.3"

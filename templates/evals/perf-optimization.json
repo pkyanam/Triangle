@@ -1,0 +1,18 @@
+{
+  "id": "builtin-perf-optimization",
+  "name": "Performance Optimization",
+  "description": "Improve FPS on a heavy scene. Success: FPS improvement of at least 10% (reuses V3 verification perf-delta check).",
+  "tasks": [
+    {
+      "id": "optimize-heavy-scene",
+      "name": "Optimize FPS on a heavy scene",
+      "prompt": "The scene in src/main.js is render-heavy with low FPS. Call triangle_performance_snapshot and triangle_describe_scene to understand the current bottleneck. Propose and apply the single highest-impact optimization (e.g. instancing, draw-call merging, LOD, material simplification, frustum culling). Then call triangle_performance_snapshot again to confirm the improvement. Summarise the before/after metrics.",
+      "setup": "A project with a heavy scene in src/main.js (many draw calls, duplicated geometry, no LOD).",
+      "successCriteria": {
+        "description": "FPS improvement of at least 10% after the optimization is applied (enforced by the V3 perf-delta verification check)."
+      },
+      "maxTokens": 12000,
+      "timeoutMs": 180000
+    }
+  ]
+}

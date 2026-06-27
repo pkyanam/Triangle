@@ -57,6 +57,9 @@ importers:
       '@triangle/automation-engine':
         specifier: workspace:*
         version: link:../../packages/automation-engine
+      '@triangle/eval':
+        specifier: workspace:*
+        version: link:../../packages/eval
       '@triangle/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
@@ -152,6 +155,28 @@ importers:
         specifier: workspace:*
         version: link:../shared
     devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/eval:
+    dependencies:
+      '@triangle/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@triangle/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
       tsx:
         specifier: ^4.22.4
         version: 4.22.4

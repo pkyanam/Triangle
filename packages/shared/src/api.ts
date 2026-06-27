@@ -30,6 +30,8 @@ import type {
   VerificationReport,
 } from './verification.js';
 import type { MemoryEntry, MemoryNote, Playbook } from './context.js';
+import type { EvalProgressEvent, EvalRun, EvalSuite } from './eval.js';
+import type { SupervisorConfig, SupervisorDecision, SupervisorRule } from './supervisor.js';
 
 /** Unsubscribe handle returned by event subscriptions. */
 export type Unsubscribe = () => void;
@@ -228,5 +230,44 @@ export interface TriangleApi {
     list: () => Promise<Playbook[]>;
     /** Read one playbook by id, when present. */
     get: (id: string) => Promise<Playbook | null>;
+  };
+  /**
+   * V5 (ADR 0032): the eval harness — standardized suites run against a
+   * harness/model to track agent performance over time. Results are indexed
+   * into project memory (V4) so future runs can recall past eval outcomes.
+   */
+  eval: {
+    /** List all eval suites (built-in + user). */
+    listSuites: () => Promise<EvalSuite[]>;
+    /** Run a suite by id against a harness/model. Returns the completed run. */
+    runSuite: (req: {
+      suiteId: string;
+      harness: string;
+      model?: string;
+      instanceId?: string;
+    }) => Promise<EvalRun>;
+    /** List past eval runs (from session history). */
+    listRuns: () => Promise<EvalRun[]>;
+    /** Subscribe to `eval:progress` push events. */
+    onProgress: (cb: (event: EvalProgressEvent) => void) => Unsubscribe;
+  };
+  /**
+   * V5 (ADR 0032): the supervisor — a lightweight orchestrator that watches
+   * preview events, evaluates declarative rules, and triggers agent runs
+   * (e.g. the Performance Optimizer on FPS drops). Opt-in, off by default.
+   */
+  supervisor: {
+    /** List all supervisor rules (built-in + user). */
+    listRules: () => Promise<SupervisorRule[]>;
+    /** Get the supervisor config (enabled + enabled rule ids). */
+    getConfig: () => Promise<SupervisorConfig>;
+    /** Update the supervisor config. */
+    setConfig: (patch: Partial<SupervisorConfig>) => Promise<{ ok: boolean; config: SupervisorConfig }>;
+    /** Enable/disable a single rule by id. */
+    setRuleEnabled: (id: string, enabled: boolean) => Promise<{ ok: boolean; error?: string }>;
+    /** List recent supervisor decisions. */
+    listDecisions: () => Promise<SupervisorDecision[]>;
+    /** Subscribe to `supervisor:decision` push events. */
+    onDecision: (cb: (decision: SupervisorDecision) => void) => Unsubscribe;
   };
 }

@@ -3,9 +3,11 @@ import type {
   AgentEvent,
   ApprovalRequest,
   AutomationTriggeredEvent,
+  EvalProgressEvent,
   FileChangeEvent,
   PreviewRequest,
   ProjectInfo,
+  SupervisorDecision,
   TriangleApi,
   Unsubscribe,
   VerificationReport,
@@ -115,6 +117,20 @@ const api: TriangleApi = {
   playbook: {
     list: () => ipcRenderer.invoke('playbook:list'),
     get: (id) => ipcRenderer.invoke('playbook:get', { id }),
+  },
+  eval: {
+    listSuites: () => ipcRenderer.invoke('eval:list-suites'),
+    runSuite: (req) => ipcRenderer.invoke('eval:run-suite', req),
+    listRuns: () => ipcRenderer.invoke('eval:list-runs'),
+    onProgress: (cb) => subscribe<EvalProgressEvent>('eval:progress', cb),
+  },
+  supervisor: {
+    listRules: () => ipcRenderer.invoke('supervisor:list-rules'),
+    getConfig: () => ipcRenderer.invoke('supervisor:get-config'),
+    setConfig: (patch) => ipcRenderer.invoke('supervisor:set-config', patch),
+    setRuleEnabled: (id, enabled) => ipcRenderer.invoke('supervisor:set-rule-enabled', { id, enabled }),
+    listDecisions: () => ipcRenderer.invoke('supervisor:list-decisions'),
+    onDecision: (cb) => subscribe<SupervisorDecision>('supervisor:decision', cb),
   },
 };
 
