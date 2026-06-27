@@ -86,6 +86,13 @@ export interface RunContext {
   emit: (event: HarnessEvent) => void;
   /** Aborts when the user cancels the run. */
   signal: AbortSignal;
+  /**
+   * V4 (ADR 0031): the per-run system prompt assembled from the dynamic
+   * {@link ContextBundle} (scene snapshot, perf, recalled sessions, matching
+   * playbooks, error context). When absent the harness falls back to its
+   * static default ({@link buildTriangleSystemPrompt} with no bundle).
+   */
+  systemPrompt?: string;
 }
 
 /** A pluggable agent backend (Claude Agent SDK, Codex CLI, …). */

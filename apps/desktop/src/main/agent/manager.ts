@@ -6,9 +6,13 @@ import type {
   ApprovalDecision,
   ApprovalFileChange,
   ApprovalRequest,
+  ContextBundle,
+  ErrorContext,
   HarnessAvailability,
   HarnessId,
   ProviderInstance,
+  SessionStatus,
+  StopReason,
 } from '@triangle/shared';
 import { isPathInScope, TIER_SCOPES, type PolicyTier, type Scope } from '@triangle/shared';
 import { loadAgentSettings, loadConfig, type TriangleConfig } from '../config.js';
@@ -17,6 +21,8 @@ import type { PreviewBridge } from '../preview-bridge.js';
 import type { ToolBridgeServer } from '../tool-bridge.js';
 import type { SessionStore } from '../session-store.js';
 import type { VerificationHost } from '../verification.js';
+import type { MemoryHost } from '../memory.js';
+import { buildTriangleSystemPrompt } from './system-prompt.js';
 import { createToolset, type ApprovalGate } from './tools.js';
 import type { AgentHarness, ApprovalAsk, ApprovalOutcome } from './harness.js';
 import { mockHarness } from './mock.js';
@@ -133,6 +139,8 @@ export class AgentManager {
     private readonly mcpEndpointConfig: () => McpServerConfig | null = () => null,
     /** V3 (ADR 0030): the verification host, used to verify after a run's writes land. */
     private readonly verification: VerificationHost | null = null,
+    /** V4 (ADR 0031): the project memory host, used to build dynamic context + index runs. */
+    private readonly memory: MemoryHost | null = null,
   ) {
     this.harnesses = {
       mock: mockHarness,
@@ -229,9 +237,27 @@ export class AgentManager {
     } catch {
       /* project not initialised — record under a placeholder */
     }
+    // V4 (ADR 0031): assemble the dynamic context bundle for this run —
+    // recalled memory (notes + past sessions), the live scene/perf snapshot,
+    // and matching playbooks — and render it into the per-run system prompt.
+    // When the memory host is absent (or assembly fails) we fall back to the
+    // caller-supplied bundle (V0 placeholder) + the harness's static prompt.
+    let contextBundle: ContextBundle | undefined = req.contextBundle;
+    let systemPrompt: string | undefined;
+    if (this.memory) {
+      try {
+        const error = extractErrorContext(req);
+        contextBundle = await this.memory.buildContextBundle(req.prompt, {
+          ...(error ? { error } : {}),
+        });
+        systemPrompt = buildTriangleSystemPrompt(harnessPromptLabel(req.harness), undefined, contextBundle);
+      } catch (err) {
+        forward({ type: 'log', runId, level: 'warn', text: `Context assembly skipped: ${(err as Error).message}` });
+      }
+    }
     this.sessions.begin(runId, projectId, req.harness, req.prompt, {
       ...(req.trigger ? { trigger: req.trigger } : {}),
-      ...(req.contextBundle ? { contextBundle: req.contextBundle } : {}),
+      ...(contextBundle ? { contextBundle } : {}),
     });
     emitStatus('started');
 
@@ -338,6 +364,7 @@ export class AgentManager {
         autoApproveWrites: req.autoApproveWrites,
         requestApproval,
         signal: run.controller.signal,
+        ...(systemPrompt ? { systemPrompt } : {}),
         emit: (event) => {
           if (event.type === 'assistant') {
             forward({ type: 'assistant', runId, messageId: event.messageId, text: event.text });
@@ -352,10 +379,10 @@ export class AgentManager {
       });
       if (run.controller.signal.aborted) {
         emitStatus('cancelled');
-        this.sessions.finish(runId, 'cancelled', undefined, 'cancelled');
+        this.finishRun(runId, 'cancelled', undefined, 'cancelled');
       } else {
         emitStatus('completed');
-        this.sessions.finish(runId, 'completed', undefined, 'completed');
+        this.finishRun(runId, 'completed', undefined, 'completed');
         // V3 (ADR 0030): after a run's writes land, run the verification
         // pipeline + the run's success criteria. On a rollback-on-fail failure
         // the host restores the last snapshot and the report's `rolledBack`
@@ -386,16 +413,26 @@ export class AgentManager {
     } catch (err) {
       if (run.controller.signal.aborted) {
         emitStatus('cancelled');
-        this.sessions.finish(runId, 'cancelled', undefined, 'cancelled');
+        this.finishRun(runId, 'cancelled', undefined, 'cancelled');
       } else {
         const message = (err as Error).message;
         emitStatus('error', message);
-        this.sessions.finish(runId, 'error', message, 'error');
+        this.finishRun(runId, 'error', message, 'error');
       }
     } finally {
       this.toolBridge.unregister(bridgeToken);
       this.cleanupRun(runId);
     }
+  }
+
+  /**
+   * V4 (ADR 0031): index the run's transcript into project memory (so future
+   * runs can recall it) and then mark the run terminal. Indexing happens before
+   * `SessionStore.finish` evicts the in-memory record.
+   */
+  private finishRun(runId: string, status: SessionStatus, error?: string, stopReason?: StopReason): void {
+    this.memory?.indexRun(runId, status);
+    this.sessions.finish(runId, status, error, stopReason);
   }
 
   /** Map a streamed run event onto a persisted transcript entry (ADR 0016). */
@@ -501,4 +538,39 @@ function labelFor(id: HarnessId): string {
     default:
       return id;
   }
+}
+
+/**
+ * V4 (ADR 0031): the harness label passed to `buildTriangleSystemPrompt`,
+ * matching the labels the static constants use (so the base prompt's role line
+ * is consistent across the static + dynamic paths).
+ */
+function harnessPromptLabel(id: HarnessId): string {
+  switch (id) {
+    case 'devin':
+    case 'acp':
+      return 'Devin / ACP';
+    case 'claude':
+      return 'Claude';
+    case 'codex':
+      return 'Codex';
+    default:
+      return '';
+  }
+}
+
+/**
+ * V4 (ADR 0031): extract error context from a run's trigger when it was
+ * initiated by a preview error (the Console "Fix with agent" button on a
+ * shader-error / runtime-exception). The trigger's `summary` carries the
+ * error message.
+ */
+function extractErrorContext(req: AgentStartRequest): ErrorContext | undefined {
+  if (req.trigger?.kind === 'preview-event') {
+    const t = req.trigger;
+    if (t.eventType === 'shader-error' || t.eventType === 'runtime-exception') {
+      return { message: t.summary };
+    }
+  }
+  return undefined;
 }

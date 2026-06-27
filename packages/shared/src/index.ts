@@ -3,6 +3,7 @@ export * from './ipc.js';
 export * from './preview.js';
 export * from './tools.js';
 export * from './agent.js';
+export * from './context.js';
 export * from './session.js';
 export * from './endpoint.js';
 export * from './api.js';

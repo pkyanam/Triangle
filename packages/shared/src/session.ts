@@ -9,6 +9,11 @@
  * outcomes are recorded.
  */
 import type { AgentRunStatus, ApprovalScope, HarnessId, ToolCallTrace } from './agent.js';
+import type { ContextBundle } from './context.js';
+
+// Re-export so existing `import('./session.js').ContextBundle` references keep
+// resolving. The type itself lives in `context.ts` (V4, ADR 0031).
+export type { ContextBundle } from './context.js';
 
 /** Final (or in-flight) status of a recorded run. */
 export type SessionStatus = AgentRunStatus | 'running';
@@ -23,18 +28,6 @@ export type SessionTrigger =
   | { kind: 'manual' }
   | { kind: 'preview-event'; eventType: string; summary: string }
   | { kind: 'automation'; automationId: string };
-
-/**
- * V0 audit spine — a summary of the context provided to the agent (filled in
- * fully by V4's dynamic context; V0 records a lightweight description so the
- * audit shape is complete).
- */
-export interface ContextBundle {
-  /** Human-readable summary of attached context (scene snapshot, error, …). */
-  summary: string;
-  /** Token estimate of the assembled context, when known. */
-  tokenEstimate?: number;
-}
 
 /**
  * V0 audit spine — verification result. V0 left this as a placeholder; V3

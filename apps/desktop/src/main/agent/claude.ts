@@ -305,7 +305,7 @@ export const claudeHarness: AgentHarness = {
     const options: Options = {
       cwd: projectRoot,
       model: config.claudeModel,
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: ctx.systemPrompt ?? SYSTEM_PROMPT,
       mcpServers: { triangle: triangleServer },
       allowedTools: [
         ...TRIANGLE_TOOL_NAMES,

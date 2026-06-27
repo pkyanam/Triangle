@@ -507,7 +507,7 @@ export const codexHarness: AgentHarness = {
             cwd: projectRoot,
             approvalPolicy: gated ? 'on-request' : 'never',
             sandbox: gated ? 'read-only' : 'workspace-write',
-            developerInstructions: DEVELOPER_INSTRUCTIONS,
+            developerInstructions: ctx.systemPrompt ?? DEVELOPER_INSTRUCTIONS,
             config: threadConfig,
             ...(config.codexModel ? { model: config.codexModel } : {}),
           })) as { thread?: { id?: string } };

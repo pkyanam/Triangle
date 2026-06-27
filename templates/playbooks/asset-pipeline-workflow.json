@@ -1,0 +1,9 @@
+{
+  "id": "builtin-asset-pipeline-workflow",
+  "name": "3D Asset Pipeline Workflow",
+  "description": "Promotes the PROMPTING.md Hugging Face asset pipeline: generate a 3D asset, download it into the project, then import it into the live preview — in that order. Matched on asset / model / generate / import keywords.",
+  "plan": "To add a 3D model, follow the generate → download → import order. First call hf_generate_3d_asset (text-to-3D with provider 'shape-e', or image-to-3D with 'hunyuan3d' / 'trellis' / 'triposr'). Then call download_3d_asset to write the model into the project (approval-gated; the destination gets the right extension). Finally call triangle_import_3d_asset to load it into the live preview and confirm it appears with triangle_describe_scene. Requires an HF token (HF_TOKEN, hfToken setting, or HF OAuth).",
+  "keywords": ["asset", "model", "generate", "3d", "hugging face", "download", "import", "glb", "gltf", "mesh"],
+  "version": 1,
+  "builtIn": true
+}

@@ -16,19 +16,20 @@ import { AssetBrowser } from '../components/AssetBrowser.js';
 import { PerformancePanel } from '../components/PerformancePanel.js';
 import { AutomationsPanel } from '../components/AutomationsPanel.js';
 import { VisualQAPanel } from '../components/VisualQAPanel.js';
+import { MemoryPanel } from '../components/MemoryPanel.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
 /**
- * localStorage key prefix for the persisted dockview layout. Bumped to `v6`
- * (ADR 0030) so saved layouts fall back to the default that includes the
- * Visual QA panel in the right rail.
+ * localStorage key prefix for the persisted dockview layout. Bumped to `v7`
+ * (ADR 0031) so saved layouts fall back to the default that includes the
+ * Memory panel in the right rail.
  */
-const LAYOUT_KEY_PREFIX = 'triangle.layout.v6';
+const LAYOUT_KEY_PREFIX = 'triangle.layout.v7';
 const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
-export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance', 'automations', 'visualqa'] as const;
+export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance', 'automations', 'visualqa', 'memory'] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 export type PanelsOpen = Record<PanelId, boolean>;
 
@@ -57,6 +58,7 @@ const WIDTHS: Record<PanelId, number> = {
   performance: 300,
   automations: 360,
   visualqa: 360,
+  memory: 320,
 };
 
 const MIN_WIDTHS: Record<PanelId, number> = {
@@ -70,6 +72,7 @@ const MIN_WIDTHS: Record<PanelId, number> = {
   performance: 240,
   automations: 280,
   visualqa: 280,
+  memory: 240,
 };
 
 // --- Panel components: rendered by dockview, read live state from context. ---
@@ -191,6 +194,18 @@ function VisualQADockPanel(_props: IDockviewPanelProps): React.JSX.Element {
   );
 }
 
+function MemoryDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
+  return (
+    <div className="tpanel">
+      <ErrorBoundary title="Memory panel failed">
+        <div className="tpanel__body">
+          <MemoryPanel />
+        </div>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
 const COMPONENTS = {
   explorer: ExplorerPanel,
   assets: AssetsPanel,
@@ -202,6 +217,7 @@ const COMPONENTS = {
   performance: PerformanceDockPanel,
   automations: AutomationsDockPanel,
   visualqa: VisualQADockPanel,
+  memory: MemoryDockPanel,
 };
 
 const TITLES: Record<string, string> = {
@@ -215,6 +231,7 @@ const TITLES: Record<string, string> = {
   performance: 'Performance',
   automations: 'Automations',
   visualqa: 'Visual QA',
+  memory: 'Memory',
 };
 
 /** Build the new engine default layout: left rail, hero viewport, right rail. */
@@ -276,6 +293,13 @@ function buildDefaultLayout(api: DockviewApi): void {
     id: 'visualqa',
     component: 'visualqa',
     title: TITLES.visualqa,
+    position: { referencePanel: 'inspector', direction: 'within' },
+  });
+  // V4 (ADR 0031): Memory sits as a tab alongside the Visual QA panel.
+  api.addPanel({
+    id: 'memory',
+    component: 'memory',
+    title: TITLES.memory,
     position: { referencePanel: 'inspector', direction: 'within' },
   });
   api.getPanel('inspector')?.api.setActive();

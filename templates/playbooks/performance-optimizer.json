@@ -6,6 +6,7 @@
   "plan": "Optimize rendering performance. First call triangle_performance_snapshot and triangle_describe_scene to understand the current bottleneck. Propose the single highest-impact optimization (e.g. instancing, draw-call merging, LOD, material simplification). Apply it to src/, then call triangle_performance_snapshot again to confirm the improvement. Summarise the before/after metrics.",
   "scope": { "mode": "allow", "paths": ["src/**", "*.js", "*.ts", "*.glsl", "*.wgsl", "*.json"] },
   "policyTier": "source",
+  "keywords": ["instancing", "performance", "fps", "draw calls", "lod", "level of detail", "optimization", "optimize", "gpu memory", "triangles"],
   "successCriteria": {
     "description": "FPS improvement of at least 10% after the optimization is applied."
   },

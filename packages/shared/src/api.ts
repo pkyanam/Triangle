@@ -29,6 +29,7 @@ import type {
   VerificationCheckSpec,
   VerificationReport,
 } from './verification.js';
+import type { MemoryEntry, MemoryNote, Playbook } from './context.js';
 
 /** Unsubscribe handle returned by event subscriptions. */
 export type Unsubscribe = () => void;
@@ -199,5 +200,33 @@ export interface TriangleApi {
     getReport: () => Promise<VerificationReport | null>;
     /** Subscribe to `verification:report` push events. */
     onReport: (cb: (report: VerificationReport) => void) => Unsubscribe;
+  };
+  /**
+   * V4 (ADR 0031): project memory — a project-local store (SQLite under
+   * `.triangle/memory/`) indexing session transcripts + user notes with a
+   * TF-IDF index. `recall` pulls the most relevant past outcomes into a run's
+   * context; `addNote` / `listNotes` / `deleteNote` back the Memory panel.
+   */
+  memory: {
+    /** Recall relevant memory entries for a run prompt (bounded by maxEntries). */
+    recall: (query: string, maxEntries?: number) => Promise<MemoryEntry[]>;
+    /** Free-text search over project memory (UI-facing). */
+    search: (query: string, maxEntries?: number) => Promise<MemoryEntry[]>;
+    /** Add a project-scoped user note. */
+    addNote: (text: string) => Promise<IpcResponse<'memory:add-note'>>;
+    /** List all user notes (newest first). */
+    listNotes: () => Promise<MemoryNote[]>;
+    /** Delete a user note by id. */
+    deleteNote: (id: string) => Promise<{ ok: boolean }>;
+  };
+  /**
+   * V4 (ADR 0031): the playbooks library — versioned, structured playbooks
+   * (built-in + user) the context pipeline matches against a run's prompt.
+   */
+  playbook: {
+    /** List all playbooks (built-in + user). */
+    list: () => Promise<Playbook[]>;
+    /** Read one playbook by id, when present. */
+    get: (id: string) => Promise<Playbook | null>;
   };
 }

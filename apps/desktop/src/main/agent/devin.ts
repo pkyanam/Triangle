@@ -129,7 +129,7 @@ export const devinHarness: AgentHarness = {
       ...(configOptions?.mode ? { mode: configOptions.mode } : {}),
       ...(configOptions && Object.keys(configOptions).length > 0 ? { configOptions } : {}),
       ...(ctx.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
-      systemPrompt: ACP_SYSTEM_PROMPT,
+      systemPrompt: ctx.systemPrompt ?? ACP_SYSTEM_PROMPT,
       mcpServers: [
         {
           name: 'triangle',

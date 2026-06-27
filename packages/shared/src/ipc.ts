@@ -26,6 +26,7 @@ import type {
   VerificationCheckSpec,
   VerificationReport,
 } from './verification.js';
+import type { MemoryEntry, MemoryNote, Playbook } from './context.js';
 
 /** Request/response channels invoked from the renderer. */
 export interface IpcInvokeChannels {
@@ -373,6 +374,45 @@ export interface IpcInvokeChannels {
     request: void;
     response: VerificationReport | null;
   };
+  /**
+   * V4 (ADR 0031): recall the most relevant memory entries (notes + past
+   * session outcomes) for a run prompt, bounded by `maxEntries` (default 8).
+   * Backs the dynamic-context pipeline + the Memory panel's search.
+   */
+  'memory:recall': {
+    request: { query: string; maxEntries?: number };
+    response: MemoryEntry[];
+  };
+  /** V4: free-text search over project memory (UI-facing; same scoring as recall). */
+  'memory:search': {
+    request: { query: string; maxEntries?: number };
+    response: MemoryEntry[];
+  };
+  /** V4: add a project-scoped user note indexed by the memory store. */
+  'memory:add-note': {
+    request: { text: string };
+    response: { ok: boolean; note?: MemoryNote; error?: string };
+  };
+  /** V4: list all user notes for the active project (newest first). */
+  'memory:list-notes': {
+    request: void;
+    response: MemoryNote[];
+  };
+  /** V4: delete a user note by id. */
+  'memory:delete-note': {
+    request: { id: string };
+    response: { ok: boolean };
+  };
+  /** V4: list all playbooks (built-in + user) available for context matching. */
+  'playbook:list': {
+    request: void;
+    response: Playbook[];
+  };
+  /** V4: read one playbook by id, when present. */
+  'playbook:get': {
+    request: { id: string };
+    response: Playbook | null;
+  };
 }
 
 /** Events pushed from main to renderer. */
@@ -451,6 +491,13 @@ export const INVOKE_CHANNELS = [
   'verification:baseline-set',
   'verification:baseline-list',
   'verification:report-get',
+  'memory:recall',
+  'memory:search',
+  'memory:add-note',
+  'memory:list-notes',
+  'memory:delete-note',
+  'playbook:list',
+  'playbook:get',
 ] as const satisfies readonly IpcInvokeChannel[];
 
 export const EVENT_CHANNELS = [

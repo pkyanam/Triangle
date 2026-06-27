@@ -51,6 +51,7 @@ export function App(): React.JSX.Element {
     performance: false,
     automations: false,
     visualqa: false,
+    memory: false,
   });
   const workspaceRef = useRef<WorkspaceHandle>(null);
 

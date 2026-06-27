@@ -45,7 +45,7 @@ export const acpHarness: AgentHarness = {
       label: ctx.config.acpAgentLabel || 'ACP agent',
       capabilities: { fs: { readTextFile: true, writeTextFile: true }, image: true },
       ...(ctx.resumeSessionId ? { resumeSessionId: ctx.resumeSessionId } : {}),
-      systemPrompt: ACP_SYSTEM_PROMPT,
+      systemPrompt: ctx.systemPrompt ?? ACP_SYSTEM_PROMPT,
       mcpServers: [
         {
           name: 'triangle',

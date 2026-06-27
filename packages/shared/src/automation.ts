@@ -93,6 +93,13 @@ export interface Automation {
   successCriteria?: SuccessCriteria;
   /** When false the engine skips this automation on its trigger. */
   enabled: boolean;
+  /**
+   * V4 (ADR 0031): keywords describing what the playbook is about, used by the
+   * dynamic-context pipeline to match a run's prompt against this playbook
+   * (e.g. `["instancing", "fps", "lod"]`). Optional; the context loader
+   * auto-derives keywords from the name/plan when absent.
+   */
+  keywords?: string[];
   /** True for the built-in playbooks (not deletable; enable/disable allowed). */
   builtIn?: boolean;
 }

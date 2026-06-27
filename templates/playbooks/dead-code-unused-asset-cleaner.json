@@ -6,6 +6,7 @@
   "plan": "Find and remove unused code and assets. Scan the project's import graph against the files in src/ and assets/, list every module and asset that is never imported or referenced, and propose the deletions. Apply the deletions to src/ only (do not delete binary assets without explicit confirmation). After deletion, verify no imports are broken by reading the entry module and its transitive imports.",
   "scope": { "mode": "allow", "paths": ["src/**", "*.js", "*.ts", "*.glsl", "*.wgsl", "*.json"] },
   "policyTier": "source",
+  "keywords": ["dead code", "unused", "asset", "assets", "cleanup", "import", "orphan"],
   "successCriteria": {
     "description": "No broken imports after the deletions are applied."
   },

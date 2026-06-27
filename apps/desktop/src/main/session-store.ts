@@ -232,6 +232,15 @@ export class SessionStore {
     }
   }
 
+  /**
+   * V4 (ADR 0031): return the in-memory record for an active run, or null when
+   * the run isn't active (finished + evicted, or never began). Used by the
+   * memory host to index a run's transcript before {@link finish} evicts it.
+   */
+  getActive(id: string): SessionRecord | null {
+    return this.active.get(id) ?? null;
+  }
+
   /** Delete all recorded sessions for a project. */
   async clear(projectId: string): Promise<void> {
     await fs.rm(this.baseDir(projectId), { recursive: true, force: true }).catch(() => undefined);

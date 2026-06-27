@@ -1,0 +1,9 @@
+{
+  "id": "builtin-grounding-workflow",
+  "name": "Grounding Workflow",
+  "description": "Promotes the PROMPTING.md ground-before-edit loop: describe the scene / read the file before any edit, iterate transiently, validate shaders, then persist. Matched on grounding + scene + edit keywords.",
+  "plan": "Before editing the scene, ground yourself: call triangle_describe_scene (and triangle_capture_screenshot when framing matters) so you target the right object by name/uuid. For code edits, call triangle_project_tree / triangle_read_file first. Iterate transiently with the set_* tools to dial in a value visually, then persist the winner to source with triangle_write_file. Validate shaders with triangle_validate_shader before writing GLSL. After heavy work, take a triangle_performance_snapshot to catch regressions. Name targets precisely — get the name/uuid from describe_scene before calling set_*.",
+  "keywords": ["ground", "describe", "scene", "edit", "screenshot", "iterate", "transient", "persist", "validate"],
+  "version": 1,
+  "builtIn": true
+}

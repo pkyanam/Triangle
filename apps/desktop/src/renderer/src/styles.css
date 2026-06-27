@@ -4429,3 +4429,90 @@ button {
   color: #fff;
   font-size: 11px;
 }
+
+/* --- Memory panel (V4, ADR 0031) ------------------------------------------ */
+.mem {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  height: 100%;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.mem__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mem__title { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text); }
+.mem__add { display: flex; flex-direction: column; gap: 6px; }
+.mem__input {
+  width: 100%;
+  resize: vertical;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-elevated, #1a1a1a);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+.mem__input:focus { outline: none; border-color: var(--accent, #3b82f6); }
+.mem__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-elevated, #1a1a1a);
+  color: var(--muted);
+}
+.mem__search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+.mem__search-input:focus { outline: none; }
+.mem__section-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.mem__results { display: flex; flex-direction: column; gap: 4px; }
+.mem__result {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-elevated, #1a1a1a);
+}
+.mem__result-text { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem__kind {
+  font-size: 9px;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--border, #2a2a2a);
+  color: var(--muted);
+}
+.mem__kind--session { background: var(--accent, #3b82f6); color: #fff; }
+.mem__notes { display: flex; flex-direction: column; gap: 4px; }
+.mem__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-elevated, #1a1a1a);
+}
+.mem__note-text { flex: 1; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.mem__note-delete {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+}
+.mem__note-delete:hover { color: var(--danger, #ef4444); }

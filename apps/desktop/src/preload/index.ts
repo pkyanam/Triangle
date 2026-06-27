@@ -105,6 +105,17 @@ const api: TriangleApi = {
     getReport: () => ipcRenderer.invoke('verification:report-get'),
     onReport: (cb) => subscribe<VerificationReport>('verification:report', cb),
   },
+  memory: {
+    recall: (query, maxEntries) => ipcRenderer.invoke('memory:recall', { query, ...(maxEntries !== undefined ? { maxEntries } : {}) }),
+    search: (query, maxEntries) => ipcRenderer.invoke('memory:search', { query, ...(maxEntries !== undefined ? { maxEntries } : {}) }),
+    addNote: (text) => ipcRenderer.invoke('memory:add-note', { text }),
+    listNotes: () => ipcRenderer.invoke('memory:list-notes'),
+    deleteNote: (id) => ipcRenderer.invoke('memory:delete-note', { id }),
+  },
+  playbook: {
+    list: () => ipcRenderer.invoke('playbook:list'),
+    get: (id) => ipcRenderer.invoke('playbook:get', { id }),
+  },
 };
 
 contextBridge.exposeInMainWorld('triangle', api);

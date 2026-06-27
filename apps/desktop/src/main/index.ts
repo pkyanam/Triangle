@@ -20,6 +20,7 @@ import { McpEndpoint } from './mcp-endpoint.js';
 import { SessionStore } from './session-store.js';
 import { AutomationHost } from './automation.js';
 import { VerificationHost } from './verification.js';
+import { MemoryHost } from './memory.js';
 import { createToolset } from './agent/tools.js';
 import { hfDeviceCode, hfDisconnect, hfPollToken, hfStatus } from './hf-oauth.js';
 
@@ -95,6 +96,7 @@ let mcpEndpoint: McpEndpoint;
 let sessions: SessionStore;
 let automation: AutomationHost;
 let verification: VerificationHost;
+let memory: MemoryHost;
 
 /** Decode a `data:…;base64,…` URL into raw bytes. */
 function dataUrlToBuffer(dataUrl: string): Buffer {
@@ -117,12 +119,13 @@ function send<C extends IpcEventChannel>(channel: C, payload: IpcEventPayload<C>
 
 /**
  * Push `project:changed` to the renderer and re-hydrate the automation engine
- * for the new active project (V2, ADR 0029). Called wherever the active project
- * changes (create/open/import/restore).
+ * (V2, ADR 0029) + the memory host (V4, ADR 0031) for the new active project.
+ * Called wherever the active project changes (create/open/import/restore).
  */
 function notifyProjectChanged(info: IpcEventPayload<'project:changed'>): void {
   send('project:changed', info);
   void automation?.reloadForProject();
+  void memory?.reloadForProject().catch((err) => console.warn('[main] memory reload failed:', err));
 }
 
 function registerIpc(): void {
@@ -352,6 +355,18 @@ function registerIpc(): void {
   handle('verification:baseline-set', (req) => verification.setBaseline(req.label));
   handle('verification:baseline-list', () => verification.listBaselines());
   handle('verification:report-get', () => verification.getReport());
+
+  // V4 project memory + playbooks (ADR 0031): recall/search memory entries,
+  // manage user notes, and list/get playbooks. The host owns the per-project
+  // SQLite store + the playbooks library; AgentManager calls
+  // `buildContextBundle` before each run to assemble the dynamic context.
+  handle('memory:recall', (req) => memory.recall(req.query, req.maxEntries));
+  handle('memory:search', (req) => memory.search(req.query, req.maxEntries));
+  handle('memory:add-note', (req) => memory.addNote(req.text));
+  handle('memory:list-notes', () => memory.listNotes());
+  handle('memory:delete-note', (req) => memory.deleteNote(req.id));
+  handle('playbook:list', () => memory.listPlaybooks());
+  handle('playbook:get', (req) => memory.getPlaybook(req.id));
 }
 
 function createWindow(): void {
@@ -460,6 +475,16 @@ app.whenReady().then(async () => {
       }
     },
   );
+  // V4 (ADR 0031): the project memory + playbooks host. Owns the per-project
+  // SQLite store under `.triangle/memory/` + the playbooks library; AgentManager
+  // calls `buildContextBundle` before each run to assemble the dynamic context,
+  // and `indexRun` after a run finishes so future runs can recall it.
+  memory = new MemoryHost(project, preview, sessions);
+  try {
+    await memory.init();
+  } catch (err) {
+    console.error('[main] memory host failed to initialize:', err);
+  }
   agents = new AgentManager(
     project,
     preview,
@@ -470,6 +495,7 @@ app.whenReady().then(async () => {
     (req) => send('agent:approval-request', req),
     () => mcpEndpoint.serverConfig(),
     verification,
+    memory,
   );
   // V2 (ADR 0029): the automation engine. Subscribes to V0 preview events +
   // the file watcher + a scheduler; fires matching automations through the
