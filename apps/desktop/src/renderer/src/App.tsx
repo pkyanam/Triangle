@@ -24,6 +24,8 @@ export function App(): React.JSX.Element {
   const [status, setStatus] = useState<PreviewStatus>({ phase: 'idle' });
   const [playing, setPlaying] = useState(false);
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
+  // V6 (ADR 0033): Outliner multi-selection (shift-click).
+  const [multiSelection, setMultiSelection] = useState<Set<string>>(new Set());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [robotImporterOpen, setRobotImporterOpen] = useState(false);
@@ -54,6 +56,7 @@ export function App(): React.JSX.Element {
     memory: false,
     eval: false,
     supervisor: false,
+    debugger: false,
   });
   const workspaceRef = useRef<WorkspaceHandle>(null);
 
@@ -205,6 +208,8 @@ export function App(): React.JSX.Element {
       onStats: onStatsNoop,
       selectedObject,
       setSelectedObject,
+      multiSelection,
+      setMultiSelection,
     }),
     [
       project,
@@ -250,7 +255,7 @@ export function App(): React.JSX.Element {
         status={status}
         entry={entry}
         projectName={projectName}
-        selectedCount={selectedObject ? 1 : 0}
+        selectedCount={Math.max(selectedObject ? 1 : 0, multiSelection.size)}
       />
 
       <CommandPalette

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MousePointer2, Save } from 'lucide-react';
+import { MousePointer2, Save, Sparkles } from 'lucide-react';
 import type { SceneObjectDetail, UniformDetail } from '@triangle/preview-runtime';
-import type { SceneEdit } from '@triangle/shared';
+import type { MemoryEntry, SceneEdit } from '@triangle/shared';
 import { applyActiveSceneEdit, describeActiveObject, getActiveRobotInfo } from '../preview/bridge.js';
 import { upsertOverridesBlock } from '../lib/overrides.js';
 import { JointInspector } from './JointInspector.js';
@@ -10,9 +10,11 @@ import { toast } from './ui/toast.js';
 
 interface InspectorProps {
   selectedUuid: string | null;
+  /** V6 (ADR 0033): multi-selection set from the Outliner. */
+  multiSelection?: Set<string>;
 }
 
-export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
+export function Inspector({ selectedUuid, multiSelection }: InspectorProps): React.JSX.Element {
   const [detail, setDetail] = useState<SceneObjectDetail | null>(null);
   // Pending edits since selection, keyed by op, so Apply persists exactly what
   // changed. Targeted by name (uuids change across hot-reload).
@@ -28,6 +30,30 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
       setDetail(describeActiveObject(uuid));
     }, 80);
   }, []);
+
+  // V6 (ADR 0033): agent-suggested value chips via project memory recall.
+  // Recalls notes/sessions relevant to the selected object's name + material
+  // type so the Inspector can surface "agent suggests …" chips next to fields.
+  const [suggestions, setSuggestions] = useState<MemoryEntry[]>([]);
+  useEffect(() => {
+    if (!detail) {
+      setSuggestions([]);
+      return;
+    }
+    const query = `${detail.name} ${detail.materials?.map((m) => m.type).join(' ') ?? ''}`;
+    let cancelled = false;
+    void window.triangle.memory
+      .recall(query, 5)
+      .then((notes) => {
+        if (!cancelled) setSuggestions(notes);
+      })
+      .catch(() => {
+        if (!cancelled) setSuggestions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail]);
 
   useEffect(() => {
     pending.current = new Map();
@@ -84,9 +110,17 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
   }
 
   const isRobotRoot = getActiveRobotInfo()?.rootUuid === detail.uuid;
+  const multiCount = multiSelection?.size ?? 0;
 
   return (
     <div className="inspector">
+      {/* V6 (ADR 0033): multi-selection bar. */}
+      {multiCount > 1 && (
+        <div className="inspector__multi-bar">
+          <span>{multiCount} objects selected</span>
+          <span style={{ color: 'var(--muted-foreground)', fontSize: 10 }}>edits apply to the primary selection</span>
+        </div>
+      )}
       <div className="engine-section">
         <div className="engine-section__label">
           <span>{detail.name}</span>
@@ -227,6 +261,25 @@ export function Inspector({ selectedUuid }: InspectorProps): React.JSX.Element {
             </div>
           </div>
         </Section>
+
+        {/* V6 (ADR 0033): agent-suggested value chips from project memory. */}
+        {suggestions.length > 0 && (
+          <Section label="Agent suggestions">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 10px' }}>
+              {suggestions.map((note) => (
+                <button
+                  key={note.id}
+                  className="inspector__chip"
+                  title={note.text}
+                  onClick={() => toast(`Suggestion: ${note.text.slice(0, 120)}`, { variant: 'info' })}
+                >
+                  <Sparkles size={10} /> {note.text.slice(0, 32)}
+                  {note.text.length > 32 ? '…' : ''}
+                </button>
+              ))}
+            </div>
+          </Section>
+        )}
 
         <div className="inspector__apply">
           <Button variant="primary" size="xs" onClick={() => void applyToSource()} disabled={applying || pendingCount === 0}>

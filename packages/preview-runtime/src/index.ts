@@ -18,3 +18,4 @@ export { loadModel } from './loaders.js';
 export type { LoadModelResult, ModelFormat } from './loaders.js';
 export { buildRobot, applyJoint } from './robot.js';
 export type { BuiltRobot, RobotJointHandle, RobotJointInfo } from './robot.js';
+export { ProfilerSampler } from './profiler-sampler.js';

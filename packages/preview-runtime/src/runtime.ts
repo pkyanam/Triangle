@@ -33,6 +33,8 @@ import { applyJoint, buildRobot, type BuiltRobot, type RobotJointInfo } from './
 import type { Robot } from '@triangle/robotics';
 import type { TriangleRenderer, RendererBackend } from './renderer-type.js';
 import { createRenderer } from './renderer-factory.js';
+import { ProfilerSampler } from './profiler-sampler.js';
+import type { ProfilerFrame, ProfilerTrace } from '@triangle/shared';
 // The WebGPU build (`three/webgpu`) re-exports all of core THREE *plus* the
 // node-material classes, WebGPURenderer, StorageBufferAttribute, and the TSL
 // namespace (Fn, storage, instance, compute, uv, time, …). It is imported here
@@ -172,6 +174,9 @@ export class PreviewRuntime {
   // Live robot model (ADR 0025), transient like imported models.
   private builtRobot: BuiltRobot | null = null;
 
+  // V6 (ADR 0033): profiler ring buffer, fed from the stats loop.
+  private profiler: ProfilerSampler | null = null;
+
   constructor(canvas: HTMLCanvasElement, options: PreviewRuntimeOptions = {}) {
     this.canvas = canvas;
     this.options = options;
@@ -244,6 +249,8 @@ export class PreviewRuntime {
     });
     this.renderer = created.renderer;
     this.backend = created.backend;
+    // V6: (re)create the profiler sampler now that the backend is known.
+    this.profiler = new ProfilerSampler(this.backend);
     // Patch the cached context so author modules see the now-available renderer.
     if (this.baseContext) this.baseContext.renderer = this.renderer;
     void created.ready.then(
@@ -393,6 +400,19 @@ export class PreviewRuntime {
       };
     }
     return inspectPerformance(this.renderer, this.scene, this.lastFps);
+  }
+
+  /**
+   * V6 (ADR 0033): read the current profiler trace (ring-buffer snapshot).
+   * Returns an empty trace when the renderer has not been created yet. The
+   * GPU-memory field on each frame is filled periodically by the panel via
+   * {@link performanceSnapshot} (a scene traversal is too expensive per frame).
+   */
+  profilerTrace(): ProfilerTrace {
+    if (!this.profiler) {
+      return { capturedAt: Date.now(), backend: this.backend, frames: [] };
+    }
+    return this.profiler.snapshot();
   }
 
   /** Compile a GLSL shader via the offscreen WebGL2 validation context (no scene mutation). */
@@ -684,6 +704,23 @@ export class PreviewRuntime {
     };
     this.options.onStats?.(stats);
     this.checkPerfThresholds(stats);
+    // V6 (ADR 0033): feed the profiler ring buffer. Programs are cheap to read
+    // from renderer.info; GPU memory is expensive (a scene traversal) so it is
+    // left for the periodic snapshot the panel polls separately.
+    if (this.profiler) {
+      const programs = info.programs?.length ?? info.memory.programs ?? 0;
+      const frame: ProfilerFrame = {
+        ts: now,
+        frameMs: this.lastFps > 0 ? 1000 / this.lastFps : 0,
+        fps: this.lastFps,
+        drawCalls: info.render.calls,
+        triangles: info.render.triangles,
+        geometries: info.memory.geometries,
+        textures: info.memory.textures,
+        programs,
+      };
+      this.profiler.push(frame);
+    }
     this.frames = 0;
     this.lastStatsAt = now;
   }

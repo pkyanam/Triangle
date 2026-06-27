@@ -21,7 +21,14 @@ import { applyActiveSceneEdit, describeActiveScene, onSceneChanged, setActiveSel
 interface OutlinerProps {
   selectedUuid: string | null;
   onSelect: (uuid: string) => void;
+  /** V6 (ADR 0033): the current multi-selection set (shift-click adds). */
+  multiSelection?: Set<string>;
+  onMultiSelectionChange?: (uuids: Set<string>) => void;
 }
+
+/** V6 (ADR 0033): type filter chips for the Outliner. */
+type TypeFilter = 'all' | 'Mesh' | 'Light' | 'Camera' | 'Group';
+const TYPE_FILTERS: TypeFilter[] = ['all', 'Mesh', 'Light', 'Camera', 'Group'];
 
 const REPARENT_MIME = 'application/x-triangle-node';
 
@@ -71,10 +78,12 @@ function flatten(nodes: SceneObjectSummary[]): SceneObjectSummary[] {
 interface RowControls {
   expanded: Set<string>;
   selectedUuid: string | null;
+  /** V6: multi-selection set for shift-click range selection. */
+  multiSelection?: Set<string>;
   locked: Set<string>;
   isolated: string | null;
   onToggle: (uuid: string) => void;
-  onSelect: (uuid: string) => void;
+  onSelect: (uuid: string, additive: boolean) => void;
   onVisibility: (uuid: string, visible: boolean) => void;
   onLock: (uuid: string) => void;
   onIsolate: (uuid: string) => void;
@@ -95,6 +104,7 @@ function TreeRow({
   const isOpen = ctrl.expanded.has(node.uuid);
   const hasChildren = (node.children?.length ?? 0) > 0;
   const selected = ctrl.selectedUuid === node.uuid;
+  const multiSelected = ctrl.multiSelection?.has(node.uuid) ?? false;
   const locked = ctrl.locked.has(node.uuid);
   const isolated = ctrl.isolated === node.uuid;
   const Icon = objectIcon(node.type);
@@ -102,9 +112,9 @@ function TreeRow({
   return (
     <>
       <div
-        className={`outliner__row${selected ? ' outliner__row--selected' : ''}${locked ? ' outliner__row--locked' : ''}`}
+        className={`outliner__row${selected ? ' outliner__row--selected' : ''}${multiSelected ? ' outliner__row--multi-selected' : ''}${locked ? ' outliner__row--locked' : ''}`}
         style={{ paddingLeft: 10 + (flat ? 0 : depth) * 12 }}
-        onClick={() => !locked && ctrl.onSelect(node.uuid)}
+        onClick={(e) => !locked && ctrl.onSelect(node.uuid, e.shiftKey)}
         title={node.name}
         draggable={!locked}
         onDragStart={(e) => {
@@ -210,12 +220,13 @@ function useSceneSummary(): SceneSummary | null {
   return summary;
 }
 
-export function Outliner({ selectedUuid, onSelect }: OutlinerProps): React.JSX.Element {
+export function Outliner({ selectedUuid, onSelect, multiSelection, onMultiSelectionChange }: OutlinerProps): React.JSX.Element {
   const summary = useSceneSummary();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [locked, setLocked] = useState<Set<string>>(new Set());
   const [isolated, setIsolated] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
   const toggle = (uuid: string) => {
     setExpanded((prev) => {
@@ -226,9 +237,18 @@ export function Outliner({ selectedUuid, onSelect }: OutlinerProps): React.JSX.E
     });
   };
 
-  const handleSelect = (uuid: string) => {
+  // V6: shift-click toggles membership in the multi-selection set.
+  const handleSelect = (uuid: string, additive: boolean) => {
     setActiveSelection(uuid);
     onSelect(uuid);
+    if (additive && onMultiSelectionChange) {
+      const next = new Set(multiSelection ?? []);
+      if (next.has(uuid)) next.delete(uuid);
+      else next.add(uuid);
+      onMultiSelectionChange(next);
+    } else if (!additive && onMultiSelectionChange && (multiSelection?.size ?? 0) > 0) {
+      onMultiSelectionChange(new Set());
+    }
   };
 
   const handleVisibility = (uuid: string, visible: boolean) => {
@@ -269,13 +289,19 @@ export function Outliner({ selectedUuid, onSelect }: OutlinerProps): React.JSX.E
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return null;
-    return flatten(objects).filter((o) => o.name.toLowerCase().includes(q) || o.type.toLowerCase().includes(q));
-  }, [objects, query]);
+    const byType = typeFilter === 'all' ? null : typeFilter;
+    if (!q && !byType) return null;
+    return flatten(objects).filter((o) => {
+      const matchesQuery = !q || o.name.toLowerCase().includes(q) || o.type.toLowerCase().includes(q);
+      const matchesType = !byType || o.type === byType;
+      return matchesQuery && matchesType;
+    });
+  }, [objects, query, typeFilter]);
 
   const ctrl: RowControls = {
     expanded,
     selectedUuid,
+    multiSelection,
     locked,
     isolated,
     onToggle: toggle,
@@ -296,6 +322,18 @@ export function Outliner({ selectedUuid, onSelect }: OutlinerProps): React.JSX.E
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+      </div>
+      {/* V6 (ADR 0033): type filter chips. */}
+      <div className="outliner__filter-row">
+        {TYPE_FILTERS.map((f) => (
+          <button
+            key={f}
+            className={`outliner__filter-chip${typeFilter === f ? ' outliner__filter-chip--active' : ''}`}
+            onClick={() => setTypeFilter(f)}
+          >
+            {f === 'all' ? 'All' : f}
+          </button>
+        ))}
       </div>
       <div
         className="outliner__body"
@@ -331,7 +369,7 @@ export function Outliner({ selectedUuid, onSelect }: OutlinerProps): React.JSX.E
                   <span className="engine-section__divider" />
                 </div>
                 {lights.map((light) => (
-                  <LightRow key={light.name ?? light.type} light={light} selectedUuid={selectedUuid} onSelect={handleSelect} />
+                  <LightRow key={light.name ?? light.type} light={light} selectedUuid={selectedUuid} onSelect={(uuid) => handleSelect(uuid, false)} />
                 ))}
               </div>
             )}

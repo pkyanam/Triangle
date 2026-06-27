@@ -19,19 +19,20 @@ import { VisualQAPanel } from '../components/VisualQAPanel.js';
 import { MemoryPanel } from '../components/MemoryPanel.js';
 import { EvalDashboardPanel } from '../components/EvalDashboardPanel.js';
 import { SupervisorPanel } from '../components/SupervisorPanel.js';
+import { DebuggerPanel } from '../components/DebuggerPanel.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { WorkspaceContext, useWorkspace, type WorkspaceState } from './context.js';
 
 /**
- * localStorage key prefix for the persisted dockview layout. Bumped to `v8`
- * (ADR 0032) so saved layouts fall back to the default that includes the
- * Eval Dashboard + Supervisor panels in the right rail.
+ * localStorage key prefix for the persisted dockview layout. Bumped to `v9`
+ * (ADR 0033) so saved layouts fall back to the default that includes the
+ * Workflow Debugger panel in the right rail.
  */
-const LAYOUT_KEY_PREFIX = 'triangle.layout.v8';
+const LAYOUT_KEY_PREFIX = 'triangle.layout.v9';
 const layoutKey = (projectId: string): string => `${LAYOUT_KEY_PREFIX}.${projectId}`;
 
 /** Panel ids, in their default left-to-right order. */
-export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance', 'automations', 'visualqa', 'memory', 'eval', 'supervisor'] as const;
+export const PANEL_IDS = ['explorer', 'assets', 'editor', 'preview', 'agent', 'outliner', 'inspector', 'performance', 'automations', 'visualqa', 'memory', 'eval', 'supervisor', 'debugger'] as const;
 export type PanelId = (typeof PANEL_IDS)[number];
 export type PanelsOpen = Record<PanelId, boolean>;
 
@@ -63,6 +64,7 @@ const WIDTHS: Record<PanelId, number> = {
   memory: 320,
   eval: 340,
   supervisor: 340,
+  debugger: 420,
 };
 
 const MIN_WIDTHS: Record<PanelId, number> = {
@@ -79,6 +81,7 @@ const MIN_WIDTHS: Record<PanelId, number> = {
   memory: 240,
   eval: 260,
   supervisor: 260,
+  debugger: 320,
 };
 
 // --- Panel components: rendered by dockview, read live state from context. ---
@@ -147,7 +150,12 @@ function OutlinerPanel(_props: IDockviewPanelProps): React.JSX.Element {
   return (
     <div className="tpanel">
       <ErrorBoundary title="Outliner failed">
-        <Outliner selectedUuid={ws.selectedObject} onSelect={ws.setSelectedObject} />
+        <Outliner
+          selectedUuid={ws.selectedObject}
+          onSelect={ws.setSelectedObject}
+          multiSelection={ws.multiSelection}
+          onMultiSelectionChange={ws.setMultiSelection}
+        />
       </ErrorBoundary>
     </div>
   );
@@ -158,7 +166,7 @@ function InspectorPanel(_props: IDockviewPanelProps): React.JSX.Element {
   return (
     <div className="tpanel">
       <ErrorBoundary title="Inspector failed">
-        <Inspector selectedUuid={ws.selectedObject} />
+        <Inspector selectedUuid={ws.selectedObject} multiSelection={ws.multiSelection} />
       </ErrorBoundary>
     </div>
   );
@@ -236,6 +244,18 @@ function SupervisorDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
   );
 }
 
+function DebuggerDockPanel(_props: IDockviewPanelProps): React.JSX.Element {
+  return (
+    <div className="tpanel">
+      <ErrorBoundary title="Workflow Debugger panel failed">
+        <div className="tpanel__body">
+          <DebuggerPanel />
+        </div>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
 const COMPONENTS = {
   explorer: ExplorerPanel,
   assets: AssetsPanel,
@@ -250,6 +270,7 @@ const COMPONENTS = {
   memory: MemoryDockPanel,
   eval: EvalDockPanel,
   supervisor: SupervisorDockPanel,
+  debugger: DebuggerDockPanel,
 };
 
 const TITLES: Record<string, string> = {
@@ -266,6 +287,7 @@ const TITLES: Record<string, string> = {
   memory: 'Memory',
   eval: 'Eval Dashboard',
   supervisor: 'Supervisor',
+  debugger: 'Workflow Debugger',
 };
 
 /** Build the new engine default layout: left rail, hero viewport, right rail. */
@@ -334,6 +356,13 @@ function buildDefaultLayout(api: DockviewApi): void {
     id: 'memory',
     component: 'memory',
     title: TITLES.memory,
+    position: { referencePanel: 'inspector', direction: 'within' },
+  });
+  // V6 (ADR 0033): Workflow Debugger sits as a tab alongside the Memory panel.
+  api.addPanel({
+    id: 'debugger',
+    component: 'debugger',
+    title: TITLES.debugger,
     position: { referencePanel: 'inspector', direction: 'within' },
   });
   api.getPanel('inspector')?.api.setActive();

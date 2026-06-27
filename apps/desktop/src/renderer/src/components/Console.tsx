@@ -4,7 +4,7 @@ import type { AgentEvent, PreviewEvent, PreviewStatus } from '@triangle/shared';
 import { evalActivePreview } from '../preview/bridge.js';
 import { subscribePreviewEvents } from '../preview/host.js';
 
-type LogSource = 'preview' | 'agent' | 'error' | 'eval';
+type LogSource = 'preview' | 'agent' | 'automation' | 'supervisor' | 'error' | 'eval';
 
 interface LogEntry {
   id: string;
@@ -27,6 +27,8 @@ const FILTERS: { id: 'all' | LogSource; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'preview', label: 'Preview' },
   { id: 'agent', label: 'Agent' },
+  { id: 'automation', label: 'Automation' },
+  { id: 'supervisor', label: 'Supervisor' },
   { id: 'error', label: 'Errors' },
 ];
 
@@ -122,6 +124,30 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
     });
   }, []);
 
+  // V6 (ADR 0033): surface automation firings + supervisor decisions as
+  // first-class console sources so the filter chips can isolate them.
+  useEffect(() => {
+    const off = window.triangle.automation.onTriggered((event) => {
+      push({
+        source: 'automation',
+        level: 'info',
+        message: `Automation fired: ${event.name} (${event.triggerKind}) → run ${event.runId.slice(0, 8)}`,
+      });
+    });
+    return off;
+  }, []);
+
+  useEffect(() => {
+    const off = window.triangle.supervisor.onDecision((decision) => {
+      push({
+        source: 'supervisor',
+        level: decision.acted ? 'info' : 'warn',
+        message: `Supervisor: ${decision.ruleId ?? 'no-match'} ${decision.acted ? 'ACTED' : 'SUPPRESSED'}${decision.reason ? ` — ${decision.reason}` : ''}`,
+      });
+    });
+    return off;
+  }, []);
+
   useEffect(() => {
     if (expanded) bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
   }, [logs, expanded]);
@@ -142,6 +168,8 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
 
   // V0 (ADR 0027): start an agent run pre-loaded with the error payload as
   // context, tagged with a `preview-event` trigger for the audit spine.
+  // V6 (ADR 0033): extended to all error classes — any error log entry without
+  // a backing preview event is forwarded as a generic "fix this error" prompt.
   const fixWithAgent = (event: PreviewEvent): void => {
     if (event.type !== 'shader-error' && event.type !== 'runtime-exception') return;
     const eventType = event.type;
@@ -151,6 +179,22 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
       `[Triangle context] ${eventType}:\n${event.message}\n` +
       (event.stack ? `\nStack trace:\n${event.stack}\n` : '') +
       `\nInspect the relevant shader/source, diagnose the cause, apply a fix, and validate with triangle_validate_shader.`;
+    startFixRun(eventType, summary, prompt);
+  };
+
+  // V6 (ADR 0033): generic error fix — for error rows without a preview event
+  // (agent failures, runtime exceptions surfaced as text, etc.).
+  const fixErrorWithAgent = (message: string, detail?: string): void => {
+    const summary = message;
+    const prompt =
+      `An error occurred in the Triangle project. Diagnose and fix it.\n\n` +
+      `[Triangle context] error:\n${message}\n` +
+      (detail ? `\nDetail:\n${detail}\n` : '') +
+      `\nInspect the relevant source, diagnose the cause, apply a fix, and verify with triangle_performance_snapshot + triangle_validate_shader where applicable.`;
+    startFixRun('error', summary, prompt);
+  };
+
+  const startFixRun = (eventType: string, summary: string, prompt: string): void => {
     void window.triangle.config.get().then((settings) => {
       const instance =
         settings.providerInstances.find((i) => i.id === settings.selectedInstanceId) ??
@@ -278,6 +322,19 @@ export function Console({ status, entry }: ConsoleProps): React.JSX.Element {
                         onClick={(e) => {
                           e.stopPropagation();
                           fixWithAgent(log.fixEvent!);
+                        }}
+                      >
+                        <Wand2 size={11} /> Fix with agent
+                      </button>
+                    )}
+                    {/* V6: fix-with-agent for any error row without a backing preview event. */}
+                    {!log.fixEvent && log.level === 'error' && (
+                      <button
+                        className="console__fix-btn"
+                        title="Start an agent run to fix this error"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fixErrorWithAgent(log.message, log.detail);
                         }}
                       >
                         <Wand2 size={11} /> Fix with agent

@@ -1,17 +1,36 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PerformanceSnapshot, PreviewStats } from '@triangle/shared';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Wand2 } from 'lucide-react';
+import type {
+  BottleneckFlag,
+  PerformanceSnapshot,
+  PreviewStats,
+  ProfilerTrace,
+  SceneSummary,
+} from '@triangle/shared';
+import { detectBottlenecks, dominantBottleneck, formatProfilerTrace } from '@triangle/shared';
 import { subscribeStats } from '../preview/host.js';
-import { activePerformanceSnapshot } from '../preview/bridge.js';
+import { activePerformanceSnapshot, activeProfilerTrace, describeActiveScene } from '../preview/bridge.js';
+import { Button } from './ui/button.js';
+import { toast } from './ui/toast.js';
 
 const HISTORY = 320;
 const HIST_BUCKETS = [8, 16, 24, 33, 50, Infinity];
 const HIST_LABELS = ['<8', '8-16', '16-24', '24-33', '33-50', '50+'];
+/** Built-in Performance Optimizer automation id (templates/playbooks). */
+const PERF_OPTIMIZER_ID = 'builtin-performance-optimizer';
 
-/** Detailed performance panel: long FPS history, frame-time histogram, and the
- * full renderer.info counters. Complements the compact in-viewport HUD. */
+/**
+ * V6 (ADR 0033): the Performance Profiler. Extends the live HUD with a
+ * per-frame timeline (CSS-rendered from the runtime's profiler ring buffer),
+ * bottleneck detection with agent-suggested fixes, an exportable JSON trace,
+ * and a one-click "fix with agent" that starts a scoped Performance Optimizer
+ * run via the V2 automation engine.
+ */
 export function PerformancePanel(): React.JSX.Element {
   const [stats, setStats] = useState<PreviewStats | null>(null);
   const [snapshot, setSnapshot] = useState<PerformanceSnapshot | null>(null);
+  const [trace, setTrace] = useState<ProfilerTrace | null>(null);
+  const [scene, setScene] = useState<SceneSummary | null>(null);
   const fpsRef = useRef<number[]>([]);
   const frameRef = useRef<number[]>([]);
 
@@ -24,8 +43,6 @@ export function PerformancePanel(): React.JSX.Element {
       const frameHist = frameRef.current;
       frameHist.push(s.fps > 0 ? 1000 / s.fps : 0);
       if (frameHist.length > HISTORY) frameHist.shift();
-      // No separate force-update needed: setStats triggers the re-render that
-      // makes the useMemo below recompute from the mutated refs.
     });
   }, []);
 
@@ -43,9 +60,67 @@ export function PerformancePanel(): React.JSX.Element {
     return () => window.clearInterval(id);
   }, []);
 
+  // V6: poll the profiler trace + scene summary for the timeline + bottleneck
+  // detection. ~5 Hz keeps the timeline lively without re-rendering every RAF.
+  useEffect(() => {
+    const tick = (): void => {
+      try {
+        setTrace(activeProfilerTrace());
+      } catch {
+        setTrace(null);
+      }
+      try {
+        setScene(describeActiveScene());
+      } catch {
+        setScene(null);
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 200);
+    return () => window.clearInterval(id);
+  }, []);
+
   const fpsPath = useMemo(() => sparkline(fpsRef.current, 0, 120), [stats]);
   const histogram = useMemo(() => buildHistogram(frameRef.current), [stats]);
   const maxBucket = Math.max(1, ...histogram);
+
+  const bottlenecks = useMemo<BottleneckFlag[]>(() => {
+    if (!trace) return [];
+    return detectBottlenecks(trace, { objectCount: scene?.objectCount });
+  }, [trace, scene]);
+
+  const dominant = useMemo<BottleneckFlag | null>(() => {
+    if (!trace) return null;
+    return dominantBottleneck(trace, { objectCount: scene?.objectCount });
+  }, [trace, scene]);
+
+  const exportTrace = useCallback(() => {
+    if (!trace) return;
+    const json = formatProfilerTrace(trace, bottlenecks);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `triangle-profiler-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Profiler trace exported.', { variant: 'success' });
+  }, [trace, bottlenecks]);
+
+  const fixWithAgent = useCallback(() => {
+    void window.triangle.automation
+      .run(PERF_OPTIMIZER_ID)
+      .then((res) => {
+        if (res.ok && res.runId) {
+          toast('Started Performance Optimizer run.', { variant: 'success' });
+        } else {
+          toast(`Could not start optimizer: ${res.reason ?? 'automation unavailable.'}`, { variant: 'error' });
+        }
+      })
+      .catch((e: unknown) => toast(`Could not start optimizer: ${String(e)}`, { variant: 'error' }));
+  }, []);
 
   return (
     <div className="perf">
@@ -82,6 +157,45 @@ export function PerformancePanel(): React.JSX.Element {
         <Metric label="Programs" value={snapshot?.programs} />
         <Metric label="GPU est." value={snapshot ? `${snapshot.gpuMemoryEstimateMb} MB` : undefined} />
       </div>
+
+      {/* V6: per-frame timeline (CSS-rendered, no charting library). */}
+      <div className="prof">
+        <div className="prof__head">
+          <span className="prof__title">Frame timeline</span>
+          <span className="prof__backend">{trace?.backend ?? '—'}</span>
+        </div>
+        <ProfilerTimeline trace={trace} />
+        <div className="prof__legend">
+          <span>frame ms — taller bar = slower frame</span>
+        </div>
+      </div>
+
+      {/* V6: bottleneck detection + one-click fix. */}
+      <div className="prof__bottlenecks">
+        <div className="prof__head">
+          <span className="prof__title">Bottlenecks</span>
+          <div className="prof__actions">
+            <Button size="xs" variant="ghost" onClick={exportTrace} disabled={!trace || trace.frames.length === 0} title="Export the current trace as JSON">
+              <Download size={12} /> Export
+            </Button>
+            <Button size="xs" variant="primary" onClick={fixWithAgent} disabled={!dominant} title={dominant ? 'Start a scoped Performance Optimizer run' : 'No bottleneck detected'}>
+              <Wand2 size={12} /> Fix with agent
+            </Button>
+          </div>
+        </div>
+        {bottlenecks.length === 0 ? (
+          <div className="prof__empty">No bottlenecks detected.</div>
+        ) : (
+          <div className="prof__flag-list">
+            {bottlenecks.map((flag) => (
+              <div key={flag.kind} className={`prof__flag prof__flag--${flag.kind}`}>
+                <div className="prof__flag-summary">{flag.summary}</div>
+                <div className="prof__flag-suggestion">{flag.suggestion}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -92,6 +206,35 @@ function Metric({ label, value }: { label: string; value?: number | string }): R
     <div className="perf__metric">
       <span className="perf__metric-label">{label}</span>
       <span className="perf__metric-value">{display}</span>
+    </div>
+  );
+}
+
+/**
+ * CSS-rendered per-frame timeline. Each frame is a vertical bar whose height
+ * is proportional to its frame time (ms); the tallest frame defines the scale.
+ * Frames over the 33 ms (~30 fps) line are tinted to flag slow frames.
+ */
+function ProfilerTimeline({ trace }: { trace: ProfilerTrace | null }): React.JSX.Element {
+  const frames = trace?.frames ?? [];
+  if (frames.length === 0) {
+    return <div className="prof__empty">No frames sampled yet.</div>;
+  }
+  const maxMs = Math.max(8, ...frames.map((f) => f.frameMs));
+  return (
+    <div className="prof__timeline" title={`max frame time: ${maxMs.toFixed(1)} ms`}>
+      {frames.map((f, i) => {
+        const pct = maxMs > 0 ? (f.frameMs / maxMs) * 100 : 0;
+        const slow = f.frameMs > 33;
+        return (
+          <div
+            key={i}
+            className={`prof__bar${slow ? ' prof__bar--slow' : ''}`}
+            style={{ height: `${Math.max(2, pct)}%` }}
+            title={`${f.fps} fps · ${f.frameMs.toFixed(1)} ms · ${f.drawCalls} draws · ${f.triangles.toLocaleString()} tris`}
+          />
+        );
+      })}
     </div>
   );
 }

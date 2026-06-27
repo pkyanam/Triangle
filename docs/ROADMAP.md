@@ -298,7 +298,7 @@ stages `V0`–`V8`, each delivering a finished feature or QoL update.
 | V3 | Verification Pipeline & Visual Regression | V0, V2 | Shipped |
 | V4 | Project Memory & Dynamic Context | V0, V2 | Shipped |
 | V5 | Supervisor Orchestration & Eval Harness | V2, V4 | Shipped |
-| V6 | Agent UX & Performance Profiler | V0, V3, V4 | Planned |
+| V6 | Agent UX & Performance Profiler | V0, V3, V4 | Shipped |
 | V7 | Git Integration & Headless/CI Mode | V3 | Planned |
 | V8 | Generative & Ecosystem | V2, V3 | Planned |
 

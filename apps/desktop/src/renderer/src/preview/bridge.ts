@@ -1,6 +1,7 @@
 import type {
   PreviewRequest,
   PreviewResult,
+  ProfilerTrace,
   SceneEdit,
   ShaderStage,
   ShaderValidationResult,
@@ -96,6 +97,15 @@ export function describeActiveScene(): ReturnType<PreviewRuntime['describeScene'
 export function activePerformanceSnapshot(): ReturnType<PreviewRuntime['performanceSnapshot']> {
   if (!activeRuntime) throw new NoPreviewError();
   return activeRuntime.performanceSnapshot();
+}
+
+/**
+ * V6 (ADR 0033): read the current profiler trace (ring-buffer snapshot) from
+ * the live runtime. Throws when no preview is mounted.
+ */
+export function activeProfilerTrace(): ProfilerTrace {
+  if (!activeRuntime) throw new NoPreviewError();
+  return activeRuntime.profilerTrace();
 }
 
 /**

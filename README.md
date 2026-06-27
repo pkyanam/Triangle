@@ -164,7 +164,8 @@ in [`docs/VISION-PRD.md`](docs/VISION-PRD.md) as vision stages `V0`–`V8`. Stag
 [Stage 8](docs/STAGE-8.md) (complete).
 Vision stage write-ups:
 [V0](docs/VISION-STAGE-0.md) · [V1](docs/VISION-STAGE-1.md) ·
-[V2](docs/VISION-STAGE-2.md) · [V3](docs/VISION-STAGE-3.md).
+[V2](docs/VISION-STAGE-2.md) · [V3](docs/VISION-STAGE-3.md) ·
+[V6](docs/VISION-STAGE-6.md).
 For effective prompting, see [`docs/PROMPTING.md`](docs/PROMPTING.md).
 
 ## Architecture

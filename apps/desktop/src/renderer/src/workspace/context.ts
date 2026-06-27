@@ -20,6 +20,9 @@ export interface WorkspaceState {
   /** Currently selected scene object uuid (Stage 5.75). */
   selectedObject: string | null;
   setSelectedObject: (uuid: string | null) => void;
+  /** V6 (ADR 0033): multi-selection set (shift-click in the Outliner). */
+  multiSelection: Set<string>;
+  setMultiSelection: (uuids: Set<string>) => void;
 }
 
 export const WorkspaceContext = createContext<WorkspaceState | null>(null);
